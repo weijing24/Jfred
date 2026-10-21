@@ -71,7 +71,7 @@ struct RemotePane: View {
                 Color(hex: 0x161616)
                 VStack(spacing: 18) {
                     ZStack {
-                        BowlerHat(showsGlass: false).frame(width: 180, height: 140).opacity(0.85)
+                        HoodMark().frame(width: 180, height: 140)
                         Image(systemName: "wave.3.right")
                             .font(.system(size: 48))
                             .foregroundStyle(.white.opacity(0.25))

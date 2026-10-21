@@ -31,6 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let image = hoodLogoImage() {
+            NSApp.applicationIconImage = image
+        }
         AppRuntime.model = model
         model.start()
     }

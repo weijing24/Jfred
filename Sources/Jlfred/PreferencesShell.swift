@@ -83,7 +83,7 @@ struct IconRail: View {
         } label: {
             VStack(spacing: 4) {
                 if section == .general {
-                    BowlerHat(showsGlass: true).frame(width: 28, height: 26)
+                    HoodMark().frame(width: 28, height: 26)
                 } else {
                     Image(systemName: section.symbol)
                         .font(.system(size: 20))

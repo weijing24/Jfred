@@ -63,41 +63,50 @@ struct LauncherTheme: Identifiable {
     }
 }
 
-struct BowlerHat: View {
-    var showsGlass: Bool = true
+struct HoodMark: View {
+    var body: some View {
+        if let image = hoodLogoImage() {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+        } else {
+            RedFedoraFallback()
+        }
+    }
+}
+
+private struct RedFedoraFallback: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
             ZStack {
                 Ellipse()
-                    .fill(Color(white: 0.12))
-                    .frame(width: w * 0.92, height: h * 0.22)
-                    .offset(y: h * 0.30)
+                    .fill(Color(red: 0.78, green: 0.08, blue: 0.1))
+                    .frame(width: w * 0.92, height: h * 0.28)
+                    .offset(y: h * 0.22)
                 Capsule()
-                    .fill(Color(white: 0.08))
-                    .frame(width: w * 0.58, height: h * 0.46)
-                    .offset(y: -h * 0.06)
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(JlfredColor.sidebar)
-                    .frame(width: w * 0.62, height: h * 0.09)
-                    .offset(y: h * 0.05)
-                if showsGlass {
-                    Circle()
-                        .stroke(Color.white.opacity(0.95), lineWidth: max(1, w * 0.045))
-                        .background(Circle().fill(Color.white.opacity(0.18)))
-                        .frame(width: w * 0.34, height: w * 0.34)
-                        .offset(x: w * 0.16, y: -h * 0.22)
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color(white: 0.45))
-                        .frame(width: max(2, w * 0.045), height: h * 0.24)
-                        .rotationEffect(.degrees(38))
-                        .offset(x: w * 0.01, y: h * 0.02)
-                }
+                    .fill(Color(red: 0.86, green: 0.1, blue: 0.12))
+                    .frame(width: w * 0.48, height: h * 0.42)
+                    .offset(y: -h * 0.08)
+                Capsule()
+                    .fill(Color.black.opacity(0.8))
+                    .frame(width: w * 0.5, height: h * 0.08)
+                    .offset(y: h * 0.02)
             }
             .frame(width: w, height: h)
         }
     }
+}
+
+func hoodLogoImage() -> NSImage? {
+    for ext in ["png", "icns"] {
+        guard let url = Bundle.main.url(forResource: "AppIcon", withExtension: ext),
+              let image = NSImage(contentsOf: url) else { continue }
+        return image
+    }
+    return nil
 }
 
 struct DamaskBackground: View {
@@ -288,14 +297,17 @@ struct AppIcon: NSViewRepresentable {
 }
 
 func menuHatImage() -> NSImage {
-    let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
-        NSColor.black.setFill()
-        let brim = NSBezierPath(ovalIn: NSRect(x: 1, y: 3, width: 16, height: 5))
-        brim.fill()
-        let crown = NSBezierPath(roundedRect: NSRect(x: 4, y: 6, width: 10, height: 8), xRadius: 4, yRadius: 4)
-        crown.fill()
-        return true
+    let side: CGFloat = 18
+    let canvas = NSImage(size: NSSize(width: side, height: side))
+    canvas.lockFocus()
+    if let logo = hoodLogoImage() {
+        logo.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+    } else {
+        NSColor(calibratedRed: 0.82, green: 0.09, blue: 0.11, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 1, y: 3, width: 16, height: 6)).fill()
+        NSBezierPath(roundedRect: NSRect(x: 4, y: 7, width: 10, height: 8), xRadius: 3, yRadius: 3).fill()
     }
-    image.isTemplate = true
-    return image
+    canvas.unlockFocus()
+    canvas.isTemplate = false
+    return canvas
 }
