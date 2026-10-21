@@ -13,7 +13,7 @@ public struct Conversion: Equatable, Sendable {
 public enum Units {
     public static func convert(_ raw: String) -> Conversion? {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let arg = argument(of: "unit", in: text) { text = arg }
+        if let arg = argument(of: "unit", in: text) ?? argument(of: "conv", in: text) { text = arg }
         let pattern = #"^\s*([0-9]*\.?[0-9]+)\s*([a-zA-Z]+)\s+(?:in|to|as)\s+([a-zA-Z]+)\s*$"#
         guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
         let range = NSRange(text.startIndex..., in: text)
@@ -96,15 +96,72 @@ public enum Units {
 
 public enum DevToys {
     public static func rows(argument: String) -> [(title: String, subtitle: String, payload: String)] {
+        rows(keyword: "dev", argument: argument)
+    }
+
+    public static func rows(keyword: String, argument: String) -> [(title: String, subtitle: String, payload: String)] {
+        let key = fold(keyword)
         let arg = argument.trimmingCharacters(in: .whitespacesAndNewlines)
+        if key == "dev" || key == "help" { return legacy(arg) }
+        switch key {
+        case "encode":
+            let base64 = Data(arg.utf8).base64EncodedString()
+            let url = arg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? arg
+            return [(base64, "Base64", base64), (url, "URL encode", url), (htmlEncode(arg), "HTML encode", htmlEncode(arg))]
+        case "decode":
+            var rows: [(String, String, String)] = []
+            if let base64 = Data(base64Encoded: arg).flatMap({ String(data: $0, encoding: .utf8) }) {
+                rows.append((base64, "Base64 decode", base64))
+            }
+            let url = arg.removingPercentEncoding ?? arg
+            rows.append((url, "URL decode", url))
+            let html = htmlDecode(arg)
+            rows.append((html, "HTML decode", html))
+            return rows
+        case "uuid":
+            let count = Int(arg) ?? 1
+            let values = (0..<max(1, min(count, 8))).map { _ in UUID().uuidString }
+            return values.map { ($0, "UUID", $0) }
+        case "hash":
+            return [
+                (hex(SHA256.hash(data: Data(arg.utf8))), "SHA256", hex(SHA256.hash(data: Data(arg.utf8)))),
+                (hex(Insecure.SHA1.hash(data: Data(arg.utf8))), "SHA1", hex(Insecure.SHA1.hash(data: Data(arg.utf8)))),
+                (hex(Insecure.MD5.hash(data: Data(arg.utf8))), "MD5", hex(Insecure.MD5.hash(data: Data(arg.utf8)))),
+            ]
+        case "json format", "json":
+            let value = prettyJSON(arg)
+            return [(value, "JSON", value)]
+        case "li":
+            let value = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+            return [(value, "Lorem ipsum", value)]
+        case "time":
+            let value = String(Int(Date().timeIntervalSince1970))
+            return [("Unix time", value, value)]
+        case "qrcode":
+            if arg.isEmpty { return [("QR code", "Type the text to encode", "")] }
+            return [(arg, "QR text", arg)]
+        default:
+            if key.hasPrefix("cc ") {
+                let style = String(key.dropFirst(3))
+                let value = changeCase(arg, style: style)
+                return [(value, style, value)]
+            }
+            if key.hasPrefix("nb ") {
+                return numberRows(arg, source: String(key.dropFirst(3)))
+            }
+            return [("DevToys", keyword, "")]
+        }
+    }
+
+    private static func legacy(_ arg: String) -> [(title: String, subtitle: String, payload: String)] {
         if arg.isEmpty || arg == "help" {
             return [
                 ("UUID", "Copy a new UUID", UUID().uuidString),
                 ("Timestamp", "Unix time", String(Int(Date().timeIntervalSince1970))),
-                ("Base64 encode", "dev b64 text", ""),
-                ("SHA256", "dev sha256 text", ""),
-                ("JSON pretty", "dev json {…}", ""),
-                ("URL encode", "dev url text", ""),
+                ("Base64 encode", "encode text", ""),
+                ("SHA256", "hash text", ""),
+                ("JSON pretty", "json format {…}", ""),
+                ("URL encode", "encode text", ""),
             ]
         }
         let parts = arg.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
@@ -112,25 +169,22 @@ public enum DevToys {
         let rest = parts.count > 1 ? String(parts[1]) : ""
         switch command {
         case "uuid":
-            let value = UUID().uuidString
-            return [("UUID", value, value)]
+            return rows(keyword: "uuid", argument: rest)
         case "time", "timestamp", "now":
-            let value = String(Int(Date().timeIntervalSince1970))
-            return [("Unix time", value, value)]
+            return rows(keyword: "time", argument: rest)
         case "b64", "base64":
             let value = Data(rest.utf8).base64EncodedString()
             return [("Base64", value, value)]
         case "b64d", "decode64":
-            let value = Data(base64Encoded: rest).flatMap { String(data: $0, encoding: .utf8) } ?? "Not valid Base64"
-            return [("Base64 decode", value, value)]
+            return rows(keyword: "decode", argument: rest)
         case "sha256", "sha":
-            let value = SHA256.hash(data: Data(rest.utf8)).map { String(format: "%02x", $0) }.joined()
+            let value = hex(SHA256.hash(data: Data(rest.utf8)))
             return [("SHA256", value, value)]
         case "sha1":
-            let value = Insecure.SHA1.hash(data: Data(rest.utf8)).map { String(format: "%02x", $0) }.joined()
+            let value = hex(Insecure.SHA1.hash(data: Data(rest.utf8)))
             return [("SHA1", value, value)]
         case "md5":
-            let value = Insecure.MD5.hash(data: Data(rest.utf8)).map { String(format: "%02x", $0) }.joined()
+            let value = hex(Insecure.MD5.hash(data: Data(rest.utf8)))
             return [("MD5", value, value)]
         case "url", "urlencode":
             let value = rest.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rest
@@ -139,10 +193,110 @@ public enum DevToys {
             let value = rest.removingPercentEncoding ?? rest
             return [("URL decode", value, value)]
         case "json":
-            let value = prettyJSON(rest)
-            return [("JSON", value, value)]
+            return rows(keyword: "json format", argument: rest)
         default:
-            return [("DevToys", "uuid, time, b64, sha256, md5, json, url", "")]
+            return [("DevToys", "encode, decode, uuid, hash, json format, cc snake, nb decimal", "")]
+        }
+    }
+
+    private static func hex<Hash: Sequence>(_ hash: Hash) -> String where Hash.Element == UInt8 {
+        hash.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func htmlEncode(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
+    private static func htmlDecode(_ text: String) -> String {
+        text.replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&amp;", with: "&")
+    }
+
+    private static func caseWords(_ text: String) -> [String] {
+        var words: [String] = []
+        var current = ""
+        func push() {
+            if !current.isEmpty { words.append(current.lowercased()) }
+            current = ""
+        }
+        for character in text {
+            if character == "_" || character == "-" || character == "/" || character == "." || character.isWhitespace {
+                push()
+                continue
+            }
+            if character.isUppercase, let last = current.last, !last.isUppercase {
+                push()
+            }
+            current.append(character)
+        }
+        push()
+        return words
+    }
+
+    private static func changeCase(_ text: String, style: String) -> String {
+        let words = caseWords(text)
+        switch style {
+        case "lower":
+            return text.lowercased()
+        case "upper":
+            return text.uppercased()
+        case "swap":
+            return text.map { character -> String in
+                let value = String(character)
+                if character.isUppercase { return value.lowercased() }
+                if character.isLowercase { return value.uppercased() }
+                return value
+            }.joined()
+        case "snake":
+            return words.joined(separator: "_")
+        case "constant":
+            return words.joined(separator: "_").uppercased()
+        case "param", "command":
+            return words.joined(separator: "-")
+        case "path":
+            return words.joined(separator: "/")
+        case "dot":
+            return words.joined(separator: ".")
+        case "camel":
+            return words.enumerated().map { $0.offset == 0 ? $0.element : $0.element.capitalized }.joined()
+        case "pascal":
+            return words.map(\.capitalized).joined()
+        case "title":
+            return words.map(\.capitalized).joined(separator: " ")
+        case "hashtag":
+            return words.map { "#" + $0.capitalized }.joined(separator: " ")
+        case "ucfirst":
+            guard let first = text.first else { return text }
+            return first.uppercased() + text.dropFirst()
+        case "lcfirst":
+            guard let first = text.first else { return text }
+            return first.lowercased() + text.dropFirst()
+        default:
+            return words.joined(separator: " ")
+        }
+    }
+
+    private static func numberRows(_ text: String, source: String) -> [(title: String, subtitle: String, payload: String)] {
+        let cleaned = text.replacingOccurrences(of: " ", with: "")
+        let radix: Int
+        switch source {
+        case "binary": radix = 2
+        case "octal": radix = 8
+        case "hexadecimal", "hex": radix = 16
+        default: radix = 10
+        }
+        guard let value = Int(cleaned, radix: radix) else {
+            return [("Number base", "Type a \(source) number", "")]
+        }
+        let targets = [("Binary", 2), ("Octal", 8), ("Decimal", 10), ("Hexadecimal", 16)]
+        return targets.filter { $0.1 != radix }.map { name, base in
+            let rendered = base == 16 ? String(value, radix: base).uppercased() : String(value, radix: base)
+            return (rendered, "\(source) to \(name)", rendered)
         }
     }
 
@@ -245,10 +399,6 @@ public struct SystemCommand: Sendable, Equatable {
         SystemCommand(id: "mute", title: "Mute Volume", subtitle: "Toggle mute", symbol: "speaker.slash", keywords: ["mute", "volume"]),
         SystemCommand(id: "volumeup", title: "Volume Up", subtitle: "Raise the output volume", symbol: "speaker.plus", keywords: ["volume up", "louder"]),
         SystemCommand(id: "volumedown", title: "Volume Down", subtitle: "Lower the output volume", symbol: "speaker.minus", keywords: ["volume down", "quieter"]),
-        SystemCommand(id: "playpause", title: "Play or Pause", subtitle: "Music", symbol: "playpause", keywords: ["play", "pause", "playpause"], category: "music"),
-        SystemCommand(id: "nexttrack", title: "Next Track", subtitle: "Music", symbol: "forward.end", keywords: ["next", "next track"], category: "music"),
-        SystemCommand(id: "previoustrack", title: "Previous Track", subtitle: "Music", symbol: "backward.end", keywords: ["previous", "prev", "previous track"], category: "music"),
-        SystemCommand(id: "nowplaying", title: "Now Playing", subtitle: "Show the current Music track", symbol: "music.note", keywords: ["now playing", "np"], category: "music"),
     ]
 }
 

@@ -1,5 +1,5 @@
 import SwiftUI
-import JlfredCore
+import JfredCore
 
 struct FeaturesPane: View {
     var model: AppModel
@@ -19,8 +19,6 @@ struct FeaturesPane: View {
                     case .snippets: snippets
                     case .calculator: calculator
                     case .dictionary: dictionary
-                    case .contacts: contacts
-                    case .music: music
                     case .onePassword: onePassword
                     case .system: system
                     case .terminal: terminal
@@ -31,7 +29,7 @@ struct FeaturesPane: View {
                 .padding(28)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(JlfredColor.canvas)
+            .background(JfredColor.canvas)
         }
         .sheet(item: model.bind(\.featureSheet)) { kind in
             sheetView(kind)
@@ -58,25 +56,22 @@ struct FeaturesPane: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
                         .foregroundStyle(.white)
-                        .background(model.feature == feature ? JlfredColor.sidebarSelected : Color.clear)
+                        .background(model.feature == feature ? JfredColor.sidebarSelected : Color.clear)
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
         .frame(width: 248)
-        .background(JlfredColor.sidebar.opacity(0.96))
+        .background(JfredColor.sidebar.opacity(0.96))
     }
 
     private var defaultResults: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Default Results", "These are the main results Jlfred presents by default, and where he looks for them.")
+            header("Default Results", "These are the main results Jfred presents by default, and where he looks for them.")
             labeled("Applications:") { Button("Options...") { model.featureSheet = .appOptions } }
             labeled("Essentials:") {
-                HStack(spacing: 28) {
-                    Toggle("Contacts", isOn: model.bindPref(\.contactsEnabled))
-                    Toggle("System Settings", isOn: model.bindPref(\.systemSettingsEnabled))
-                }
+                Toggle("System Settings", isOn: model.bindPref(\.systemSettingsEnabled))
             }
             labeled("Extras:") {
                 VStack(alignment: .leading, spacing: 8) {
@@ -94,11 +89,11 @@ struct FeaturesPane: View {
                     }
                 }
             }
-            Text("Note: Jlfred works most efficiently if you only have 'Essential' items ticked and use the 'open' keyword to find files. You can also press space immediately after activating Jlfred to quickly enter the file search mode.")
-                .font(.system(size: 11)).foregroundStyle(JlfredColor.sub).padding(.leading, 132)
+            Text("Note: Jfred works most efficiently if you only have 'Essential' items ticked and use the 'open' keyword to find files. You can also press space immediately after activating Jfred to quickly enter the file search mode.")
+                .font(.system(size: 11)).foregroundStyle(JfredColor.sub).padding(.leading, 132)
             labeled("Unintelligent:") { Toggle("Search all file types", isOn: model.bindPref(\.searchAllFileTypes)) }
             Text("WARNING: Selecting this will slow down and muddle the default search results considerably. Use 'open' and 'find' for file operations instead.")
-                .font(.system(size: 11)).foregroundStyle(JlfredColor.sub).padding(.leading, 132)
+                .font(.system(size: 11)).foregroundStyle(JfredColor.sub).padding(.leading, 132)
             labeled("Search Scope:") {
                 HStack(spacing: 16) {
                     Toggle("macOS Applications folder", isOn: model.bindPref(\.scopeApplications))
@@ -118,8 +113,8 @@ struct FeaturesPane: View {
                     Button("Setup fallback results") { model.featureSheet = .fallbacks }
                 }
             }
-            Text("Fallbacks are shown when Jlfred is unable to find any results. If the option to intelligently show fallbacks is selected, Jlfred will show the fallbacks when relevant. By default, Jlfred shows Google, Amazon and Wikipedia.")
-                .font(.system(size: 11)).foregroundStyle(JlfredColor.sub).padding(.leading, 132)
+            Text("Fallbacks are shown when Jfred is unable to find any results. If the option to intelligently show fallbacks is selected, Jfred will show the fallbacks when relevant. By default, Jfred shows Google, Amazon and Wikipedia.")
+                .font(.system(size: 11)).foregroundStyle(JfredColor.sub).padding(.leading, 132)
         }
     }
 
@@ -142,8 +137,8 @@ struct FeaturesPane: View {
                 }
                 Button("Reset...") { model.preferences.scopePaths = Preferences.defaultScope }
             }
-            Text("These folders define where Jlfred looks for files, applications and metadata. Fewer paths give more accurate results. Drop folders above from Finder or Jlfred.")
-                .font(.system(size: 11)).foregroundStyle(JlfredColor.sub).padding(.leading, 132)
+            Text("These folders define where Jfred looks for files, applications and metadata. Fewer paths give more accurate results. Drop folders above from Finder or Jfred.")
+                .font(.system(size: 11)).foregroundStyle(JfredColor.sub).padding(.leading, 132)
         }
     }
 
@@ -153,7 +148,7 @@ struct FeaturesPane: View {
             Stepper("Maximum results: \(model.preferences.fileSearchMax)", value: model.bindPref(\.fileSearchMax), in: 5...50)
             Toggle("Keep a file buffer (option-up adds the selected file)", isOn: model.bindPref(\.fileBufferEnabled))
             Text("Return opens every file in the buffer. ⌘Y previews the selected file with Quick Look.")
-                .font(.system(size: 12)).foregroundStyle(JlfredColor.sub)
+                .font(.system(size: 12)).foregroundStyle(JfredColor.sub)
         }
     }
 
@@ -161,7 +156,7 @@ struct FeaturesPane: View {
         VStack(alignment: .leading, spacing: 8) {
             header("Universal Actions", "Modifiers on return change what the selected result does.")
             Text("Control, option, and command are set in Advanced. By default control searches the web, option searches in Finder, and command reveals a local file.")
-                .foregroundStyle(JlfredColor.sub)
+                .foregroundStyle(JfredColor.sub)
             LabeledContent("Copy") { Text("⌘C copies the path, URL, or subtitle") }
             LabeledContent("Large Type") { Text("⌘L") }
             LabeledContent("Quick Look") { Text("⌘Y") }
@@ -192,8 +187,8 @@ struct FeaturesPane: View {
             header("Web Bookmarks", "Safari and Chrome bookmarks are mixed into default results.")
             Toggle("Safari bookmarks", isOn: model.bindPref(\.safariBookmarks))
             Toggle("Google Chrome bookmarks", isOn: model.bindPref(\.chromeBookmarks))
-            Text("\(model.links.count) bookmarks indexed. The tabs keyword also reads open tabs and recent history.")
-                .foregroundStyle(JlfredColor.sub)
+            Text("\(model.links.count) bookmarks indexed. The tabnhistory keyword also reads open tabs and recent history.")
+                .foregroundStyle(JfredColor.sub)
             Button("Reload bookmarks") { model.reloadLinks() }
         }
     }
@@ -217,7 +212,8 @@ struct FeaturesPane: View {
             ForEach(Array(model.snippets.enumerated()), id: \.element.id) { index, _ in
                 HStack {
                     TextField("Name", text: model.bindSnippet(index, \.name)).frame(width: 140)
-                    TextField("Keyword", text: model.bindSnippet(index, \.keyword)).frame(width: 100)
+                    TextField("Keyword", text: model.bindSnippet(index, \.keyword)).frame(width: 220)
+                    Toggle("Expand", isOn: model.bindSnippet(index, \.autoExpand))
                     TextField("Text, {date} {time} {iso}", text: model.bindSnippet(index, \.text))
                 }
             }
@@ -226,7 +222,7 @@ struct FeaturesPane: View {
                 Button("Remove last") { if !model.snippets.isEmpty { model.snippets.removeLast() } }
             }
             Text("{date}, {time}, and {iso} are filled in when the snippet expands.")
-                .font(.system(size: 12)).foregroundStyle(JlfredColor.sub)
+                .font(.system(size: 12)).foregroundStyle(JfredColor.sub)
         }
     }
 
@@ -235,7 +231,7 @@ struct FeaturesPane: View {
             header("Calculator", "Type an expression such as (2+2)*3 or sqrt(9).")
             Toggle("Calculate in the default results", isOn: model.bindPref(\.calculatorEnabled))
             Text("Return pastes the result into the previous app. Functions: sqrt, sin, cos, tan, log, ln, abs, pi, e.")
-                .foregroundStyle(JlfredColor.sub)
+                .foregroundStyle(JfredColor.sub)
         }
     }
 
@@ -246,29 +242,12 @@ struct FeaturesPane: View {
         }
     }
 
-    private var contacts: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header("Contacts", "Names, emails, and phone numbers from Contacts.")
-            Toggle("Include contacts in default results", isOn: model.bindPref(\.contactsEnabled))
-            Text("\(model.contacts.count) contacts loaded.")
-                .foregroundStyle(JlfredColor.sub)
-            Button("Reload contacts") { model.reloadContacts() }
-        }
-    }
-
-    private var music: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header("Music", "play, next, previous, and now playing control the Music app.")
-            Toggle("Show music commands", isOn: model.bindPref(\.musicEnabled))
-        }
-    }
-
     private var onePassword: some View {
         VStack(alignment: .leading, spacing: 8) {
             header("1Password", "Uses the op command-line tool when it is installed and signed in.")
             Toggle("Search 1Password items", isOn: model.bindPref(\.onePasswordEnabled))
             Text(model.opItems.isEmpty ? "No items loaded. Turn this on after op item list works in Terminal." : "\(model.opItems.count) items.")
-                .foregroundStyle(JlfredColor.sub)
+                .foregroundStyle(JfredColor.sub)
             Button("Reload items") { model.reloadOnePassword() }
         }
     }
@@ -324,7 +303,7 @@ struct FeaturesPane: View {
     private func header(_ title: String, _ text: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 22, weight: .semibold))
-            Text(text).foregroundStyle(JlfredColor.sub)
+            Text(text).foregroundStyle(JfredColor.sub)
         }
         .padding(.bottom, 6)
     }

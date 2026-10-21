@@ -1,4 +1,4 @@
-import JlfredCore
+import JfredCore
 import SwiftUI
 
 extension AppModel {

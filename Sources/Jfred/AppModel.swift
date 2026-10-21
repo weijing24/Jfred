@@ -1,5 +1,5 @@
 import AppKit
-import JlfredCore
+import JfredCore
 import Foundation
 import ServiceManagement
 
@@ -19,14 +19,14 @@ struct DiskState: Codable {
 enum Seed {
     static func workflows() -> [Workflow] {
         [
-            Workflow(name: "DevToys", keyword: "dev", author: "Built in", symbol: "hammer.fill", tint: "6C5CE7", builtin: "dev"),
-            Workflow(name: "Epoch Converter", keyword: "epoch", author: "Built in", symbol: "clock.fill", tint: "0984E3", builtin: "epoch"),
-            Workflow(name: "Window Switcher", keyword: "win", author: "Built in", symbol: "macwindow", tint: "E17055", builtin: "windows"),
+            Workflow(name: "DevToys", keyword: "encode", author: "Built in", symbol: "hammer.fill", tint: "6C5CE7", builtin: "dev"),
+            Workflow(name: "Epoch Converter", keyword: "ts", author: "Built in", symbol: "clock.fill", tint: "0984E3", builtin: "epoch"),
+            Workflow(name: "Window Switcher", keyword: "win", author: "Built in", symbol: "macwindow", tint: "E17055", enabled: false, builtin: "windows", hotkey: Hotkey(keyCode: 48, modifiers: Hotkey.option)),
             Workflow(name: "Kill Process", keyword: "kill", author: "Built in", symbol: "xmark.octagon.fill", tint: "2D3436", builtin: "kill"),
-            Workflow(name: "Search Browser Tabs and History", keyword: "tabs", author: "Built in", symbol: "globe", tint: "00B894", builtin: "tabs"),
-            Workflow(name: "Switch Chrome Profiles", keyword: "profile", author: "Built in", symbol: "person.2.fill", tint: "6C5CE7", builtin: "profiles"),
-            Workflow(name: "uicli", keyword: "ui", author: "Built in", symbol: "cursorarrow.click.2", tint: "0984E3", builtin: "ui"),
-            Workflow(name: "Unit Converter", keyword: "unit", author: "Built in", symbol: "ruler.fill", tint: "FDCB6E", builtin: "unit"),
+            Workflow(name: "Search Browser Tabs and History", keyword: "tabnhistory", author: "Built in", symbol: "globe", tint: "00B894", builtin: "tabs"),
+            Workflow(name: "Switch Chrome Profiles", keyword: "cp", author: "Built in", symbol: "person.2.fill", tint: "6C5CE7", builtin: "profiles"),
+            Workflow(name: "uicli", keyword: "uicli login", author: "Built in", symbol: "cursorarrow.click.2", tint: "0984E3", builtin: "ui"),
+            Workflow(name: "Unit Converter", keyword: "conv", author: "Built in", symbol: "ruler.fill", tint: "FDCB6E", builtin: "unit"),
         ]
     }
 
@@ -75,6 +75,16 @@ final class AppModel {
     var workflowIsNew = false
     var showTemplates = false
     var showGallery = false
+    var scriptCatalog = ScriptCatalog()
+    var importNote = ""
+    var showStatusItem: Bool {
+        get { knowledge["statusItem"] != "hidden" }
+        set {
+            knowledge["statusItem"] = newValue ? "shown" : "hidden"
+            refreshStatusItem()
+            scheduleSave()
+        }
+    }
 
     private var generation = 0
     private var historyCursor: Int?
@@ -96,7 +106,7 @@ final class AppModel {
         if selectedWorkflow == nil { selectedWorkflow = workflows.first?.id }
         launcher = LauncherController(model: self)
         launcher?.install()
-        installStatusItem()
+        refreshStatusItem()
         applyHotkeys()
         if !suppressPrompts {
             applyLoginItem()
@@ -105,7 +115,6 @@ final class AppModel {
         applyRemote()
         reindex()
         reloadLinks()
-        if preferences.contactsEnabled, !suppressPrompts { reloadContacts() }
         if preferences.onePasswordEnabled { reloadOnePassword() }
         clipChange = NSPasteboard.general.changeCount
         Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
@@ -122,10 +131,30 @@ final class AppModel {
         generation += 1
         let token = generation
         let raw = query
-        let base = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil)
+        let catalog = scriptCatalog
+        let disabledGroups = Set(workflows.compactMap { workflow -> String? in
+            guard let builtin = workflow.builtin, !workflow.enabled else { return nil }
+            return builtin
+        })
+        let base = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil, forced: nil)
         Task {
-            var context = base
+            var forced: [SearchResult]?
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let useCatalog = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
+            if useCatalog, let hit = catalog.hit(in: trimmed, disabledGroups: disabledGroups) {
+                let ran = await Task.detached {
+                    if hit.node.keyword.hasPrefix("gh ") {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                    }
+                    return ScriptRunner.results(catalog: catalog, node: hit.node, argument: hit.argument)
+                }.value
+                if let ran {
+                    forced = ran.isEmpty
+                        ? [SearchResult(id: "run:empty", title: "No matches", subtitle: hit.node.keyword, icon: hit.node.icon, kind: "text", payload: "", category: "action", score: 1)]
+                        : ran
+                }
+            }
+            var context = base
             if self.workflowHit("kill", trimmed) {
                 let processes = await Task.detached { ProcessList.fetch() }.value
                 context.processes = processes
@@ -151,6 +180,7 @@ final class AppModel {
             if let word = Search.wantsDefinition(raw: raw), context.preferences.dictionaryEnabled {
                 context.definition = DictionaryLookup.define(word)
             }
+            context.forcedResults = forced
             let rows = Search.results(for: raw, context: context)
             await MainActor.run {
                 guard token == self.generation else { return }
@@ -292,13 +322,6 @@ final class AppModel {
         case "place":
             openPlace(item.payload)
             hideLauncher(reactivate: false)
-        case "contact":
-            if item.payload.contains("@") {
-                NSWorkspace.shared.open(URL(string: "mailto:\(item.payload)")!)
-            } else if !item.payload.isEmpty {
-                writeClipboard(item.payload)
-            }
-            hideLauncher(reactivate: false)
         case "calculation", "copy", "clipboard", "snippet":
             let text: String
             if item.kind == "snippet" {
@@ -371,6 +394,35 @@ final class AppModel {
         case "largetype":
             hideLauncher(reactivate: false)
             showLarge(item.payload)
+        case "external":
+            let parts = item.payload.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+            let uid = String(parts.first ?? "")
+            let arg = parts.count > 1 ? String(parts[1]) : ""
+            let catalog = scriptCatalog
+            hideLauncher(reactivate: false)
+            Task.detached {
+                ScriptRunner.runAction(catalog: catalog, uid: uid, argument: arg)
+                await MainActor.run { self.debugLine = "Ran the workflow action" }
+            }
+        case "externalchain":
+            let parts = item.payload.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+            let uid = String(parts.first ?? "")
+            let arg = parts.count > 1 ? String(parts[1]) : ""
+            let catalog = scriptCatalog
+            Task.detached {
+                let rows = ScriptRunner.results(catalog: catalog, uid: uid, argument: arg)
+                await MainActor.run {
+                    guard let rows else {
+                        self.debugLine = "The workflow action failed"
+                        return
+                    }
+                    self.results = rows.isEmpty
+                        ? [SearchResult(id: "run:empty", title: "No matches", subtitle: arg, icon: "symbol:magnifyingglass", kind: "text", payload: "", category: "action", score: 1)]
+                        : rows
+                    self.selection = 0
+                    self.launcher?.layout()
+                }
+            }
         case "text":
             hideLauncher(reactivate: false)
             if !item.payload.isEmpty { showLarge(item.payload) }
@@ -396,7 +448,6 @@ final class AppModel {
         if old.scopePaths != preferences.scopePaths || old.includeSystemApps != preferences.includeSystemApps || old.includeUserApps != preferences.includeUserApps || old.includePreferencePanes != preferences.includePreferencePanes || old.scopeApplications != preferences.scopeApplications {
             reindex()
         }
-        if old.contactsEnabled != preferences.contactsEnabled && preferences.contactsEnabled { reloadContacts() }
         if old.onePasswordEnabled != preferences.onePasswordEnabled && preferences.onePasswordEnabled { reloadOnePassword() }
         if old.safariBookmarks != preferences.safariBookmarks || old.chromeBookmarks != preferences.chromeBookmarks { reloadLinks() }
     }
@@ -425,12 +476,6 @@ final class AppModel {
         Task.detached {
             let links = BookmarkIndex.load(preferences: prefs)
             await MainActor.run { self.links = links }
-        }
-    }
-
-    func reloadContacts() {
-        ContactIndex.request { rows in
-            Task { @MainActor in self.contacts = rows }
         }
     }
 
@@ -467,7 +512,6 @@ final class AppModel {
 
     func requestPermissions() {
         _ = Accessibility.prompt()
-        if preferences.contactsEnabled { reloadContacts() }
         if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
@@ -516,7 +560,7 @@ final class AppModel {
         let query = parts.count > 1 ? String(parts[1]) : ""
         let params = queryItems(query)
         guard params["token"] == preferences.remoteToken else {
-            return "<p>Token required. Add ?token= from Jlfred Preferences → Remote.</p>"
+            return "<p>Token required. Add ?token= from Jfred Preferences → Remote.</p>"
         }
         if path == "/run" {
             let id = params["id"] ?? ""
@@ -534,9 +578,9 @@ final class AppModel {
         }
         let q = params["q"] ?? ""
         var body = """
-        <!doctype html><meta charset="utf-8"><title>Jlfred Remote</title>
+        <!doctype html><meta charset="utf-8"><title>Jfred Remote</title>
         <style>body{font:15px -apple-system,sans-serif;background:#1b1b1b;color:#f2f2f2;margin:28px}a{color:#d7b4ff;text-decoration:none}input,button{font:inherit;padding:6px 8px}li{margin:6px 0}</style>
-        <h1>Jlfred Remote</h1>
+        <h1>Jfred Remote</h1>
         <form><input type="hidden" name="token" value="\(preferences.remoteToken)"><input name="q" value="\(escapeHTML(q))" placeholder="Search" autofocus><button>Search</button></form>
         """
         if !q.isEmpty {
@@ -631,10 +675,10 @@ final class AppModel {
 
     private func workflowHit(_ builtin: String, _ trimmed: String) -> Bool {
         guard let workflow = workflows.first(where: { $0.enabled && $0.builtin == builtin }) else { return false }
-        return argument(of: workflow.keyword, in: trimmed) != nil
+        return WorkflowMatching.best(in: [workflow], query: trimmed) != nil
     }
 
-    private func makeContext(files: [AppRecord], windows: [WindowInfo], processes: [ProcInfo], tabs: [LinkRecord], profiles: [ProfileInfo], definition: String?) -> SearchContext {
+    private func makeContext(files: [AppRecord], windows: [WindowInfo], processes: [ProcInfo], tabs: [LinkRecord], profiles: [ProfileInfo], definition: String?, forced: [SearchResult]? = nil) -> SearchContext {
         SearchContext(
             preferences: preferences,
             workflows: workflows,
@@ -653,7 +697,8 @@ final class AppModel {
             definition: definition,
             opItems: opItems,
             knowledge: knowledge,
-            now: Date()
+            now: Date(),
+            forcedResults: forced
         )
     }
 
@@ -780,12 +825,6 @@ final class AppModel {
         case "mute": _ = Shell.osascript("set volume with output muted")
         case "volumeup": changeVolume(10)
         case "volumedown": changeVolume(-10)
-        case "playpause": _ = Shell.osascript("tell application \"Music\" to playpause")
-        case "nexttrack": _ = Shell.osascript("tell application \"Music\" to next track")
-        case "previoustrack": _ = Shell.osascript("tell application \"Music\" to previous track")
-        case "nowplaying":
-            let text = Shell.osascript("tell application \"Music\" to (get name of current track) & \" — \" & (get artist of current track)")
-            showLarge(text.isEmpty ? "Nothing playing" : text)
         default:
             debugLine = "Unknown command \(id)"
         }
@@ -839,6 +878,10 @@ final class AppModel {
             hotkeyWarning = ""
         } else {
             hotkeyWarning = "That hotkey is already in use. Pick another."
+            if knowledge["statusItem"] == "hidden" {
+                knowledge["statusItem"] = "shown"
+                refreshStatusItem()
+            }
         }
         for (index, workflow) in workflows.enumerated() {
             let id = UInt32(100 + index)
@@ -907,6 +950,7 @@ final class AppModel {
             preferences = Preferences()
             workflows = Seed.workflows()
             snippets = Seed.snippets()
+            finishJfredStore()
             return
         }
         preferences = state.preferences
@@ -915,6 +959,27 @@ final class AppModel {
         clips = state.clips
         usage = state.usage
         knowledge = state.knowledge
+        finishJfredStore()
+    }
+
+    private func finishJfredStore() {
+        if knowledge["launcher.sync"] != "1", let catalog = JfredStore.apply(self) {
+            knowledge["launcher.sync"] = "1"
+            scriptCatalog = catalog
+            scheduleSave()
+        } else {
+            scriptCatalog = JfredStore.catalog()
+        }
+    }
+
+    func importLauncherSettings() {
+        guard let catalog = JfredStore.apply(self) else { return }
+        knowledge["launcher.sync"] = "1"
+        scriptCatalog = catalog
+        applyHotkeys()
+        applyExpander()
+        refreshStatusItem()
+        scheduleSave()
     }
 
     private func scheduleSave() {
@@ -932,14 +997,25 @@ final class AppModel {
         try? data.write(to: supportDirectory().appendingPathComponent("state.json"), options: .atomic)
     }
 
+    private func refreshStatusItem() {
+        if showStatusItem {
+            if statusItem == nil { installStatusItem() }
+            return
+        }
+        if let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
+    }
+
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = menuHatImage()
         let menu = NSMenu()
-        menu.addItem(withTitle: "Show Jlfred", action: #selector(statusShow), keyEquivalent: "")
+        menu.addItem(withTitle: "Show Jfred", action: #selector(statusShow), keyEquivalent: "")
         menu.addItem(withTitle: "Preferences", action: #selector(statusPrefs), keyEquivalent: ",")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Jlfred", action: #selector(statusQuit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit Jfred", action: #selector(statusQuit), keyEquivalent: "q")
         for entry in menu.items { entry.target = self }
         item.menu = menu
         statusItem = item
@@ -990,7 +1066,7 @@ enum AppRelease {
 }
 
 enum FeatureID: String, CaseIterable, Identifiable {
-    case defaultResults, fileSearch, universalActions, webSearch, bookmarks, clipboard, snippets, calculator, dictionary, contacts, music, onePassword, system, terminal, largeType, previews
+    case defaultResults, fileSearch, universalActions, webSearch, bookmarks, clipboard, snippets, calculator, dictionary, onePassword, system, terminal, largeType, previews
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -1003,8 +1079,6 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "Snippets"
         case .calculator: "Calculator"
         case .dictionary: "Dictionary"
-        case .contacts: "Contacts"
-        case .music: "Music"
         case .onePassword: "1Password"
         case .system: "System"
         case .terminal: "Terminal"
@@ -1023,8 +1097,6 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "Snippets, Clippings"
         case .calculator: "Standard, Advanced"
         case .dictionary: "Spelling, Definitions"
-        case .contacts: "Viewer, Emailing"
-        case .music: "Mini Player"
         case .onePassword: "1Click Bookmarks"
         case .system: "Commands, Quitting, Ejecting"
         case .terminal: "Prefix, Custom Integration"
@@ -1043,8 +1115,6 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "note.text"
         case .calculator: "plus.slash.minus"
         case .dictionary: "character.book.closed.fill"
-        case .contacts: "person.crop.circle"
-        case .music: "music.note"
         case .onePassword: "key.fill"
         case .system: "power"
         case .terminal: "terminal.fill"
@@ -1098,16 +1168,16 @@ enum PreferenceIndex {
     static let hits: [PreferenceHit] = {
         var rows: [PreferenceHit] = [
             PreferenceHit(id: "login", title: "Launch at login", detail: "General", section: .general, feature: nil),
-            PreferenceHit(id: "hotkey", title: "Jlfred Hotkey", detail: "General", section: .general, feature: nil),
+            PreferenceHit(id: "hotkey", title: "Jfred Hotkey", detail: "General", section: .general, feature: nil),
             PreferenceHit(id: "location", title: "Where are you", detail: "Google and Amazon domains", section: .general, feature: nil),
-            PreferenceHit(id: "permissions", title: "Permissions", detail: "Accessibility, contacts, automation", section: .general, feature: nil),
+            PreferenceHit(id: "permissions", title: "Permissions", detail: "Accessibility and automation", section: .general, feature: nil),
             PreferenceHit(id: "cache", title: "Clear Application Cache", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "metadata", title: "Rebuild macOS Metadata", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "history", title: "Store typed query", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "learning", title: "Top Result Keyword Latching", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "sync", title: "Syncing folder", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "usage", title: "Usage", detail: "Stats", section: .usage, feature: nil),
-            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Jlfred Modern and others", section: .appearance, feature: nil),
+            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Jfred Modern and others", section: .appearance, feature: nil),
             PreferenceHit(id: "remote", title: "Remote server", detail: "Local command page", section: .remote, feature: nil),
         ]
         for feature in FeatureID.allCases {

@@ -1,5 +1,5 @@
 import SwiftUI
-import JlfredCore
+import JfredCore
 
 struct PreferencesShell: View {
     var model: AppModel
@@ -10,11 +10,11 @@ struct PreferencesShell: View {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(JlfredColor.canvas)
+        .background(JfredColor.canvas)
         .preferredColorScheme(model.section == .workflows ? .dark : .light)
         .background(WindowReader { window in
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
-            window.title = "Jlfred Preferences"
+            window.title = "Jfred Preferences"
             window.titlebarAppearsTransparent = false
             window.setContentSize(NSSize(width: 1120, height: 720))
         })
@@ -74,7 +74,7 @@ struct IconRail: View {
         .padding(.vertical, 8)
         .frame(width: 86)
         .frame(maxHeight: .infinity)
-        .background(JlfredColor.sidebar)
+        .background(JfredColor.sidebar)
     }
 
     private func railButton(_ section: PrefSection) -> some View {
@@ -96,7 +96,7 @@ struct IconRail: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 7)
-            .background(model.section == section ? JlfredColor.sidebarSelected : Color.clear)
+            .background(model.section == section ? JfredColor.sidebarSelected : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -127,7 +127,7 @@ struct PreferenceSearchList: View {
             .buttonStyle(.plain)
         }
         .scrollContentBackground(.hidden)
-        .background(JlfredColor.canvas)
+        .background(JfredColor.canvas)
     }
 }
 
@@ -137,16 +137,16 @@ struct GeneralPane: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
-                JlfredColor.canvas
+                JfredColor.canvas
                 DamaskBackground()
                 VStack(alignment: .leading, spacing: 0) {
                     Text(AppRelease.version)
                         .font(.system(size: 12))
                         .foregroundStyle(Color(hex: 0x8A8A8A))
-                        .padding(.top, 8)
+                        .padding(.top, 6)
                         .padding(.leading, 12)
-                    Spacer(minLength: 0)
                     form
+                        .padding(.top, 46)
                     Spacer(minLength: 0)
                 }
             }
@@ -157,32 +157,41 @@ struct GeneralPane: View {
         VStack(alignment: .leading, spacing: 18) {
             FormRow(label: "Startup:") {
                 HStack(spacing: 12) {
-                    Toggle("Launch Jlfred at login", isOn: model.bindPref(\.launchAtLogin))
-                    Button("Quit Jlfred") { NSApp.terminate(nil) }
+                    Toggle("Launch Jfred at login", isOn: model.bindPref(\.launchAtLogin))
+                    Button("Quit Jfred") { NSApp.terminate(nil) }
                 }
             }
-            HelpNote(text: "If selected, Jlfred will still launch at login after using the \"Quit Jlfred\" button.")
-            FormRow(label: "Jlfred Hotkey:") {
+            HelpNote(text: "If selected, Jfred will still launch at login after using the \"Quit Jfred\" button.")
+            FormRow(label: "Jfred Hotkey:") {
                 HStack(spacing: 8) {
                     ZStack {
                         HotkeyGlyphs(hotkey: model.preferences.hotkey)
-                        HotkeyCapture { code, flags in
-                            model.preferences.hotkey = Hotkey(keyCode: code, modifiers: flags)
-                        }
+                        HotkeyCapture(
+                            onSet: { code, flags in
+                                model.preferences.hotkey = Hotkey(keyCode: code, modifiers: flags)
+                            },
+                            onFocus: { focused in
+                                if focused {
+                                    HotkeyCenter.shared.suspend()
+                                } else {
+                                    model.applyHotkeys()
+                                }
+                            }
+                        )
                     }
                     .frame(width: 280, height: 26)
                     .padding(.horizontal, 8)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(JlfredColor.line))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(JfredColor.line))
                     Button {
                     } label: {
                         Image(systemName: "questionmark.circle")
                     }
                     .buttonStyle(.plain)
-                    .help("Click the field and type the hotkey you would like to use to show Jlfred.")
+                    .help("Click the field, then press a key or a modifier plus a key. Escape cancels.")
                 }
             }
-            HelpNote(text: model.hotkeyWarning.isEmpty ? "Select this field and type the hotkey you would like to use to show Jlfred." : model.hotkeyWarning)
+            HelpNote(text: model.hotkeyWarning.isEmpty ? "Click the field, then press a key combination such as ⌥Space or ⌘Space. Escape cancels." : model.hotkeyWarning)
             FormRow(label: "Where are you:") {
                 Picker("", selection: model.bindPref(\.location)) {
                     ForEach(Preferences.locations, id: \.self) { Text($0).tag($0) }
@@ -194,11 +203,18 @@ struct GeneralPane: View {
                 Spacer().frame(width: 142)
                 Toggle("Use .com for Google searches", isOn: model.bindPref(\.useDotCom))
             }
-            HelpNote(text: "This tells Jlfred which websites to use for web searching such as amazon.ca or ebay.com.")
+            HelpNote(text: "This tells Jfred which websites to use for web searching such as amazon.ca or ebay.com.")
             FormRow(label: "Permissions:") {
                 Button("Request Permissions...") { model.requestPermissions() }
             }
-            HelpNote(text: "Jlfred requires certain permissions to enable him to automate your Mac. This button will help you enable these permissions.")
+            HelpNote(text: "Jfred requires certain permissions to enable him to automate your Mac. This button will help you enable these permissions.")
+            FormRow(label: "Menu bar:") {
+                Toggle("Show menu bar icon", isOn: Binding(get: { model.showStatusItem }, set: { model.showStatusItem = $0 }))
+            }
+            FormRow(label: "Launcher:") {
+                Button("Import Launcher Settings") { model.importLauncherSettings() }
+            }
+            HelpNote(text: model.importNote.isEmpty ? "Copies this Mac's launcher settings into Jfred and reads that copy. The original folder is left unchanged. Built-in workflow keywords are reset to match." : model.importNote)
         }
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)

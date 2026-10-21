@@ -63,7 +63,6 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var hotkey: Hotkey
     public var location: String
     public var useDotCom: Bool
-    public var contactsEnabled: Bool
     public var systemSettingsEnabled: Bool
     public var extraFolders: Bool
     public var extraDocuments: Bool
@@ -98,7 +97,6 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var clipboardLimit: Int
     public var calculatorEnabled: Bool
     public var dictionaryEnabled: Bool
-    public var musicEnabled: Bool
     public var onePasswordEnabled: Bool
     public var largeTypeSize: Double
     public var largeTypeFont: String
@@ -140,10 +138,9 @@ public struct Preferences: Codable, Equatable, Sendable {
 
     public init() {
         launchAtLogin = true
-        hotkey = .screenshotDefault
+        hotkey = Hotkey(keyCode: 49, modifiers: Hotkey.command)
         location = "International"
         useDotCom = true
-        contactsEnabled = true
         systemSettingsEnabled = true
         extraFolders = false
         extraDocuments = false
@@ -178,12 +175,11 @@ public struct Preferences: Codable, Equatable, Sendable {
         clipboardLimit = 250
         calculatorEnabled = true
         dictionaryEnabled = true
-        musicEnabled = true
         onePasswordEnabled = false
         largeTypeSize = 96
         largeTypeFont = "System"
         quickLookEnabled = true
-        terminalApp = "Terminal"
+        terminalApp = "iTerm"
         fileSearchMax = 20
         remoteEnabled = false
         remoteLocalOnly = true
@@ -315,12 +311,36 @@ public struct Snippet: Codable, Equatable, Sendable, Identifiable {
     public var name: String
     public var keyword: String
     public var text: String
+    public var autoExpand: Bool
 
-    public init(id: UUID = UUID(), name: String, keyword: String, text: String) {
+    public init(id: UUID = UUID(), name: String, keyword: String, text: String, autoExpand: Bool = true) {
         self.id = id
         self.name = name
         self.keyword = keyword
         self.text = text
+        self.autoExpand = autoExpand
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, keyword, text, autoExpand
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        keyword = try container.decode(String.self, forKey: .keyword)
+        text = try container.decode(String.self, forKey: .text)
+        autoExpand = try container.decodeIfPresent(Bool.self, forKey: .autoExpand) ?? true
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(keyword, forKey: .keyword)
+        try container.encode(text, forKey: .text)
+        try container.encode(autoExpand, forKey: .autoExpand)
     }
 }
 
@@ -479,6 +499,7 @@ public struct SearchContext: Sendable {
     public var opItems: [AppRecord]
     public var knowledge: [String: String]
     public var now: Date
+    public var forcedResults: [SearchResult]?
 
     public init(
         preferences: Preferences = Preferences(),
@@ -498,7 +519,8 @@ public struct SearchContext: Sendable {
         definition: String? = nil,
         opItems: [AppRecord] = [],
         knowledge: [String: String] = [:],
-        now: Date = Date()
+        now: Date = Date(),
+        forcedResults: [SearchResult]? = nil
     ) {
         self.preferences = preferences
         self.workflows = workflows
@@ -518,6 +540,7 @@ public struct SearchContext: Sendable {
         self.opItems = opItems
         self.knowledge = knowledge
         self.now = now
+        self.forcedResults = forcedResults
     }
 }
 

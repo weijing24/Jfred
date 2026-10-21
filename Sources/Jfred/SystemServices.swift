@@ -1,7 +1,6 @@
-import JlfredCore
+import JfredCore
 import AppKit
 import ApplicationServices
-import Contacts
 import CoreServices
 import Darwin
 import Foundation
@@ -24,13 +23,21 @@ final class ShellBuffer: @unchecked Sendable {
 }
 
 enum Shell {
-    static func run(_ executable: String, _ arguments: [String], timeout: TimeInterval = 4) -> String {
+    static func run(
+        _ executable: String,
+        _ arguments: [String],
+        timeout: TimeInterval = 4,
+        directory: URL? = nil,
+        environment: [String: String]? = nil
+    ) -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
+        if let directory { process.currentDirectoryURL = directory }
+        if let environment { process.environment = environment }
         let out = Pipe()
         process.standardOutput = out
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         let collected = ShellBuffer()
         let handle = out.fileHandleForReading
         handle.readabilityHandler = { file in
@@ -286,7 +293,7 @@ enum WindowList {
             let layer = item[kCGWindowLayer as String] as? Int ?? 0
             if layer != 0 { continue }
             let owner = item[kCGWindowOwnerName as String] as? String ?? ""
-            if owner.isEmpty || owner == "Window Server" || owner == "Jlfred" { continue }
+            if owner.isEmpty || owner == "Window Server" || owner == "Jfred" { continue }
             let title = item[kCGWindowName as String] as? String ?? ""
             let pid = item[kCGWindowOwnerPID as String] as? Int32 ?? Int32(item[kCGWindowOwnerPID as String] as? Int ?? 0)
             let number = item[kCGWindowNumber as String] as? Int ?? 0
@@ -360,27 +367,6 @@ enum BrowserTabs {
     }
 }
 
-enum ContactIndex {
-    static func request(_ done: @escaping @Sendable ([ContactRecord]) -> Void) {
-        let store = CNContactStore()
-        store.requestAccess(for: .contacts) { allowed, _ in
-            guard allowed else { done([]); return }
-            let keys = [CNContactGivenNameKey, CNContactFamilyNameKey, CNContactEmailAddressesKey, CNContactPhoneNumbersKey] as [CNKeyDescriptor]
-            let request = CNContactFetchRequest(keysToFetch: keys)
-            var rows: [ContactRecord] = []
-            try? store.enumerateContacts(with: request) { contact, _ in
-                let name = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
-                let email = contact.emailAddresses.first?.value as String? ?? ""
-                let phone = contact.phoneNumbers.first?.value.stringValue ?? ""
-                if !name.isEmpty {
-                    rows.append(ContactRecord(id: contact.identifier, name: name, email: email, phone: phone))
-                }
-            }
-            done(rows)
-        }
-    }
-}
-
 enum DictionaryLookup {
     static func define(_ word: String) -> String? {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -441,7 +427,7 @@ final class SnippetExpander: @unchecked Sendable {
     func update(enabled: Bool, snippets: [Snippet]) {
         lock.lock()
         self.enabled = enabled
-        self.snippets = Dictionary(snippets.map { ($0.keyword, $0.text) }, uniquingKeysWith: { first, _ in first })
+        self.snippets = Dictionary(snippets.filter(\.autoExpand).map { ($0.keyword, $0.text) }, uniquingKeysWith: { first, _ in first })
         lock.unlock()
         if enabled { install() }
     }
@@ -502,7 +488,7 @@ final class SnippetExpander: @unchecked Sendable {
         }
         lock.lock()
         buffer.append(character)
-        if buffer.count > 40 { buffer.removeFirst(buffer.count - 40) }
+        if buffer.count > 160 { buffer.removeFirst(buffer.count - 160) }
         let current = buffer
         lock.unlock()
         guard character == " " || character == "\t" else { return }
@@ -626,11 +612,25 @@ final class RemoteServer: @unchecked Sendable {
 
 enum SupportPaths {
     static func directory(syncFolder: String) -> URL {
+        let url: URL
         if !syncFolder.isEmpty {
             let base = URL(fileURLWithPath: (syncFolder as NSString).expandingTildeInPath, isDirectory: true)
-            return base.appendingPathComponent("JlfredLocal", isDirectory: true)
+            url = base.appendingPathComponent("JfredLocal", isDirectory: true)
+        } else {
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            url = appSupport.appendingPathComponent("JfredLocal", isDirectory: true)
+            adoptPreviousState(into: url)
         }
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return appSupport.appendingPathComponent("JlfredLocal", isDirectory: true)
+        return url
+    }
+
+    private static func adoptPreviousState(into directory: URL) {
+        let destination = directory.appendingPathComponent("state.json")
+        if FileManager.default.fileExists(atPath: destination.path) { return }
+        let legacy = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("JlfredLocal/state.json")
+        guard FileManager.default.fileExists(atPath: legacy.path) else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? FileManager.default.copyItem(at: legacy, to: destination)
     }
 }

@@ -8,6 +8,9 @@ public enum Search {
             return cap(fileResults(query: raw.trimmingCharacters(in: .whitespacesAndNewlines), context: context))
         }
         if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return [] }
+        if let forced = context.forcedResults {
+            return Array(forced.prefix(12))
+        }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix(">") {
             let command = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
@@ -135,24 +138,6 @@ public enum Search {
                 ))
             }
         }
-        if context.preferences.contactsEnabled {
-            for contact in context.contacts {
-                let subtitle = [contact.email, contact.phone].filter { !$0.isEmpty }.joined(separator: "  ·  ")
-                push(scored(
-                    query: needle,
-                    fields: [contact.name, contact.email, contact.phone],
-                    id: "contact:\(contact.id)",
-                    title: contact.name,
-                    subtitle: subtitle.isEmpty ? "Contact" : subtitle,
-                    icon: "symbol:person.crop.circle",
-                    kind: "contact",
-                    payload: contact.email.isEmpty ? contact.phone : contact.email,
-                    category: "general",
-                    context: context,
-                    dampen: 0.96
-                ))
-            }
-        }
         for snippet in context.snippets where context.preferences.snippetsEnabled {
             push(scored(
                 query: needle,
@@ -169,7 +154,7 @@ public enum Search {
             ))
         }
         for command in SystemCommand.all {
-            if command.category == "music" && !context.preferences.musicEnabled { continue }
+            if command.category == "music" { continue }
             push(scored(
                 query: needle,
                 fields: [command.title] + command.keywords,
@@ -287,56 +272,52 @@ public enum Search {
     }
 
     private static func workflowResults(_ trimmed: String, context: SearchContext) -> [SearchResult]? {
-        var matched: [SearchResult] = []
-        var hit = false
-        for (index, workflow) in context.workflows.enumerated() where workflow.enabled {
-            guard let arg = argument(of: workflow.keyword, in: trimmed) else { continue }
-            hit = true
-            let score = 2.0 - Double(index) * 0.01
-            if let builtin = workflow.builtin {
-                matched.append(contentsOf: builtinResults(workflow, builtin: builtin, argument: arg, score: score, context: context))
-            } else if workflow.actions.isEmpty {
-                matched.append(make(
-                    id: "wf:\(workflow.id.uuidString)",
-                    title: workflow.name,
-                    subtitle: "No actions yet",
-                    icon: "symbol:\(workflow.symbol)",
-                    kind: "text",
-                    payload: workflow.name,
-                    category: "action",
-                    score: score
-                ))
-            } else {
-                for action in workflow.actions {
-                    let value = fillTemplate(action.value, query: arg)
-                    matched.append(make(
-                        id: "wf:\(workflow.id.uuidString):\(action.id.uuidString)",
-                        title: workflow.name,
-                        subtitle: actionSubtitle(action.kind, value: value, argument: arg),
-                        icon: "symbol:\(workflow.symbol)",
-                        kind: actionKind(action.kind),
-                        payload: value,
-                        category: "action",
-                        score: score
-                    ))
-                }
-            }
+        guard let match = WorkflowMatching.best(in: context.workflows, query: trimmed) else { return nil }
+        let workflow = match.workflow
+        let argument = match.argument
+        let score = 2.0
+        if let builtin = workflow.builtin {
+            return builtinResults(workflow, builtin: builtin, keyword: match.keyword, argument: argument, score: score, context: context)
         }
-        return hit ? matched : nil
+        if workflow.actions.isEmpty {
+            return [make(
+                id: "wf:\(workflow.id.uuidString)",
+                title: workflow.name,
+                subtitle: "No actions yet",
+                icon: "symbol:\(workflow.symbol)",
+                kind: "text",
+                payload: workflow.name,
+                category: "action",
+                score: score
+            )]
+        }
+        return workflow.actions.map { action in
+            let value = fillTemplate(action.value, query: argument)
+            return make(
+                id: "wf:\(workflow.id.uuidString):\(action.id.uuidString)",
+                title: workflow.name,
+                subtitle: actionSubtitle(action.kind, value: value, argument: argument),
+                icon: "symbol:\(workflow.symbol)",
+                kind: actionKind(action.kind),
+                payload: value,
+                category: "action",
+                score: score
+            )
+        }
     }
 
-    private static func builtinResults(_ workflow: Workflow, builtin: String, argument: String, score: Double, context: SearchContext) -> [SearchResult] {
+    private static func builtinResults(_ workflow: Workflow, builtin: String, keyword: String, argument: String, score: Double, context: SearchContext) -> [SearchResult] {
         switch builtin {
         case "dev":
-            return DevToys.rows(argument: argument).map { row in
-                make(id: "dev:\(row.title):\(row.payload)", title: row.title, subtitle: row.subtitle, icon: "symbol:hammer", kind: "copy", payload: row.payload, category: "action", score: score)
+            return DevToys.rows(keyword: keyword, argument: argument).map { row in
+                make(id: "dev:\(keyword):\(row.subtitle):\(row.payload)", title: row.title, subtitle: row.subtitle, icon: "symbol:hammer", kind: "copy", payload: row.payload, category: "action", score: score)
             }
         case "epoch":
             return Epoch.rows(argument: argument, now: context.now).map { row in
                 make(id: "epoch:\(row.title)", title: row.title, subtitle: row.subtitle, icon: "symbol:clock", kind: "copy", payload: row.payload, category: "action", score: score)
             }
         case "unit":
-            if let conversion = Units.convert(argument.isEmpty ? "" : "unit \(argument)") ?? Units.convert(argument) {
+            if let conversion = Units.convert(argument) ?? Units.convert("conv \(argument)") ?? Units.convert(argument.isEmpty ? "" : "unit \(argument)") {
                 return [make(id: "unit:\(conversion.text)", title: conversion.text, subtitle: argument, icon: "symbol:ruler", kind: "calculation", payload: conversion.text, category: "general", score: score)]
             }
             return [make(id: "unit:help", title: "Unit Converter", subtitle: "Try 10 km in m", icon: "symbol:ruler", kind: "text", payload: "10 km in m, 32 f in c, 1 gb in mb", category: "general", score: score)]
@@ -374,17 +355,12 @@ public enum Search {
                 make(id: "profile:\(profile.directory)", title: profile.name, subtitle: profile.directory, icon: "symbol:person.crop.circle", kind: "profile", payload: profile.directory, category: "action", score: score)
             }
         case "ui":
-            let commands = SystemCommand.all.filter { ["lock", "sleep", "desktop", "mission", "launchpad", "screenshot", "darkmode", "emptetrash", "screensaver"].contains($0.id) }
-            let rows = commands.filter { argument.isEmpty || bestFuzzyScore(query: argument, fields: [commandTitle($0)]) != nil }
-            return rows.map { command in
-                make(id: "sys:\(command.id)", title: command.title, subtitle: command.subtitle, icon: "symbol:\(command.symbol)", kind: "system", payload: command.id, category: "action", score: score)
-            }
+            let subtitle = argument.isEmpty ? "Workflow" : argument
+            return [make(id: "ui:\(keyword)", title: keyword, subtitle: subtitle, icon: "symbol:cursorarrow.click.2", kind: "text", payload: "", category: "action", score: score)]
         default:
             return []
         }
     }
-
-    private static func commandTitle(_ command: SystemCommand) -> String { command.title }
 
     private static func fileResults(query: String, context: SearchContext) -> [SearchResult] {
         if query.isEmpty {

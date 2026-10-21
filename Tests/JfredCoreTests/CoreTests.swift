@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import JlfredCore
+@testable import JfredCore
 
 struct CoreTests {
     @Test func calculatorPrecedence() {
@@ -71,10 +71,48 @@ struct CoreTests {
 
     @Test func webKeyword() {
         let context = SearchContext()
-        let rows = Search.results(for: "g jlfred", context: context)
+        let rows = Search.results(for: "g jfred", context: context)
         #expect(rows.count == 1)
         #expect(rows[0].kind == "url")
         #expect(rows[0].payload.contains("google.com"))
+    }
+
+    @Test func launcherKeywords() {
+        let dev = Workflow(name: "DevToys", keyword: "encode", author: "Built in", symbol: "hammer", tint: "purple", builtin: "dev")
+        let epoch = Workflow(name: "Epoch Converter", keyword: "ts", author: "Built in", symbol: "clock", tint: "blue", builtin: "epoch")
+        let unit = Workflow(name: "Unit Converter", keyword: "conv", author: "Built in", symbol: "ruler", tint: "yellow", builtin: "unit")
+        let profiles = Workflow(name: "Switch Chrome Profiles", keyword: "cp", author: "Built in", symbol: "person", tint: "purple", builtin: "profiles")
+        let windows = Workflow(name: "Window Switcher", keyword: "win", author: "Built in", symbol: "macwindow", tint: "orange", enabled: false, builtin: "windows")
+        let ui = Workflow(name: "uicli", keyword: "uicli login", author: "Built in", symbol: "cursorarrow", tint: "blue", builtin: "ui")
+        var context = SearchContext(workflows: [dev, epoch, unit, profiles, windows, ui])
+        let encoded = Search.results(for: "encode hi", context: context)
+        #expect(encoded.contains { $0.payload == "aGk=" })
+        let snake = Search.results(for: "cc snake Hello World", context: context)
+        #expect(snake.first?.payload == "hello_world")
+        let stamp = Search.results(for: "ts 1700000000", context: context)
+        #expect(stamp.contains { $0.payload == "1700000000" })
+        let converted = Search.results(for: "conv 10 km in m", context: context)
+        #expect(converted.first?.title == "10000 m")
+        context.profiles = [ProfileInfo(id: "Default", name: "Default", directory: "Default")]
+        let profile = Search.results(for: "cpDef", context: context)
+        #expect(profile.first?.kind == "profile")
+        #expect(profile.first?.title == "Default")
+        context.windows = [WindowInfo(id: "1", title: "Inbox", owner: "Mail", pid: 1)]
+        let win = Search.results(for: "win", context: context)
+        #expect(!win.contains { $0.kind == "window" })
+        let comments = WorkflowMatching.best(in: [ui], query: "gh issue new comments @me 2")
+        #expect(comments?.keyword == "gh issue new comments @me")
+        #expect(comments?.argument == "2")
+        let base64 = DevToys.rows(keyword: "nb decimal", argument: "255")
+        #expect(base64.contains { $0.payload == "FF" })
+        let parsed = ScriptJSON.items(in: "log\n{\"items\":[{\"title\":\"A\",\"subtitle\":\"B\",\"arg\":\"C\"}]}\n")
+        #expect(parsed?.first?.title == "A")
+        #expect(parsed?.first?.valid == true)
+        let id = UUID()
+        let data = #"{"id":"\#(id.uuidString)","name":"Date","keyword":";date","text":"{date}"}"#.data(using: .utf8)!
+        let snippet = try! JSONDecoder().decode(Snippet.self, from: data)
+        #expect(snippet.autoExpand)
+        #expect(snippet.keyword == ";date")
     }
 
     @Test func usageBuckets() {

@@ -1,5 +1,5 @@
 import AppKit
-import JlfredCore
+import JfredCore
 import SwiftUI
 
 final class LauncherPanel: NSPanel {

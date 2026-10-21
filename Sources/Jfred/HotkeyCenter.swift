@@ -37,6 +37,15 @@ final class HotkeyCenter: @unchecked Sendable {
         if let ref { UnregisterEventHotKey(ref) }
     }
 
+    func suspend() {
+        lock.lock()
+        let current = refs
+        refs.removeAll()
+        handlers.removeAll()
+        lock.unlock()
+        for (_, ref) in current { UnregisterEventHotKey(ref) }
+    }
+
     fileprivate func fire(_ id: UInt32) {
         lock.lock()
         let handler = handlers[id]

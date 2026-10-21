@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "Jlfred",
+    name: "Jfred",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Jlfred", targets: ["Jlfred"])
+        .executable(name: "Jfred", targets: ["Jfred"])
     ],
     targets: [
-        .target(name: "JlfredCore"),
+        .target(name: "JfredCore"),
         .executableTarget(
-            name: "Jlfred",
-            dependencies: ["JlfredCore"],
+            name: "Jfred",
+            dependencies: ["JfredCore"],
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"])
             ],
@@ -19,13 +19,12 @@ let package = Package(
                 .linkedFramework("AppKit"),
                 .linkedFramework("SwiftUI"),
                 .linkedFramework("Carbon"),
-                .linkedFramework("Contacts"),
                 .linkedFramework("ServiceManagement"),
                 .linkedFramework("CoreServices"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("UserNotifications"),
             ]
         ),
-        .testTarget(name: "JlfredCoreTests", dependencies: ["JlfredCore"]),
+        .testTarget(name: "JfredCoreTests", dependencies: ["JfredCore"]),
     ]
 )

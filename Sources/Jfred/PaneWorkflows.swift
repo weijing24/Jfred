@@ -1,5 +1,5 @@
 import SwiftUI
-import JlfredCore
+import JfredCore
 
 struct WorkflowsPane: View {
     var model: AppModel
@@ -74,7 +74,7 @@ struct WorkflowsPane: View {
     private var cards: some View {
         ScrollView {
             VStack(spacing: 12) {
-                card("star.fill", "Jlfred Gallery", "Browse the built-in workflows and turn them back on.") { model.showGallery = true }
+                card("star.fill", "Jfred Gallery", "Browse the built-in workflows and turn them back on.") { model.showGallery = true }
                 card("point.3.connected.trianglepath.dotted", "Create a new Workflow", "Jump in and create a blank Workflow.") { model.beginWorkflowEdit(blank()) }
                 card("square.on.square", "Create a Workflow from a Template", "New to workflows? Try one of our Getting Started templates.") { model.showTemplates = true }
             }
@@ -103,7 +103,7 @@ struct WorkflowsPane: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Button("Jlfred Gallery") { model.showGallery = true }
+            Button("Jfred Gallery") { model.showGallery = true }
             Button("+") { model.beginWorkflowEdit(blank()) }
             Button("−") {
                 guard let id = model.selectedWorkflow else { return }
@@ -195,6 +195,9 @@ struct WorkflowEditor: View {
             if workflow?.builtin != nil {
                 Text("This is a built-in workflow. Its keyword still works, and the actions below are not used.")
                     .font(.caption).foregroundStyle(.secondary)
+                if let summary = WorkflowMatching.summary(for: workflow?.builtin) {
+                    Text(summary).font(.caption).foregroundStyle(.secondary)
+                }
             }
             ForEach(Array((workflow?.actions ?? []).enumerated()), id: \.element.id) { index, _ in
                 HStack {

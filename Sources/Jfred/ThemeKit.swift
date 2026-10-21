@@ -1,7 +1,7 @@
-import JlfredCore
+import JfredCore
 import SwiftUI
 
-enum JlfredColor {
+enum JfredColor {
     static let sidebar = Color(hex: 0x561D7E)
     static let sidebarSelected = Color(hex: 0x330D4E)
     static let canvas = Color(hex: 0xF2F2F2)
@@ -46,33 +46,46 @@ struct LauncherTheme: Identifiable {
     }
 
     static let all: [LauncherTheme] = [
-        LauncherTheme(id: "jlfred", name: "Jlfred", detail: "Jlfred Default Theme", query: Color(hex: 0x222222), title: .black, subtitle: Color(hex: 0x6A6A6A), selected: Color(hex: 0x561D7E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82), background: Color(hex: 0xF7F7F7), material: nil, radius: 10, querySize: 42, fontName: nil),
-        LauncherTheme(id: "jlfred-dark", name: "Jlfred Dark", detail: "Jlfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.62), selected: Color(hex: 0x6D28A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.8), background: Color(hex: 0x1C1C1E), material: nil, radius: 10, querySize: 42, fontName: nil),
-        LauncherTheme(id: "modern", name: "Jlfred Modern", detail: "Jlfred Default Theme", query: Color(hex: 0x1C1C1E), title: Color(hex: 0x1C1C1E), subtitle: Color(hex: 0x6E6E73), selected: Color(hex: 0x581672), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.white.opacity(0.72), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
-        LauncherTheme(id: "modern-dark", name: "Jlfred Modern Dark", detail: "Jlfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.66), selected: Color(hex: 0x6B21A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.black.opacity(0.45), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
-        LauncherTheme(id: "classic", name: "Jlfred Classic", detail: "Jlfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.7), selected: Color(hex: 0xE6E6E6), selectedTitle: .black, selectedSubtitle: Color.black.opacity(0.6), background: Color(hex: 0x2A2A2A), material: nil, radius: 8, querySize: 34, fontName: nil),
-        LauncherTheme(id: "macos", name: "Jlfred macOS", detail: "Jlfred Default Theme", query: .primary, title: .primary, subtitle: .secondary, selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.white.opacity(0.55), material: .regular, radius: 12, querySize: 36, fontName: nil),
-        LauncherTheme(id: "macos-dark", name: "Jlfred macOS Dark", detail: "Jlfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.65), selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.black.opacity(0.45), material: .regular, radius: 12, querySize: 36, fontName: nil),
-        LauncherTheme(id: "frosty", name: "Frosty Teal", detail: "Jlfred Default Theme", query: Color(hex: 0x12343A), title: Color(hex: 0x12343A), subtitle: Color(hex: 0x4C7076), selected: Color(hex: 0x128E8E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color(hex: 0xF3FBFA), material: nil, radius: 14, querySize: 42, fontName: nil),
-        LauncherTheme(id: "avenir", name: "Large Avenir", detail: "Jlfred Default Theme", query: Color(hex: 0x222222), title: Color(hex: 0x222222), subtitle: Color(hex: 0x666666), selected: Color(hex: 0x333333), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.75), background: .white, material: nil, radius: 6, querySize: 54, fontName: "Avenir Next"),
-        LauncherTheme(id: "contrast", name: "High Contrast Light", detail: "Jlfred Default Theme", query: .black, title: .black, subtitle: .black, selected: Color(hex: 0xFFE14A), selectedTitle: .black, selectedSubtitle: .black, background: .white, material: nil, radius: 4, querySize: 46, fontName: nil),
+        LauncherTheme(id: "jfred", name: "Jfred", detail: "Jfred Default Theme", query: Color(hex: 0x222222), title: .black, subtitle: Color(hex: 0x6A6A6A), selected: Color(hex: 0x561D7E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82), background: Color(hex: 0xF7F7F7), material: nil, radius: 10, querySize: 42, fontName: nil),
+        LauncherTheme(id: "jfred-dark", name: "Jfred Dark", detail: "Jfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.62), selected: Color(hex: 0x6D28A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.8), background: Color(hex: 0x1C1C1E), material: nil, radius: 10, querySize: 42, fontName: nil),
+        LauncherTheme(id: "modern", name: "Jfred Modern", detail: "Jfred Default Theme", query: Color(hex: 0x1C1C1E), title: Color(hex: 0x1C1C1E), subtitle: Color(hex: 0x6E6E73), selected: Color(hex: 0x581672), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.white.opacity(0.72), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
+        LauncherTheme(id: "modern-dark", name: "Jfred Modern Dark", detail: "Jfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.66), selected: Color(hex: 0x6B21A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.black.opacity(0.45), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
+        LauncherTheme(id: "classic", name: "Jfred Classic", detail: "Jfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.7), selected: Color(hex: 0xE6E6E6), selectedTitle: .black, selectedSubtitle: Color.black.opacity(0.6), background: Color(hex: 0x2A2A2A), material: nil, radius: 8, querySize: 34, fontName: nil),
+        LauncherTheme(id: "macos", name: "Jfred macOS", detail: "Jfred Default Theme", query: .primary, title: .primary, subtitle: .secondary, selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.white.opacity(0.55), material: .regular, radius: 12, querySize: 36, fontName: nil),
+        LauncherTheme(id: "macos-dark", name: "Jfred macOS Dark", detail: "Jfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.65), selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.black.opacity(0.45), material: .regular, radius: 12, querySize: 36, fontName: nil),
+        LauncherTheme(id: "frosty", name: "Frosty Teal", detail: "Jfred Default Theme", query: Color(hex: 0x12343A), title: Color(hex: 0x12343A), subtitle: Color(hex: 0x4C7076), selected: Color(hex: 0x128E8E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color(hex: 0xF3FBFA), material: nil, radius: 14, querySize: 42, fontName: nil),
+        LauncherTheme(id: "avenir", name: "Large Avenir", detail: "Jfred Default Theme", query: Color(hex: 0x222222), title: Color(hex: 0x222222), subtitle: Color(hex: 0x666666), selected: Color(hex: 0x333333), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.75), background: .white, material: nil, radius: 6, querySize: 54, fontName: "Avenir Next"),
+        LauncherTheme(id: "contrast", name: "High Contrast Light", detail: "Jfred Default Theme", query: .black, title: .black, subtitle: .black, selected: Color(hex: 0xFFE14A), selectedTitle: .black, selectedSubtitle: .black, background: .white, material: nil, radius: 4, querySize: 46, fontName: nil),
     ]
 
     static func by(id: String) -> LauncherTheme {
-        all.first { $0.id == id } ?? all[2]
+        let resolved = id.replacingOccurrences(of: "jlfred", with: "jfred")
+        return all.first { $0.id == resolved } ?? all[2]
     }
 }
 
 struct HoodMark: View {
     var body: some View {
-        if let image = hoodLogoImage() {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-        } else {
-            RedFedoraFallback()
+        Group {
+            if let image = hoodLogoImage() {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+            } else {
+                RedFedoraFallback()
+            }
         }
+        .clipShape(IconSquircle())
+    }
+}
+
+/// macOS app-icon squircle. Corner radius is ~22.37% of the side.
+struct IconSquircle: Shape {
+    func path(in rect: CGRect) -> Path {
+        let side = min(rect.width, rect.height)
+        let box = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
+        return RoundedRectangle(cornerRadius: side * 0.2237, style: .continuous).path(in: box)
     }
 }
 
@@ -150,7 +163,7 @@ struct FormRow<Content: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text(label)
                 .font(.system(size: 13))
-                .foregroundStyle(JlfredColor.ink)
+                .foregroundStyle(JfredColor.ink)
                 .frame(width: 128, alignment: .trailing)
             content()
             Spacer(minLength: 0)
@@ -163,7 +176,7 @@ struct HelpNote: View {
     var body: some View {
         Text(text)
             .font(.system(size: 11))
-            .foregroundStyle(JlfredColor.sub)
+            .foregroundStyle(JfredColor.sub)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, 142)
     }
@@ -213,7 +226,7 @@ struct HotkeyGlyphs: View {
             if hotkey.modifiers & Hotkey.command != 0 { Text("⌘") }
             Text(keyDisplayName(hotkey.keyCode))
                 .font(.system(size: prominent ? 18 : 13, weight: .semibold))
-                .foregroundStyle(prominent ? JlfredColor.hotkey : Color.primary)
+                .foregroundStyle(prominent ? JfredColor.hotkey : Color.primary)
         }
         .font(.system(size: 15))
         .foregroundStyle(Color.secondary)
@@ -222,31 +235,84 @@ struct HotkeyGlyphs: View {
 
 struct HotkeyCapture: NSViewRepresentable {
     var onSet: (UInt16, UInt) -> Void
+    var onFocus: (Bool) -> Void
 
     func makeNSView(context: Context) -> RecorderView {
         let view = RecorderView()
         view.onSet = onSet
+        view.onFocus = onFocus
         return view
     }
 
     func updateNSView(_ nsView: RecorderView, context: Context) {
         nsView.onSet = onSet
+        nsView.onFocus = onFocus
     }
 }
 
 final class RecorderView: NSView {
     var onSet: ((UInt16, UInt) -> Void)?
+    var onFocus: ((Bool) -> Void)?
+    private var monitor: Any?
+    private var finishing = false
+    private static let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+
     override var acceptsFirstResponder: Bool { true }
-    override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        guard super.becomeFirstResponder() else { return false }
+        installMonitor()
+        onFocus?(true)
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        removeMonitor()
+        onFocus?(false)
+        return super.resignFirstResponder()
+    }
+
     override func keyDown(with event: NSEvent) {
+        _ = capture(event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard window?.firstResponder === self else { return false }
+        return capture(event)
+    }
+
+    private func installMonitor() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.window?.firstResponder === self else { return event }
+            return self.capture(event) ? nil : event
+        }
+    }
+
+    private func removeMonitor() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+    }
+
+    private func capture(_ event: NSEvent) -> Bool {
+        if finishing { return true }
         if event.keyCode == 53 {
             window?.makeFirstResponder(nil)
-            return
+            return true
         }
+        if Self.modifierKeyCodes.contains(event.keyCode) { return true }
+        finishing = true
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
         onSet?(event.keyCode, flags.rawValue)
         window?.makeFirstResponder(nil)
+        finishing = false
+        return true
     }
+
     override func drawFocusRingMask() { bounds.fill() }
     override var focusRingMaskBounds: NSRect { bounds }
 }
@@ -300,6 +366,8 @@ func menuHatImage() -> NSImage {
     let side: CGFloat = 18
     let canvas = NSImage(size: NSSize(width: side, height: side))
     canvas.lockFocus()
+    let radius = side * 0.2237
+    NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: side, height: side), xRadius: radius, yRadius: radius).addClip()
     if let logo = hoodLogoImage() {
         logo.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
     } else {

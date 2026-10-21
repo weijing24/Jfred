@@ -5,17 +5,17 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>Jlfred</string>
+  <string>Jfred</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
-  <string>dev.jim.jlfred.local</string>
+  <string>dev.jim.jfred.local</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Jlfred</string>
+  <string>Jfred</string>
   <key>CFBundleDisplayName</key>
-  <string>Jlfred</string>
+  <string>Jfred</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -28,18 +28,16 @@
   <true/>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
-  <key>NSContactsUsageDescription</key>
-  <string>Jlfred shows matching contacts in search results.</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>Jlfred controls Finder, Music, browsers, and system commands you run from the launcher.</string>
+  <string>Jfred controls Finder, browsers, and system commands you run from the launcher.</string>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
       <key>CFBundleURLName</key>
-      <string>dev.jim.jlfred.local</string>
+      <string>dev.jim.jfred.local</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>jlfredlocal</string>
+        <string>jfredlocal</string>
       </array>
     </dict>
   </array>

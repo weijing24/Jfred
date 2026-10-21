@@ -1,13 +1,13 @@
-import JlfredCore
+import JfredCore
 import AppKit
 import SwiftUI
 
 @main
-struct JlfredApp: App {
+struct JfredApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        Window("Jlfred Preferences", id: "preferences") {
+        Window("Jfred Preferences", id: "preferences") {
             PreferencesShell(model: delegate.model)
                 .frame(minWidth: 980, minHeight: 640)
         }
@@ -15,10 +15,10 @@ struct JlfredApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .appSettings) {
-                Button("Show Jlfred") { delegate.model.toggleLauncher() }
+                Button("Show Jfred") { delegate.model.toggleLauncher() }
             }
             CommandMenu("Search") {
-                Button("Show Jlfred") { delegate.model.showLauncher() }
+                Button("Show Jfred") { delegate.model.showLauncher() }
                 Button("Preferences Search") { delegate.model.showPreferences() }
                     .keyboardShortcut(",", modifiers: .command)
             }
@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            guard url.scheme == "jlfredlocal" else { continue }
+            guard url.scheme == "jfredlocal" else { continue }
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let query = items.first { $0.name == "q" }?.value ?? ""
             if url.host == "search" || url.host == nil {
