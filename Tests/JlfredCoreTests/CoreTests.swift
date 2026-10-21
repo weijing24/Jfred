@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import AlfredCore
+@testable import JlfredCore
 
 struct CoreTests {
     @Test func calculatorPrecedence() {
@@ -71,7 +71,7 @@ struct CoreTests {
 
     @Test func webKeyword() {
         let context = SearchContext()
-        let rows = Search.results(for: "g alfred", context: context)
+        let rows = Search.results(for: "g jlfred", context: context)
         #expect(rows.count == 1)
         #expect(rows[0].kind == "url")
         #expect(rows[0].payload.contains("google.com"))

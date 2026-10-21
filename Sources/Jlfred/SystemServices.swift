@@ -1,4 +1,4 @@
-import AlfredCore
+import JlfredCore
 import AppKit
 import ApplicationServices
 import Contacts
@@ -286,7 +286,7 @@ enum WindowList {
             let layer = item[kCGWindowLayer as String] as? Int ?? 0
             if layer != 0 { continue }
             let owner = item[kCGWindowOwnerName as String] as? String ?? ""
-            if owner.isEmpty || owner == "Window Server" || owner == "Alfred" { continue }
+            if owner.isEmpty || owner == "Window Server" || owner == "Jlfred" { continue }
             let title = item[kCGWindowName as String] as? String ?? ""
             let pid = item[kCGWindowOwnerPID as String] as? Int32 ?? Int32(item[kCGWindowOwnerPID as String] as? Int ?? 0)
             let number = item[kCGWindowNumber as String] as? Int ?? 0
@@ -628,9 +628,9 @@ enum SupportPaths {
     static func directory(syncFolder: String) -> URL {
         if !syncFolder.isEmpty {
             let base = URL(fileURLWithPath: (syncFolder as NSString).expandingTildeInPath, isDirectory: true)
-            return base.appendingPathComponent("AlfredLocal", isDirectory: true)
+            return base.appendingPathComponent("JlfredLocal", isDirectory: true)
         }
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return appSupport.appendingPathComponent("AlfredLocal", isDirectory: true)
+        return appSupport.appendingPathComponent("JlfredLocal", isDirectory: true)
     }
 }

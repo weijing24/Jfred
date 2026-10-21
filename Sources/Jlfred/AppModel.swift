@@ -1,5 +1,5 @@
 import AppKit
-import AlfredCore
+import JlfredCore
 import Foundation
 import ServiceManagement
 
@@ -86,7 +86,7 @@ final class AppModel {
     let remote = RemoteServer()
     private var didStart = false
     private var suppressPrompts: Bool {
-        ProcessInfo.processInfo.environment["ALFRED_LOCAL_NO_PROMPTS"] == "1"
+        ProcessInfo.processInfo.environment["JLFRED_LOCAL_NO_PROMPTS"] == "1"
     }
 
     func start() {
@@ -516,7 +516,7 @@ final class AppModel {
         let query = parts.count > 1 ? String(parts[1]) : ""
         let params = queryItems(query)
         guard params["token"] == preferences.remoteToken else {
-            return "<p>Token required. Add ?token= from Alfred Preferences → Remote.</p>"
+            return "<p>Token required. Add ?token= from Jlfred Preferences → Remote.</p>"
         }
         if path == "/run" {
             let id = params["id"] ?? ""
@@ -534,9 +534,9 @@ final class AppModel {
         }
         let q = params["q"] ?? ""
         var body = """
-        <!doctype html><meta charset="utf-8"><title>Alfred Remote</title>
+        <!doctype html><meta charset="utf-8"><title>Jlfred Remote</title>
         <style>body{font:15px -apple-system,sans-serif;background:#1b1b1b;color:#f2f2f2;margin:28px}a{color:#d7b4ff;text-decoration:none}input,button{font:inherit;padding:6px 8px}li{margin:6px 0}</style>
-        <h1>Alfred Remote</h1>
+        <h1>Jlfred Remote</h1>
         <form><input type="hidden" name="token" value="\(preferences.remoteToken)"><input name="q" value="\(escapeHTML(q))" placeholder="Search" autofocus><button>Search</button></form>
         """
         if !q.isEmpty {
@@ -936,10 +936,10 @@ final class AppModel {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = menuHatImage()
         let menu = NSMenu()
-        menu.addItem(withTitle: "Show Alfred", action: #selector(statusShow), keyEquivalent: "")
+        menu.addItem(withTitle: "Show Jlfred", action: #selector(statusShow), keyEquivalent: "")
         menu.addItem(withTitle: "Preferences", action: #selector(statusPrefs), keyEquivalent: ",")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Alfred", action: #selector(statusQuit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit Jlfred", action: #selector(statusQuit), keyEquivalent: "q")
         for entry in menu.items { entry.target = self }
         item.menu = menu
         statusItem = item
@@ -1098,7 +1098,7 @@ enum PreferenceIndex {
     static let hits: [PreferenceHit] = {
         var rows: [PreferenceHit] = [
             PreferenceHit(id: "login", title: "Launch at login", detail: "General", section: .general, feature: nil),
-            PreferenceHit(id: "hotkey", title: "Alfred Hotkey", detail: "General", section: .general, feature: nil),
+            PreferenceHit(id: "hotkey", title: "Jlfred Hotkey", detail: "General", section: .general, feature: nil),
             PreferenceHit(id: "location", title: "Where are you", detail: "Google and Amazon domains", section: .general, feature: nil),
             PreferenceHit(id: "permissions", title: "Permissions", detail: "Accessibility, contacts, automation", section: .general, feature: nil),
             PreferenceHit(id: "cache", title: "Clear Application Cache", detail: "Advanced", section: .advanced, feature: nil),
@@ -1107,7 +1107,7 @@ enum PreferenceIndex {
             PreferenceHit(id: "learning", title: "Top Result Keyword Latching", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "sync", title: "Syncing folder", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "usage", title: "Usage", detail: "Stats", section: .usage, feature: nil),
-            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Alfred Modern and others", section: .appearance, feature: nil),
+            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Jlfred Modern and others", section: .appearance, feature: nil),
             PreferenceHit(id: "remote", title: "Remote server", detail: "Local command page", section: .remote, feature: nil),
         ]
         for feature in FeatureID.allCases {

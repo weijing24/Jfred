@@ -1,5 +1,5 @@
 import SwiftUI
-import AlfredCore
+import JlfredCore
 
 struct PreferencesShell: View {
     var model: AppModel
@@ -10,11 +10,11 @@ struct PreferencesShell: View {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(AlfredColor.canvas)
+        .background(JlfredColor.canvas)
         .preferredColorScheme(model.section == .workflows ? .dark : .light)
         .background(WindowReader { window in
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
-            window.title = "Alfred Preferences"
+            window.title = "Jlfred Preferences"
             window.titlebarAppearsTransparent = false
             window.setContentSize(NSSize(width: 1120, height: 720))
         })
@@ -74,7 +74,7 @@ struct IconRail: View {
         .padding(.vertical, 8)
         .frame(width: 86)
         .frame(maxHeight: .infinity)
-        .background(AlfredColor.sidebar)
+        .background(JlfredColor.sidebar)
     }
 
     private func railButton(_ section: PrefSection) -> some View {
@@ -96,7 +96,7 @@ struct IconRail: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 7)
-            .background(model.section == section ? AlfredColor.sidebarSelected : Color.clear)
+            .background(model.section == section ? JlfredColor.sidebarSelected : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -127,7 +127,7 @@ struct PreferenceSearchList: View {
             .buttonStyle(.plain)
         }
         .scrollContentBackground(.hidden)
-        .background(AlfredColor.canvas)
+        .background(JlfredColor.canvas)
     }
 }
 
@@ -137,7 +137,7 @@ struct GeneralPane: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
-                AlfredColor.canvas
+                JlfredColor.canvas
                 DamaskBackground()
                 VStack(alignment: .leading, spacing: 0) {
                     Text(AppRelease.version)
@@ -157,12 +157,12 @@ struct GeneralPane: View {
         VStack(alignment: .leading, spacing: 18) {
             FormRow(label: "Startup:") {
                 HStack(spacing: 12) {
-                    Toggle("Launch Alfred at login", isOn: model.bindPref(\.launchAtLogin))
-                    Button("Quit Alfred") { NSApp.terminate(nil) }
+                    Toggle("Launch Jlfred at login", isOn: model.bindPref(\.launchAtLogin))
+                    Button("Quit Jlfred") { NSApp.terminate(nil) }
                 }
             }
-            HelpNote(text: "If selected, Alfred will still launch at login after using the \"Quit Alfred\" button.")
-            FormRow(label: "Alfred Hotkey:") {
+            HelpNote(text: "If selected, Jlfred will still launch at login after using the \"Quit Jlfred\" button.")
+            FormRow(label: "Jlfred Hotkey:") {
                 HStack(spacing: 8) {
                     ZStack {
                         HotkeyGlyphs(hotkey: model.preferences.hotkey)
@@ -173,16 +173,16 @@ struct GeneralPane: View {
                     .frame(width: 280, height: 26)
                     .padding(.horizontal, 8)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(AlfredColor.line))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(JlfredColor.line))
                     Button {
                     } label: {
                         Image(systemName: "questionmark.circle")
                     }
                     .buttonStyle(.plain)
-                    .help("Click the field and type the hotkey you would like to use to show Alfred.")
+                    .help("Click the field and type the hotkey you would like to use to show Jlfred.")
                 }
             }
-            HelpNote(text: model.hotkeyWarning.isEmpty ? "Select this field and type the hotkey you would like to use to show Alfred." : model.hotkeyWarning)
+            HelpNote(text: model.hotkeyWarning.isEmpty ? "Select this field and type the hotkey you would like to use to show Jlfred." : model.hotkeyWarning)
             FormRow(label: "Where are you:") {
                 Picker("", selection: model.bindPref(\.location)) {
                     ForEach(Preferences.locations, id: \.self) { Text($0).tag($0) }
@@ -194,11 +194,11 @@ struct GeneralPane: View {
                 Spacer().frame(width: 142)
                 Toggle("Use .com for Google searches", isOn: model.bindPref(\.useDotCom))
             }
-            HelpNote(text: "This tells Alfred which websites to use for web searching such as amazon.ca or ebay.com.")
+            HelpNote(text: "This tells Jlfred which websites to use for web searching such as amazon.ca or ebay.com.")
             FormRow(label: "Permissions:") {
                 Button("Request Permissions...") { model.requestPermissions() }
             }
-            HelpNote(text: "Alfred requires certain permissions to enable him to automate your Mac. This button will help you enable these permissions.")
+            HelpNote(text: "Jlfred requires certain permissions to enable him to automate your Mac. This button will help you enable these permissions.")
         }
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)

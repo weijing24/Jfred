@@ -5,17 +5,17 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>Alfred</string>
+  <string>Jlfred</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
-  <string>dev.jim.alfred.local</string>
+  <string>dev.jim.jlfred.local</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Alfred</string>
+  <string>Jlfred</string>
   <key>CFBundleDisplayName</key>
-  <string>Alfred</string>
+  <string>Jlfred</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -29,17 +29,17 @@
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>NSContactsUsageDescription</key>
-  <string>Alfred shows matching contacts in search results.</string>
+  <string>Jlfred shows matching contacts in search results.</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>Alfred controls Finder, Music, browsers, and system commands you run from the launcher.</string>
+  <string>Jlfred controls Finder, Music, browsers, and system commands you run from the launcher.</string>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
       <key>CFBundleURLName</key>
-      <string>dev.jim.alfred.local</string>
+      <string>dev.jim.jlfred.local</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>alfredlocal</string>
+        <string>jlfredlocal</string>
       </array>
     </dict>
   </array>

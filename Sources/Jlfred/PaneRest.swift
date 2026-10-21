@@ -1,5 +1,5 @@
 import SwiftUI
-import AlfredCore
+import JlfredCore
 
 struct AppearancePane: View {
     var model: AppModel
@@ -66,7 +66,7 @@ struct RemotePane: View {
                 Spacer()
             }
             .frame(width: 230)
-            .background(AlfredColor.sidebar)
+            .background(JlfredColor.sidebar)
             ZStack {
                 Color(hex: 0x161616)
                 VStack(spacing: 18) {
@@ -89,7 +89,7 @@ struct RemotePane: View {
                 }
             }
             VStack(alignment: .leading, spacing: 12) {
-                Toggle("Enable Alfred Remote Server", isOn: model.bindPref(\.remoteEnabled))
+                Toggle("Enable Jlfred Remote Server", isOn: model.bindPref(\.remoteEnabled))
                     .padding(.top, 18)
                 Text(model.preferences.remoteEnabled ? "Server running" : "Server Stopped")
                     .frame(maxWidth: .infinity)
@@ -104,7 +104,7 @@ struct RemotePane: View {
                     .textSelection(.enabled)
                 Spacer()
                 VStack(spacing: 8) {
-                    Text("Alfred Remote for iOS")
+                    Text("Jlfred Remote for iOS")
                         .font(.system(size: 16, weight: .semibold))
                     Text("This local page is your command centre. It stays on this Mac and asks for the token above.")
                         .font(.system(size: 12))
@@ -132,8 +132,8 @@ struct AdvancedPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(spacing: 4) {
-                    Text("General and global tweaking of Alfred").font(.system(size: 16, weight: .semibold))
-                    Text("Mostly because you won't be touching this stuff much, and it doesn't fit elsewhere in Alfred's preferences ;)")
+                    Text("General and global tweaking of Jlfred").font(.system(size: 16, weight: .semibold))
+                    Text("Mostly because you won't be touching this stuff much, and it doesn't fit elsewhere in Jlfred's preferences ;)")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -176,7 +176,7 @@ struct AdvancedPane: View {
                             .labelsHidden()
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        note("Alfred uses the clipboard when pasting the selected item. You can restore the previous clipboard contents afterwards.")
+                        note("Jlfred uses the clipboard when pasting the selected item. You can restore the previous clipboard contents afterwards.")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     VStack(alignment: .leading, spacing: 16) {
@@ -185,7 +185,7 @@ struct AdvancedPane: View {
                                 .textFieldStyle(.roundedBorder)
                                 .frame(maxWidth: 220)
                         }
-                        note("This will force Alfred to use the specified keyboard locale. Leave blank (default) and Alfred won't switch keyboards.")
+                        note("This will force Jlfred to use the specified keyboard locale. Leave blank (default) and Jlfred won't switch keyboards.")
                         labeled("Action Modifier:") {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("⌘ + number to action result items").font(.system(size: 12))
@@ -201,7 +201,7 @@ struct AdvancedPane: View {
                                 .lineLimit(3)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        note("This folder can be local or under the control of a syncing service. Alfred keeps its own AlfredLocal folder inside it, separate from the official Alfred preferences.")
+                        note("This folder can be local or under the control of a syncing service. Jlfred keeps its own JlfredLocal folder inside it, separate from the official Jlfred preferences.")
                         HStack {
                             Button("Set preferences folder...") { model.chooseSupportFolder() }
                             Button("Reveal in Finder") { model.revealSupportFolder() }
@@ -214,7 +214,7 @@ struct AdvancedPane: View {
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(AlfredColor.canvas)
+        .background(JlfredColor.canvas)
     }
 
     private var supportLabel: String {
@@ -282,7 +282,7 @@ struct UsagePane: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         let since = stats.since.map { formatter.string(from: $0) } ?? "today"
-        return "Since \(since), Alfred has been used \(stats.total) times. Average \(String(format: "%.1f", stats.average)) times per day."
+        return "Since \(since), Jlfred has been used \(stats.total) times. Average \(String(format: "%.1f", stats.average)) times per day."
     }
 
     private var legend: some View {
@@ -357,7 +357,7 @@ struct UpdatePane: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("You are using Alfred \(AppRelease.version)")
+                Text("You are using Jlfred \(AppRelease.version)")
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -366,10 +366,10 @@ struct UpdatePane: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Change Log").font(.system(size: 28, weight: .bold))
-                    Text("This is a local build matching the Alfred preferences layout. It does not download updates from alfredapp.com.")
+                    Text("This is a local build matching the Jlfred preferences layout. It does not download updates from jlfredapp.com.")
                         .foregroundStyle(.secondary)
                     Divider()
-                    Text("Alfred \(AppRelease.version)").font(.system(size: 22, weight: .bold))
+                    Text("Jlfred \(AppRelease.version)").font(.system(size: 22, weight: .bold))
                     Text("Local build")
                     bullet("Hotkey launcher with themes, file search, applications, contacts, and system settings")
                     bullet("Keywords for workflows, web search, clipboard, snippets, calculator, and dictionary")

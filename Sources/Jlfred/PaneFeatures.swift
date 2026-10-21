@@ -1,5 +1,5 @@
 import SwiftUI
-import AlfredCore
+import JlfredCore
 
 struct FeaturesPane: View {
     var model: AppModel
@@ -31,7 +31,7 @@ struct FeaturesPane: View {
                 .padding(28)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(AlfredColor.canvas)
+            .background(JlfredColor.canvas)
         }
         .sheet(item: model.bind(\.featureSheet)) { kind in
             sheetView(kind)
@@ -58,19 +58,19 @@ struct FeaturesPane: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
                         .foregroundStyle(.white)
-                        .background(model.feature == feature ? AlfredColor.sidebarSelected : Color.clear)
+                        .background(model.feature == feature ? JlfredColor.sidebarSelected : Color.clear)
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
         .frame(width: 248)
-        .background(AlfredColor.sidebar.opacity(0.96))
+        .background(JlfredColor.sidebar.opacity(0.96))
     }
 
     private var defaultResults: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Default Results", "These are the main results Alfred presents by default, and where he looks for them.")
+            header("Default Results", "These are the main results Jlfred presents by default, and where he looks for them.")
             labeled("Applications:") { Button("Options...") { model.featureSheet = .appOptions } }
             labeled("Essentials:") {
                 HStack(spacing: 28) {
@@ -94,11 +94,11 @@ struct FeaturesPane: View {
                     }
                 }
             }
-            Text("Note: Alfred works most efficiently if you only have 'Essential' items ticked and use the 'open' keyword to find files. You can also press space immediately after activating Alfred to quickly enter the file search mode.")
-                .font(.system(size: 11)).foregroundStyle(AlfredColor.sub).padding(.leading, 132)
+            Text("Note: Jlfred works most efficiently if you only have 'Essential' items ticked and use the 'open' keyword to find files. You can also press space immediately after activating Jlfred to quickly enter the file search mode.")
+                .font(.system(size: 11)).foregroundStyle(JlfredColor.sub).padding(.leading, 132)
             labeled("Unintelligent:") { Toggle("Search all file types", isOn: model.bindPref(\.searchAllFileTypes)) }
             Text("WARNING: Selecting this will slow down and muddle the default search results considerably. Use 'open' and 'find' for file operations instead.")
-                .font(.system(size: 11)).foregroundStyle(AlfredColor.sub).padding(.leading, 132)
+                .font(.system(size: 11)).foregroundStyle(JlfredColor.sub).padding(.leading, 132)
             labeled("Search Scope:") {
                 HStack(spacing: 16) {
                     Toggle("macOS Applications folder", isOn: model.bindPref(\.scopeApplications))
@@ -118,8 +118,8 @@ struct FeaturesPane: View {
                     Button("Setup fallback results") { model.featureSheet = .fallbacks }
                 }
             }
-            Text("Fallbacks are shown when Alfred is unable to find any results. If the option to intelligently show fallbacks is selected, Alfred will show the fallbacks when relevant. By default, Alfred shows Google, Amazon and Wikipedia.")
-                .font(.system(size: 11)).foregroundStyle(AlfredColor.sub).padding(.leading, 132)
+            Text("Fallbacks are shown when Jlfred is unable to find any results. If the option to intelligently show fallbacks is selected, Jlfred will show the fallbacks when relevant. By default, Jlfred shows Google, Amazon and Wikipedia.")
+                .font(.system(size: 11)).foregroundStyle(JlfredColor.sub).padding(.leading, 132)
         }
     }
 
@@ -142,8 +142,8 @@ struct FeaturesPane: View {
                 }
                 Button("Reset...") { model.preferences.scopePaths = Preferences.defaultScope }
             }
-            Text("These folders define where Alfred looks for files, applications and metadata. Fewer paths give more accurate results. Drop folders above from Finder or Alfred.")
-                .font(.system(size: 11)).foregroundStyle(AlfredColor.sub).padding(.leading, 132)
+            Text("These folders define where Jlfred looks for files, applications and metadata. Fewer paths give more accurate results. Drop folders above from Finder or Jlfred.")
+                .font(.system(size: 11)).foregroundStyle(JlfredColor.sub).padding(.leading, 132)
         }
     }
 
@@ -153,7 +153,7 @@ struct FeaturesPane: View {
             Stepper("Maximum results: \(model.preferences.fileSearchMax)", value: model.bindPref(\.fileSearchMax), in: 5...50)
             Toggle("Keep a file buffer (option-up adds the selected file)", isOn: model.bindPref(\.fileBufferEnabled))
             Text("Return opens every file in the buffer. ⌘Y previews the selected file with Quick Look.")
-                .font(.system(size: 12)).foregroundStyle(AlfredColor.sub)
+                .font(.system(size: 12)).foregroundStyle(JlfredColor.sub)
         }
     }
 
@@ -161,7 +161,7 @@ struct FeaturesPane: View {
         VStack(alignment: .leading, spacing: 8) {
             header("Universal Actions", "Modifiers on return change what the selected result does.")
             Text("Control, option, and command are set in Advanced. By default control searches the web, option searches in Finder, and command reveals a local file.")
-                .foregroundStyle(AlfredColor.sub)
+                .foregroundStyle(JlfredColor.sub)
             LabeledContent("Copy") { Text("⌘C copies the path, URL, or subtitle") }
             LabeledContent("Large Type") { Text("⌘L") }
             LabeledContent("Quick Look") { Text("⌘Y") }
@@ -193,7 +193,7 @@ struct FeaturesPane: View {
             Toggle("Safari bookmarks", isOn: model.bindPref(\.safariBookmarks))
             Toggle("Google Chrome bookmarks", isOn: model.bindPref(\.chromeBookmarks))
             Text("\(model.links.count) bookmarks indexed. The tabs keyword also reads open tabs and recent history.")
-                .foregroundStyle(AlfredColor.sub)
+                .foregroundStyle(JlfredColor.sub)
             Button("Reload bookmarks") { model.reloadLinks() }
         }
     }
@@ -226,7 +226,7 @@ struct FeaturesPane: View {
                 Button("Remove last") { if !model.snippets.isEmpty { model.snippets.removeLast() } }
             }
             Text("{date}, {time}, and {iso} are filled in when the snippet expands.")
-                .font(.system(size: 12)).foregroundStyle(AlfredColor.sub)
+                .font(.system(size: 12)).foregroundStyle(JlfredColor.sub)
         }
     }
 
@@ -235,7 +235,7 @@ struct FeaturesPane: View {
             header("Calculator", "Type an expression such as (2+2)*3 or sqrt(9).")
             Toggle("Calculate in the default results", isOn: model.bindPref(\.calculatorEnabled))
             Text("Return pastes the result into the previous app. Functions: sqrt, sin, cos, tan, log, ln, abs, pi, e.")
-                .foregroundStyle(AlfredColor.sub)
+                .foregroundStyle(JlfredColor.sub)
         }
     }
 
@@ -251,7 +251,7 @@ struct FeaturesPane: View {
             header("Contacts", "Names, emails, and phone numbers from Contacts.")
             Toggle("Include contacts in default results", isOn: model.bindPref(\.contactsEnabled))
             Text("\(model.contacts.count) contacts loaded.")
-                .foregroundStyle(AlfredColor.sub)
+                .foregroundStyle(JlfredColor.sub)
             Button("Reload contacts") { model.reloadContacts() }
         }
     }
@@ -268,7 +268,7 @@ struct FeaturesPane: View {
             header("1Password", "Uses the op command-line tool when it is installed and signed in.")
             Toggle("Search 1Password items", isOn: model.bindPref(\.onePasswordEnabled))
             Text(model.opItems.isEmpty ? "No items loaded. Turn this on after op item list works in Terminal." : "\(model.opItems.count) items.")
-                .foregroundStyle(AlfredColor.sub)
+                .foregroundStyle(JlfredColor.sub)
             Button("Reload items") { model.reloadOnePassword() }
         }
     }
@@ -324,7 +324,7 @@ struct FeaturesPane: View {
     private func header(_ title: String, _ text: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 22, weight: .semibold))
-            Text(text).foregroundStyle(AlfredColor.sub)
+            Text(text).foregroundStyle(JlfredColor.sub)
         }
         .padding(.bottom, 6)
     }

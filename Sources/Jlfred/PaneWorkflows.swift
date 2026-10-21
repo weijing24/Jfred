@@ -1,5 +1,5 @@
 import SwiftUI
-import AlfredCore
+import JlfredCore
 
 struct WorkflowsPane: View {
     var model: AppModel
@@ -74,7 +74,7 @@ struct WorkflowsPane: View {
     private var cards: some View {
         ScrollView {
             VStack(spacing: 12) {
-                card("star.fill", "Alfred Gallery", "Browse the built-in workflows and turn them back on.") { model.showGallery = true }
+                card("star.fill", "Jlfred Gallery", "Browse the built-in workflows and turn them back on.") { model.showGallery = true }
                 card("point.3.connected.trianglepath.dotted", "Create a new Workflow", "Jump in and create a blank Workflow.") { model.beginWorkflowEdit(blank()) }
                 card("square.on.square", "Create a Workflow from a Template", "New to workflows? Try one of our Getting Started templates.") { model.showTemplates = true }
             }
@@ -103,7 +103,7 @@ struct WorkflowsPane: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Button("Alfred Gallery") { model.showGallery = true }
+            Button("Jlfred Gallery") { model.showGallery = true }
             Button("+") { model.beginWorkflowEdit(blank()) }
             Button("−") {
                 guard let id = model.selectedWorkflow else { return }

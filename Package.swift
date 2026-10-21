@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "Alfred",
+    name: "Jlfred",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Alfred", targets: ["Alfred"])
+        .executable(name: "Jlfred", targets: ["Jlfred"])
     ],
     targets: [
-        .target(name: "AlfredCore"),
+        .target(name: "JlfredCore"),
         .executableTarget(
-            name: "Alfred",
-            dependencies: ["AlfredCore"],
+            name: "Jlfred",
+            dependencies: ["JlfredCore"],
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"])
             ],
@@ -26,6 +26,6 @@ let package = Package(
                 .linkedFramework("UserNotifications"),
             ]
         ),
-        .testTarget(name: "AlfredCoreTests", dependencies: ["AlfredCore"]),
+        .testTarget(name: "JlfredCoreTests", dependencies: ["JlfredCore"]),
     ]
 )

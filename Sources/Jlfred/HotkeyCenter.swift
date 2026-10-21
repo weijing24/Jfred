@@ -15,7 +15,7 @@ final class HotkeyCenter: @unchecked Sendable {
         handlers[id] = handler
         lock.unlock()
         var ref: EventHotKeyRef?
-        let hotkeyID = EventHotKeyID(signature: 0x414C4652, id: id)
+        let hotkeyID = EventHotKeyID(signature: 0x4A4C4652, id: id)
         let status = RegisterEventHotKey(keyCode, modifiers, hotkeyID, GetApplicationEventTarget(), 0, &ref)
         guard status == noErr, let ref else {
             lock.lock()

@@ -1,7 +1,7 @@
-import AlfredCore
+import JlfredCore
 import SwiftUI
 
-enum AlfredColor {
+enum JlfredColor {
     static let sidebar = Color(hex: 0x561D7E)
     static let sidebarSelected = Color(hex: 0x330D4E)
     static let canvas = Color(hex: 0xF2F2F2)
@@ -46,16 +46,16 @@ struct LauncherTheme: Identifiable {
     }
 
     static let all: [LauncherTheme] = [
-        LauncherTheme(id: "alfred", name: "Alfred", detail: "Alfred Default Theme", query: Color(hex: 0x222222), title: .black, subtitle: Color(hex: 0x6A6A6A), selected: Color(hex: 0x561D7E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82), background: Color(hex: 0xF7F7F7), material: nil, radius: 10, querySize: 42, fontName: nil),
-        LauncherTheme(id: "alfred-dark", name: "Alfred Dark", detail: "Alfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.62), selected: Color(hex: 0x6D28A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.8), background: Color(hex: 0x1C1C1E), material: nil, radius: 10, querySize: 42, fontName: nil),
-        LauncherTheme(id: "modern", name: "Alfred Modern", detail: "Alfred Default Theme", query: Color(hex: 0x1C1C1E), title: Color(hex: 0x1C1C1E), subtitle: Color(hex: 0x6E6E73), selected: Color(hex: 0x581672), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.white.opacity(0.72), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
-        LauncherTheme(id: "modern-dark", name: "Alfred Modern Dark", detail: "Alfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.66), selected: Color(hex: 0x6B21A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.black.opacity(0.45), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
-        LauncherTheme(id: "classic", name: "Alfred Classic", detail: "Alfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.7), selected: Color(hex: 0xE6E6E6), selectedTitle: .black, selectedSubtitle: Color.black.opacity(0.6), background: Color(hex: 0x2A2A2A), material: nil, radius: 8, querySize: 34, fontName: nil),
-        LauncherTheme(id: "macos", name: "Alfred macOS", detail: "Alfred Default Theme", query: .primary, title: .primary, subtitle: .secondary, selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.white.opacity(0.55), material: .regular, radius: 12, querySize: 36, fontName: nil),
-        LauncherTheme(id: "macos-dark", name: "Alfred macOS Dark", detail: "Alfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.65), selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.black.opacity(0.45), material: .regular, radius: 12, querySize: 36, fontName: nil),
-        LauncherTheme(id: "frosty", name: "Frosty Teal", detail: "Alfred Default Theme", query: Color(hex: 0x12343A), title: Color(hex: 0x12343A), subtitle: Color(hex: 0x4C7076), selected: Color(hex: 0x128E8E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color(hex: 0xF3FBFA), material: nil, radius: 14, querySize: 42, fontName: nil),
-        LauncherTheme(id: "avenir", name: "Large Avenir", detail: "Alfred Default Theme", query: Color(hex: 0x222222), title: Color(hex: 0x222222), subtitle: Color(hex: 0x666666), selected: Color(hex: 0x333333), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.75), background: .white, material: nil, radius: 6, querySize: 54, fontName: "Avenir Next"),
-        LauncherTheme(id: "contrast", name: "High Contrast Light", detail: "Alfred Default Theme", query: .black, title: .black, subtitle: .black, selected: Color(hex: 0xFFE14A), selectedTitle: .black, selectedSubtitle: .black, background: .white, material: nil, radius: 4, querySize: 46, fontName: nil),
+        LauncherTheme(id: "jlfred", name: "Jlfred", detail: "Jlfred Default Theme", query: Color(hex: 0x222222), title: .black, subtitle: Color(hex: 0x6A6A6A), selected: Color(hex: 0x561D7E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82), background: Color(hex: 0xF7F7F7), material: nil, radius: 10, querySize: 42, fontName: nil),
+        LauncherTheme(id: "jlfred-dark", name: "Jlfred Dark", detail: "Jlfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.62), selected: Color(hex: 0x6D28A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.8), background: Color(hex: 0x1C1C1E), material: nil, radius: 10, querySize: 42, fontName: nil),
+        LauncherTheme(id: "modern", name: "Jlfred Modern", detail: "Jlfred Default Theme", query: Color(hex: 0x1C1C1E), title: Color(hex: 0x1C1C1E), subtitle: Color(hex: 0x6E6E73), selected: Color(hex: 0x581672), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.white.opacity(0.72), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
+        LauncherTheme(id: "modern-dark", name: "Jlfred Modern Dark", detail: "Jlfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.66), selected: Color(hex: 0x6B21A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.black.opacity(0.45), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
+        LauncherTheme(id: "classic", name: "Jlfred Classic", detail: "Jlfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.7), selected: Color(hex: 0xE6E6E6), selectedTitle: .black, selectedSubtitle: Color.black.opacity(0.6), background: Color(hex: 0x2A2A2A), material: nil, radius: 8, querySize: 34, fontName: nil),
+        LauncherTheme(id: "macos", name: "Jlfred macOS", detail: "Jlfred Default Theme", query: .primary, title: .primary, subtitle: .secondary, selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.white.opacity(0.55), material: .regular, radius: 12, querySize: 36, fontName: nil),
+        LauncherTheme(id: "macos-dark", name: "Jlfred macOS Dark", detail: "Jlfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.65), selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.black.opacity(0.45), material: .regular, radius: 12, querySize: 36, fontName: nil),
+        LauncherTheme(id: "frosty", name: "Frosty Teal", detail: "Jlfred Default Theme", query: Color(hex: 0x12343A), title: Color(hex: 0x12343A), subtitle: Color(hex: 0x4C7076), selected: Color(hex: 0x128E8E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color(hex: 0xF3FBFA), material: nil, radius: 14, querySize: 42, fontName: nil),
+        LauncherTheme(id: "avenir", name: "Large Avenir", detail: "Jlfred Default Theme", query: Color(hex: 0x222222), title: Color(hex: 0x222222), subtitle: Color(hex: 0x666666), selected: Color(hex: 0x333333), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.75), background: .white, material: nil, radius: 6, querySize: 54, fontName: "Avenir Next"),
+        LauncherTheme(id: "contrast", name: "High Contrast Light", detail: "Jlfred Default Theme", query: .black, title: .black, subtitle: .black, selected: Color(hex: 0xFFE14A), selectedTitle: .black, selectedSubtitle: .black, background: .white, material: nil, radius: 4, querySize: 46, fontName: nil),
     ]
 
     static func by(id: String) -> LauncherTheme {
@@ -79,7 +79,7 @@ struct BowlerHat: View {
                     .frame(width: w * 0.58, height: h * 0.46)
                     .offset(y: -h * 0.06)
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(AlfredColor.sidebar)
+                    .fill(JlfredColor.sidebar)
                     .frame(width: w * 0.62, height: h * 0.09)
                     .offset(y: h * 0.05)
                 if showsGlass {
@@ -141,7 +141,7 @@ struct FormRow<Content: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text(label)
                 .font(.system(size: 13))
-                .foregroundStyle(AlfredColor.ink)
+                .foregroundStyle(JlfredColor.ink)
                 .frame(width: 128, alignment: .trailing)
             content()
             Spacer(minLength: 0)
@@ -154,7 +154,7 @@ struct HelpNote: View {
     var body: some View {
         Text(text)
             .font(.system(size: 11))
-            .foregroundStyle(AlfredColor.sub)
+            .foregroundStyle(JlfredColor.sub)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, 142)
     }
@@ -204,7 +204,7 @@ struct HotkeyGlyphs: View {
             if hotkey.modifiers & Hotkey.command != 0 { Text("⌘") }
             Text(keyDisplayName(hotkey.keyCode))
                 .font(.system(size: prominent ? 18 : 13, weight: .semibold))
-                .foregroundStyle(prominent ? AlfredColor.hotkey : Color.primary)
+                .foregroundStyle(prominent ? JlfredColor.hotkey : Color.primary)
         }
         .font(.system(size: 15))
         .foregroundStyle(Color.secondary)
