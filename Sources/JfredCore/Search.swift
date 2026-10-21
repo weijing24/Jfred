@@ -6,7 +6,7 @@ public enum Search {
 
     public static func results(for raw: String, context: SearchContext) -> [SearchResult] {
         if raw.hasPrefix(" ") {
-            return cap(fileResults(query: raw.trimmingCharacters(in: .whitespacesAndNewlines), context: context))
+            return cap(fileResults(query: raw.trimmingCharacters(in: .whitespacesAndNewlines), context: context), context: context)
         }
         if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return [] }
         if let forced = context.forcedResults {
@@ -27,7 +27,7 @@ public enum Search {
             )]
         }
         if let openQuery = argument(of: "open", in: trimmed) ?? argument(of: "find", in: trimmed) {
-            return cap(fileResults(query: openQuery, context: context))
+            return cap(fileResults(query: openQuery, context: context), context: context)
         }
         if let volume = volumeValue(trimmed) {
             return [make(
@@ -43,11 +43,11 @@ public enum Search {
         }
 
         if let exclusive = workflowResults(trimmed, context: context) {
-            return cap(exclusive)
+            return cap(exclusive, context: context)
         }
         let webHits = mergedWebKeywords(for: trimmed, context: context)
         if !webHits.isEmpty {
-            return cap(webHits)
+            return cap(webHits, context: context)
         }
 
         var found: [SearchResult] = []
@@ -249,15 +249,15 @@ public enum Search {
             }
         }
 
-        let ranked = dedupe(found, query: needle)
+        let ranked = dedupe(found, query: needle, context: context)
         if context.preferences.fallbackMode == "always" {
             let head = Array(ranked.prefix(resultLimit))
             return Array((head + fallbacks(for: trimmed, context: context, score: 0.2)).prefix(resultLimit + 3))
         }
         if ranked.isEmpty && context.preferences.fallbackMode != "never" {
-            return cap(fallbacks(for: trimmed, context: context, score: 1), query: needle)
+            return cap(fallbacks(for: trimmed, context: context, score: 1), query: needle, context: context)
         }
-        return cap(ranked, query: needle)
+        return cap(ranked, query: needle, context: context)
     }
 
     public static func wantsFiles(raw: String, preferences: Preferences) -> Bool {
@@ -413,44 +413,64 @@ public enum Search {
         dampen: Double = 1,
         floor: Double? = nil
     ) -> SearchResult? {
-        var score = bestFuzzyScore(query: query, fields: fields).map { $0 * dampen }
-        if let floor, score == nil { score = floor }
-        guard var score else { return nil }
-        let key = fold(query)
-        if context.preferences.topResultLatching, context.knowledge[key] == id {
-            score += 0.35
+        var match = bestFieldMatch(query: query, fields: fields)
+        if var found = match {
+            found.score *= dampen
+            match = found
+        } else if let floor {
+            match = FieldMatch(tier: 0, score: floor)
         }
-        return make(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: score)
+        guard let match else { return nil }
+        return make(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: match.score, tier: match.tier)
     }
 
-    private static func make(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double) -> SearchResult {
-        SearchResult(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: score)
+    private static func make(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double, tier: Int = 0) -> SearchResult {
+        SearchResult(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: score, tier: tier)
     }
 
-    /// Apps whose names contain the query, then System Settings panes that contain it,
-    /// then every other app, then the rest.
+    /// `/Applications` apps whose names contain the query, then other apps that contain it,
+    /// then System Settings panes, then remaining matches.
     private static func rankBand(_ item: SearchResult, query: String) -> Int {
         let folded = fold(query)
-        if item.kind == "app", !folded.isEmpty, fold(item.title).contains(folded) { return 0 }
-        if item.kind == "settings" { return 1 }
-        if item.kind == "app" { return 2 }
-        return 3
+        let nameHit = !folded.isEmpty && fold(item.title).contains(folded)
+        let applications = item.kind == "app" && item.payload.range(of: "/Applications/", options: [.anchored, .caseInsensitive]) != nil
+        if applications && nameHit { return 0 }
+        if item.kind == "app" && nameHit { return 1 }
+        if item.kind == "settings" { return 2 }
+        if applications { return 3 }
+        if item.kind == "app" { return 4 }
+        return 5
     }
 
-    private static func dedupe(_ items: [SearchResult], query: String = "") -> [SearchResult] {
+    private static func dedupe(_ items: [SearchResult], query: String = "", context: SearchContext? = nil) -> [SearchResult] {
+        let folded = fold(query)
+        let latched = context?.preferences.topResultLatching == true ? context?.knowledge[folded] : nil
         let sorted = items.sorted { lhs, rhs in
             let lhsBand = rankBand(lhs, query: query)
             let rhsBand = rankBand(rhs, query: query)
             if lhsBand != rhsBand { return lhsBand < rhsBand }
+            if lhs.tier != rhs.tier { return lhs.tier < rhs.tier }
+            let lhsLatch = lhs.id == latched
+            let rhsLatch = rhs.id == latched
+            if lhsLatch != rhsLatch { return lhsLatch }
+            let lhsUsed = (context?.selections[lhs.id]?.count ?? 0) > 0
+            let rhsUsed = (context?.selections[rhs.id]?.count ?? 0) > 0
+            if lhsUsed != rhsUsed { return lhsUsed }
             if lhs.score != rhs.score { return lhs.score > rhs.score }
+            let lhsTime = context?.selections[lhs.id]?.lastSelected ?? .distantPast
+            let rhsTime = context?.selections[rhs.id]?.lastSelected ?? .distantPast
+            if lhsTime != rhsTime { return lhsTime > rhsTime }
+            let lhsCount = context?.selections[lhs.id]?.count ?? 0
+            let rhsCount = context?.selections[rhs.id]?.count ?? 0
+            if lhsCount != rhsCount { return lhsCount > rhsCount }
             return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
         var seen = Set<String>()
         return sorted.filter { seen.insert($0.id).inserted }
     }
 
-    private static func cap(_ items: [SearchResult], query: String = "") -> [SearchResult] {
-        let ranked = dedupe(items, query: query)
+    private static func cap(_ items: [SearchResult], query: String = "", context: SearchContext? = nil) -> [SearchResult] {
+        let ranked = dedupe(items, query: query, context: context)
         let settings = ranked.filter { $0.kind == "settings" }
         guard ranked.count > resultLimit, !settings.isEmpty else {
             return Array(ranked.prefix(resultLimit))
@@ -458,7 +478,7 @@ public enum Search {
         let others = ranked.filter { $0.kind != "settings" }
         let room = max(0, resultLimit - settings.count)
         let keptOthers = Array(others.prefix(room))
-        let merged = dedupe(keptOthers + settings, query: query)
+        let merged = dedupe(keptOthers + settings, query: query, context: context)
         return Array(merged.prefix(resultLimit))
     }
 

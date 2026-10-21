@@ -15,6 +15,28 @@ struct DiskState: Codable {
     var clips: [ClipItem]
     var usage: [UsageEvent]
     var knowledge: [String: String]
+    var selections: [String: SelectionStat]
+
+    init(preferences: Preferences, workflows: [Workflow], snippets: [Snippet], clips: [ClipItem], usage: [UsageEvent], knowledge: [String: String], selections: [String: SelectionStat]) {
+        self.preferences = preferences
+        self.workflows = workflows
+        self.snippets = snippets
+        self.clips = clips
+        self.usage = usage
+        self.knowledge = knowledge
+        self.selections = selections
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        preferences = try container.decode(Preferences.self, forKey: .preferences)
+        workflows = try container.decode([Workflow].self, forKey: .workflows)
+        snippets = try container.decode([Snippet].self, forKey: .snippets)
+        clips = try container.decode([ClipItem].self, forKey: .clips)
+        usage = try container.decode([UsageEvent].self, forKey: .usage)
+        knowledge = try container.decode([String: String].self, forKey: .knowledge)
+        selections = try container.decodeIfPresent([String: SelectionStat].self, forKey: .selections) ?? [:]
+    }
 }
 
 enum Seed {
@@ -49,6 +71,7 @@ final class AppModel {
     var clips: [ClipItem] = []
     var usage: [UsageEvent] = []
     var knowledge: [String: String] = [:]
+    var selections: [String: SelectionStat] = [:]
     var apps: [AppRecord] = []
     var links: [LinkRecord] = []
     var contacts: [ContactRecord] = []
@@ -119,6 +142,9 @@ final class AppModel {
         reloadLinks()
         if preferences.onePasswordEnabled { reloadOnePassword() }
         syncActivationPolicy()
+        IndexWatch.shared.start(preferences: preferences) { [weak self] in
+            self?.reindex()
+        }
         clipChange = NSPasteboard.general.changeCount
         Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.pollClipboard() }
@@ -187,9 +213,7 @@ final class AppModel {
             let rows = Search.results(for: raw, context: context)
             await MainActor.run {
                 guard token == self.generation else { return }
-                self.results = rows
-                if self.selection >= rows.count { self.selection = 0 }
-                self.launcher?.layout()
+                self.publishResults(rows)
             }
         }
     }
@@ -448,8 +472,13 @@ final class AppModel {
         if old.remoteEnabled != preferences.remoteEnabled || old.remotePort != preferences.remotePort || old.remoteLocalOnly != preferences.remoteLocalOnly || old.remoteToken != preferences.remoteToken {
             applyRemote()
         }
-        if old.scopePaths != preferences.scopePaths || old.includeSystemApps != preferences.includeSystemApps || old.includeUserApps != preferences.includeUserApps || old.includePreferencePanes != preferences.includePreferencePanes || old.scopeApplications != preferences.scopeApplications {
+        let appRootsChanged = old.scopePaths != preferences.scopePaths || old.includeSystemApps != preferences.includeSystemApps || old.includeUserApps != preferences.includeUserApps || old.includePreferencePanes != preferences.includePreferencePanes || old.scopeApplications != preferences.scopeApplications
+        if appRootsChanged {
             reindex()
+            IndexWatch.shared.restartApps(preferences)
+        }
+        if appRootsChanged || old.scopeHome != preferences.scopeHome {
+            IndexWatch.shared.restartFiles(preferences)
         }
         if old.onePasswordEnabled != preferences.onePasswordEnabled && preferences.onePasswordEnabled { reloadOnePassword() }
         if old.safariBookmarks != preferences.safariBookmarks || old.chromeBookmarks != preferences.chromeBookmarks { reloadLinks() }
@@ -466,11 +495,23 @@ final class AppModel {
         applyExpander()
     }
 
+    private func publishResults(_ rows: [SearchResult]) {
+        for item in rows.prefix(LauncherMetrics.visibleRows) where item.icon.hasPrefix("file:") {
+            _ = IconCache.shared.image(for: String(item.icon.dropFirst("file:".count)))
+        }
+        results = rows
+        if selection >= rows.count { selection = 0 }
+        launcher?.layout()
+    }
+
     func reindex() {
         let prefs = preferences
         Task.detached {
             let apps = AppIndexer.applications(preferences: prefs)
-            await MainActor.run { self.apps = apps }
+            await MainActor.run {
+                self.apps = apps
+                IconCache.shared.prefetch(apps.map(\.path))
+            }
         }
     }
 
@@ -505,6 +546,7 @@ final class AppModel {
 
     func clearKnowledge() {
         knowledge = [:]
+        selections = [:]
         scheduleSave()
     }
 
@@ -697,6 +739,10 @@ final class AppModel {
     private func remember(_ item: SearchResult) {
         let key = fold(query)
         if preferences.topResultLatching && !key.isEmpty { knowledge[key] = item.id }
+        var stat = selections[item.id] ?? SelectionStat(count: 0, lastSelected: Date())
+        stat.count += 1
+        stat.lastSelected = Date()
+        selections[item.id] = stat
         if preferences.storeTypedQuery && !query.trimmingCharacters(in: .whitespaces).isEmpty {
             preferences.recentQueries.removeAll { $0 == query }
             preferences.recentQueries.insert(query, at: 0)
@@ -740,6 +786,7 @@ final class AppModel {
             definition: definition,
             opItems: opItems,
             knowledge: knowledge,
+            selections: selections,
             now: Date(),
             forcedResults: forced
         )
@@ -1002,6 +1049,7 @@ final class AppModel {
         clips = state.clips
         usage = state.usage
         knowledge = state.knowledge
+        selections = state.selections
         finishJfredStore()
     }
 
@@ -1033,7 +1081,7 @@ final class AppModel {
     }
 
     private func save() {
-        let state = DiskState(preferences: preferences, workflows: workflows, snippets: snippets, clips: clips, usage: usage, knowledge: knowledge)
+        let state = DiskState(preferences: preferences, workflows: workflows, snippets: snippets, clips: clips, usage: usage, knowledge: knowledge, selections: selections)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(state) else { return }

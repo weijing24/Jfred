@@ -367,7 +367,7 @@ struct QueryField: NSViewRepresentable {
 
 enum LauncherMetrics {
     static let visibleRows = 9
-    static let rowStride: CGFloat = 62
+    static let rowStride: CGFloat = 70
 }
 
 struct LauncherRow: View {
@@ -387,22 +387,22 @@ struct LauncherRow: View {
             ResultIcon(icon: item.icon, tint: selected ? theme.selectedTitle : theme.title)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title)
-                    .font(theme.font(size: 16, weight: .medium))
+                    .font(theme.font(size: 18, weight: .semibold))
                     .foregroundStyle(selected ? theme.selectedTitle : theme.title)
                     .lineLimit(1)
                 Text(item.subtitle)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text(shortcut)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
                 .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 66, maxHeight: 66, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(selected ? theme.selected : Color.clear)
@@ -455,18 +455,19 @@ struct PreviewLauncher: View {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     HStack(spacing: 12) {
                         Image(systemName: String(row.2.dropFirst("symbol:".count)))
-                            .frame(width: 28)
+                            .font(.system(size: 26))
+                            .frame(width: 40)
                             .foregroundStyle(index == 0 ? theme.selectedTitle : theme.title)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(row.0).font(theme.font(size: 16, weight: .medium)).foregroundStyle(index == 0 ? theme.selectedTitle : theme.title)
-                            Text(row.1).font(.system(size: 12)).foregroundStyle(index == 0 ? theme.selectedSubtitle : theme.subtitle).lineLimit(1)
+                            Text(row.0).font(theme.font(size: 18, weight: .semibold)).foregroundStyle(index == 0 ? theme.selectedTitle : theme.title)
+                            Text(row.1).font(.system(size: 13)).foregroundStyle(index == 0 ? theme.selectedSubtitle : theme.subtitle).lineLimit(1)
                         }
                         Spacer()
                         Text(index == 0 ? "↩" : "⌘\(index + 1)")
                             .foregroundStyle(index == 0 ? theme.selectedSubtitle : theme.subtitle)
                     }
                     .padding(.horizontal, 12)
-                    .frame(height: 54)
+                    .frame(height: 66)
                     .background(RoundedRectangle(cornerRadius: 10).fill(index == 0 ? theme.selected : Color.clear))
                 }
             }

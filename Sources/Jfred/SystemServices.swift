@@ -63,15 +63,19 @@ enum Shell {
 }
 
 enum AppIndexer {
-    static func applications(preferences: Preferences) -> [AppRecord] {
+    static func watchPaths(preferences: Preferences) -> [String] {
+        roots(preferences: preferences).map(\.0).filter { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    private static func roots(preferences: Preferences) -> [(String, Int)] {
         var roots: [(String, Int)] = []
         if preferences.includeSystemApps || preferences.scopeApplications {
-            roots.append(("/Applications", 1))
-            roots.append(("/System/Applications", 2))
+            roots.append(("/Applications", 4))
+            roots.append(("/System/Applications", 4))
             roots.append(("/System/Library/CoreServices", 2))
         }
         if preferences.includeUserApps {
-            roots.append(((NSHomeDirectory() as NSString).appendingPathComponent("Applications"), 2))
+            roots.append(((NSHomeDirectory() as NSString).appendingPathComponent("Applications"), 4))
         }
         if preferences.includePreferencePanes {
             roots.append(("/Library/PreferencePanes", 1))
@@ -81,6 +85,11 @@ enum AppIndexer {
         for path in preferences.scopePaths {
             roots.append(((path as NSString).expandingTildeInPath, 4))
         }
+        return roots
+    }
+
+    static func applications(preferences: Preferences) -> [AppRecord] {
+        let roots = roots(preferences: preferences)
         var seen = Set<String>()
         var apps: [AppRecord] = []
         for (root, depth) in roots {
@@ -99,7 +108,7 @@ enum AppIndexer {
         let rootCount = rootURL.pathComponents.count
         var results: [AppRecord] = []
         while let url = enumerator.nextObject() as? URL {
-            if results.count >= 2000 { break }
+            if results.count >= 4000 { break }
             let depth = url.pathComponents.count - rootCount
             if depth > maxDepth {
                 enumerator.skipDescendants()
@@ -107,11 +116,15 @@ enum AppIndexer {
             }
             let ext = url.pathExtension.lowercased()
             if ext == "app" || ext == "prefpane" {
-                var name = FileManager.default.displayName(atPath: url.path)
+                let resolved = resolvedBundle(url)
+                var name = FileManager.default.displayName(atPath: resolved.path)
                 for suffix in [".app", ".prefPane", ".prefpane"] where name.hasSuffix(suffix) {
                     name = String(name.dropLast(suffix.count))
                 }
-                results.append(AppRecord(id: url.path, name: name, path: url.path))
+                if ext == "prefpane" {
+                    name = PreferencePaneNames.displayName(for: resolved, fallback: name)
+                }
+                results.append(AppRecord(id: resolved.path, name: name, path: resolved.path))
                 enumerator.skipDescendants()
                 continue
             }
@@ -122,13 +135,86 @@ enum AppIndexer {
         }
         return results
     }
+
+    private static func resolvedBundle(_ url: URL) -> URL {
+        if let values = try? url.resourceValues(forKeys: [.isAliasFileKey, .isSymbolicLinkKey]) {
+            if values.isAliasFile == true, let destination = try? URL(resolvingAliasFileAt: url) {
+                return destination
+            }
+            if values.isSymbolicLink == true {
+                return url.resolvingSymlinksInPath()
+            }
+        }
+        return url
+    }
+}
+
+enum PreferencePaneNames {
+    private static let mapped: [String: String] = [
+        "Accounts.prefPane": "Users & Groups",
+        "AppleIDPrefPane.prefPane": "Apple ID",
+        "Appearance.prefPane": "Appearance",
+        "DateAndTime.prefPane": "Date & Time",
+        "DesktopScreenEffectsPref.prefPane": "Desktop & Screen Saver",
+        "FamilySharingPrefPane.prefPane": "Family",
+        "PrintAndScan.prefPane": "Printers & Scanners",
+        "PrivacyAndSecurity.prefPane": "Privacy & Security",
+        "SharingPref.prefPane": "Sharing",
+        "TouchID.prefPane": "Touch ID",
+        "UniversalAccessPref.prefPane": "Accessibility",
+        "Notifications.prefPane": "Notifications",
+        "Sound.prefPane": "Sound",
+        "Network.prefPane": "Network",
+        "Bluetooth.prefPane": "Bluetooth",
+        "Battery.prefPane": "Battery",
+        "Displays.prefPane": "Displays",
+        "Trackpad.prefPane": "Trackpad",
+        "Mouse.prefPane": "Mouse",
+        "Keyboard.prefPane": "Keyboard",
+        "Desktop.prefPane": "Desktop",
+        "Dock.prefPane": "Dock",
+        "Spotlight.prefPane": "Spotlight",
+        "TimeMachine.prefPane": "Time Machine",
+        "SoftwareUpdate.prefPane": "Software Update",
+    ]
+
+    static func displayName(for url: URL, fallback: String) -> String {
+        let bundled = bundleName(url)
+        let stem = url.deletingPathExtension().lastPathComponent
+        if let bundled, bundled.caseInsensitiveCompare(stem) != .orderedSame {
+            return bundled
+        }
+        if let known = mapped[url.lastPathComponent] { return known }
+        return bundled ?? fallback
+    }
+
+    private static func bundleName(_ url: URL) -> String? {
+        let plistURL = url.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: plistURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any]
+        else { return nil }
+        for key in ["CFBundleDisplayName", "CFBundleName"] {
+            if let name = plist[key] as? String {
+                let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { return trimmed }
+            }
+        }
+        return nil
+    }
 }
 
 enum FileSearch {
     static func files(query: String, preferences: Preferences) -> [AppRecord] {
         let safe = query.replacingOccurrences(of: "\"", with: "").trimmingCharacters(in: .whitespaces)
         guard safe.count >= 1 else { return [] }
-        let predicate = "kMDItemDisplayName == \"*\(safe)*\"c"
+        if FileIndex.shared.isReady {
+            return FileIndex.shared.search(query: safe, limit: max(preferences.fileSearchMax, 400))
+        }
+        return spotlight(query: safe, preferences: preferences)
+    }
+
+    private static func spotlight(query: String, preferences: Preferences) -> [AppRecord] {
+        let predicate = "kMDItemDisplayName == \"*\(query)*\"c"
         let roots = scopeRoots(preferences)
         let lock = NSLock()
         var found: [AppRecord] = []

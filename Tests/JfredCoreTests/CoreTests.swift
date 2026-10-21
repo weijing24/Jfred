@@ -82,6 +82,46 @@ struct CoreTests {
         }
     }
 
+    @Test func matchTierOutranksUsageAndShorterNames() {
+        #expect(fieldMatch(query: "cal", target: "Calendar")?.tier == 1)
+        #expect(fieldMatch(query: "cal", target: "Local")?.tier == 4)
+        var context = SearchContext()
+        context.apps = [
+            AppRecord(id: "local", name: "Local", path: "/Applications/Local.app"),
+            AppRecord(id: "calendar", name: "Calendar", path: "/System/Applications/Calendar.app"),
+            AppRecord(id: "alpha", name: "Alpha", path: "/Applications/Alpha.app"),
+            AppRecord(id: "alpine", name: "Alpine", path: "/Applications/Alpine.app"),
+        ]
+        context.selections["app:/Applications/Local.app"] = SelectionStat(count: 40, lastSelected: Date())
+        let cal = Search.results(for: "cal", context: context)
+        #expect(cal.first?.title == "Calendar")
+        context.selections["app:/Applications/Alpine.app"] = SelectionStat(count: 5, lastSelected: Date())
+        let rows = Search.results(for: "al", context: context)
+        let alpine = rows.firstIndex { $0.title == "Alpine" }
+        let alpha = rows.firstIndex { $0.title == "Alpha" }
+        #expect(alpine != nil)
+        #expect(alpha != nil)
+        #expect(alpine! < alpha!)
+    }
+
+    @Test func applicationsFolderRanksBeforeOtherApps() {
+        var context = SearchContext()
+        context.apps = [
+            AppRecord(id: "apps", name: "Apps", path: "/System/Applications/Apps.app"),
+            AppRecord(id: "alfred", name: "Alfred 5", path: "/Applications/Alfred 5.app"),
+            AppRecord(id: "accounts", name: "Accounts", path: "/System/Library/PreferencePanes/Accounts.prefPane"),
+        ]
+        let rows = Search.results(for: "a", context: context)
+        let alfred = rows.firstIndex { $0.title == "Alfred 5" }
+        let apps = rows.firstIndex { $0.title == "Apps" }
+        let accounts = rows.firstIndex { $0.title == "Accounts" }
+        #expect(alfred != nil)
+        #expect(apps != nil)
+        #expect(accounts != nil)
+        #expect(alfred! < apps!)
+        #expect(alfred! < accounts!)
+    }
+
     @Test func appsRankBeforeOtherMatches() {
         var context = SearchContext()
         context.apps = [

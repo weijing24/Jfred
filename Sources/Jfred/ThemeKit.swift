@@ -341,15 +341,57 @@ struct ResultIcon: View {
                 AppIcon(path: String(icon.dropFirst("file:".count)))
             } else if icon.hasPrefix("symbol:") {
                 Image(systemName: String(icon.dropFirst("symbol:".count)))
-                    .font(.system(size: 22))
+                    .font(.system(size: 26))
                     .foregroundStyle(tint)
             } else {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 22))
+                    .font(.system(size: 26))
                     .foregroundStyle(tint)
             }
         }
-        .frame(width: 32, height: 32)
+        .frame(width: 40, height: 40)
+    }
+}
+
+@MainActor
+final class IconCache {
+    static let shared = IconCache()
+    private var images: [String: NSImage] = [:]
+    private let side: CGFloat = 40
+
+    func image(for path: String) -> NSImage {
+        if let cached = images[path] { return cached }
+        let rendered = render(path)
+        images[path] = rendered
+        return rendered
+    }
+
+    /// Draws icons ahead of the first search so rows do not appear empty.
+    func prefetch(_ paths: [String]) {
+        let missing = paths.filter { images[$0] == nil }
+        guard !missing.isEmpty else { return }
+        var index = 0
+        func step() {
+            let end = min(index + 20, missing.count)
+            while index < end {
+                images[missing[index]] = render(missing[index])
+                index += 1
+            }
+            if index < missing.count {
+                DispatchQueue.main.async(execute: step)
+            }
+        }
+        DispatchQueue.main.async(execute: step)
+    }
+
+    private func render(_ path: String) -> NSImage {
+        let source = path.isEmpty ? NSWorkspace.shared.icon(for: .folder) : NSWorkspace.shared.icon(forFile: path)
+        var rect = NSRect(x: 0, y: 0, width: side * 2, height: side * 2)
+        guard let cg = source.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+            source.size = NSSize(width: side, height: side)
+            return source
+        }
+        return NSImage(cgImage: cg, size: NSSize(width: side, height: side))
     }
 }
 
@@ -359,21 +401,21 @@ struct AppIcon: NSViewRepresentable {
         let view = NSImageView()
         view.imageScaling = .scaleProportionallyUpOrDown
         view.imageAlignment = .alignCenter
+        view.imageFrameStyle = .none
+        view.animates = false
         // Workspace icons report a large intrinsic size. Let SwiftUI's frame win.
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentHuggingPriority(.defaultLow, for: .vertical)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        view.image = image
+        view.image = IconCache.shared.image(for: path)
         return view
     }
-    func updateNSView(_ nsView: NSImageView, context: Context) { nsView.image = image }
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSImageView, context: Context) -> CGSize? {
-        CGSize(width: 32, height: 32)
+    func updateNSView(_ nsView: NSImageView, context: Context) {
+        nsView.image = IconCache.shared.image(for: path)
     }
-    private var image: NSImage {
-        if path.isEmpty { return NSWorkspace.shared.icon(for: .folder) }
-        return NSWorkspace.shared.icon(forFile: path)
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSImageView, context: Context) -> CGSize? {
+        CGSize(width: 40, height: 40)
     }
 }
 

@@ -458,6 +458,16 @@ public struct ProfileInfo: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+public struct SelectionStat: Codable, Equatable, Sendable {
+    public var count: Int
+    public var lastSelected: Date
+
+    public init(count: Int, lastSelected: Date) {
+        self.count = count
+        self.lastSelected = lastSelected
+    }
+}
+
 public struct SearchResult: Equatable, Sendable, Identifiable {
     public var id: String
     public var title: String
@@ -467,8 +477,10 @@ public struct SearchResult: Equatable, Sendable, Identifiable {
     public var payload: String
     public var category: String
     public var score: Double
+    /// Match quality. Lower is better: exact, prefix, word prefix, substring, fuzzy.
+    public var tier: Int
 
-    public init(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double) {
+    public init(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double, tier: Int = 0) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -477,6 +489,7 @@ public struct SearchResult: Equatable, Sendable, Identifiable {
         self.payload = payload
         self.category = category
         self.score = score
+        self.tier = tier
     }
 }
 
@@ -498,6 +511,7 @@ public struct SearchContext: Sendable {
     public var definition: String?
     public var opItems: [AppRecord]
     public var knowledge: [String: String]
+    public var selections: [String: SelectionStat]
     public var now: Date
     public var forcedResults: [SearchResult]?
 
@@ -519,6 +533,7 @@ public struct SearchContext: Sendable {
         definition: String? = nil,
         opItems: [AppRecord] = [],
         knowledge: [String: String] = [:],
+        selections: [String: SelectionStat] = [:],
         now: Date = Date(),
         forcedResults: [SearchResult]? = nil
     ) {
@@ -539,6 +554,7 @@ public struct SearchContext: Sendable {
         self.definition = definition
         self.opItems = opItems
         self.knowledge = knowledge
+        self.selections = selections
         self.now = now
         self.forcedResults = forcedResults
     }
