@@ -31,9 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let image = hoodLogoImage() {
-            NSApp.applicationIconImage = image
-        }
+        // A raw bitmap assigned here skips the system squircle, so the Dock draws a square.
         AppRuntime.model = model
         model.start()
     }
