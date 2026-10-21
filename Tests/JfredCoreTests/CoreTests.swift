@@ -48,6 +48,8 @@ struct CoreTests {
         #expect(co.contains("Computer"))
         #expect(co.contains("Console"))
         #expect(co.contains("Contacts"))
+        #expect(co.firstIndex(of: "Contacts")! < co.firstIndex(of: "Computer")!)
+        #expect(co.firstIndex(of: "Console")! < co.firstIndex(of: "Computer")!)
 
         let kill = Search.results(for: "kill", context: context)
         #expect(kill.first?.kind == "process")
@@ -58,6 +60,40 @@ struct CoreTests {
         #expect(Search.results(for: "", context: context).isEmpty)
         #expect(Search.results(for: " ", context: context).first?.kind == "text")
         #expect(Search.results(for: "2+2*3", context: context).first?.title == "8")
+    }
+
+    @Test func settingsFollowAppsThatContainTheQuery() {
+        var context = SearchContext()
+        context.apps = [
+            AppRecord(id: "displaycal", name: "DisplayCal", path: "/Applications/DisplayCal.app"),
+            AppRecord(id: "notes", name: "Notes", path: "/Applications/Notes.app"),
+        ]
+        context.settings = SettingsCatalog.all
+        let rows = Search.results(for: "disp", context: context)
+        let app = rows.firstIndex { $0.title == "DisplayCal" }
+        let displays = rows.firstIndex { $0.id == "set:displays" }
+        let notes = rows.firstIndex { $0.title == "Notes" }
+        #expect(app != nil)
+        #expect(displays != nil)
+        #expect(app! < displays!)
+        #expect(rows.filter { $0.kind == "settings" }.allSatisfy { fold($0.title).contains("disp") })
+        if let notes, let displays {
+            #expect(displays < notes)
+        }
+    }
+
+    @Test func appsRankBeforeOtherMatches() {
+        var context = SearchContext()
+        context.apps = [
+            AppRecord(id: "cal", name: "Calendar", path: "/Applications/Calendar.app"),
+        ]
+        let rows = Search.results(for: "a", context: context)
+        let calendar = rows.firstIndex { $0.title == "Calendar" }
+        let restart = rows.firstIndex { $0.title == "Restart" }
+        #expect(rows.first?.kind == "app")
+        #expect(calendar != nil)
+        #expect(restart != nil)
+        #expect(calendar! < restart!)
     }
 
     @Test func fileModeDoesNotReturnApps() {

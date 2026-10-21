@@ -5,13 +5,16 @@ import SwiftUI
 @main
 struct JfredApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
+        let _ = registerPreferencesOpener()
         Window("Jfred Preferences", id: "preferences") {
             PreferencesShell(model: delegate.model)
                 .frame(minWidth: 980, minHeight: 640)
         }
         .defaultSize(width: 1120, height: 740)
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .appSettings) {
@@ -22,6 +25,12 @@ struct JfredApp: App {
                 Button("Preferences Search") { delegate.model.showPreferences() }
                     .keyboardShortcut(",", modifiers: .command)
             }
+        }
+    }
+
+    private func registerPreferencesOpener() {
+        AppRuntime.openPreferences = { [openWindow] in
+            openWindow(id: "preferences")
         }
     }
 }

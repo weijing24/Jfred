@@ -186,14 +186,27 @@ struct WindowReader: NSViewRepresentable {
     var onResolve: (NSWindow) -> Void
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            if let window = view.window { onResolve(window) }
-        }
+        let view = ProbeView()
+        view.onResolve = onResolve
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? ProbeView)?.onResolve = onResolve
+    }
+
+    final class ProbeView: NSView {
+        var onResolve: ((NSWindow) -> Void)?
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            onResolve?(window)
+            // SwiftUI applies the expanded preference toolbar after this view attaches.
+            DispatchQueue.main.async { [weak window] in
+                window?.toolbarStyle = .unifiedCompact
+            }
+        }
+    }
 }
 
 func keyDisplayName(_ keyCode: UInt16) -> String {
@@ -241,6 +254,7 @@ struct HotkeyCapture: NSViewRepresentable {
         let view = RecorderView()
         view.onSet = onSet
         view.onFocus = onFocus
+        view.focusRingType = .none
         return view
     }
 
@@ -255,11 +269,14 @@ final class RecorderView: NSView {
     var onFocus: ((Bool) -> Void)?
     private var monitor: Any?
     private var finishing = false
+    /// Stays false until a click, so opening General does not start capture.
+    private var capturing = false
     private static let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
 
-    override var acceptsFirstResponder: Bool { true }
+    override var acceptsFirstResponder: Bool { capturing }
 
     override func mouseDown(with event: NSEvent) {
+        capturing = true
         window?.makeFirstResponder(self)
     }
 
@@ -271,6 +288,7 @@ final class RecorderView: NSView {
     }
 
     override func resignFirstResponder() -> Bool {
+        capturing = false
         removeMonitor()
         onFocus?(false)
         return super.resignFirstResponder()
@@ -312,9 +330,6 @@ final class RecorderView: NSView {
         finishing = false
         return true
     }
-
-    override func drawFocusRingMask() { bounds.fill() }
-    override var focusRingMaskBounds: NSRect { bounds }
 }
 
 struct ResultIcon: View {

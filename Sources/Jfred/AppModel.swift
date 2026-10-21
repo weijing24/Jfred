@@ -5,6 +5,7 @@ import ServiceManagement
 
 enum AppRuntime {
     @MainActor static var model: AppModel?
+    @MainActor static var openPreferences: (() -> Void)?
 }
 
 struct DiskState: Codable {
@@ -59,6 +60,7 @@ final class AppModel {
     var launcherVisible = false
     var fileBuffer: [SearchResult] = []
     var hotkeyWarning = ""
+    var hotkeyFieldFocused = false
     var remoteWarning = ""
     var debugLine = "Debugger Stopped"
     var prefsQuery = ""
@@ -116,6 +118,7 @@ final class AppModel {
         reindex()
         reloadLinks()
         if preferences.onePasswordEnabled { reloadOnePassword() }
+        syncActivationPolicy()
         clipChange = NSPasteboard.general.changeCount
         Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.pollClipboard() }
@@ -545,12 +548,52 @@ final class AppModel {
     }
 
     func showPreferences() {
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        for window in NSApp.windows where window.identifier?.rawValue == "preferences" {
+        if let window = preferencesWindow() {
+            window.deminiaturize(nil)
             window.makeKeyAndOrderFront(nil)
             return
         }
-        NSApp.windows.first { $0.title.contains("Preferences") }?.makeKeyAndOrderFront(nil)
+        AppRuntime.openPreferences?()
+    }
+
+    func notePreferencesWindow(_ window: NSWindow) {
+        window.identifier = NSUserInterfaceItemIdentifier("preferences")
+        NSApp.setActivationPolicy(.regular)
+        guard observedPreferencesWindow !== window else { return }
+        if let preferencesCloseObserver {
+            NotificationCenter.default.removeObserver(preferencesCloseObserver)
+        }
+        observedPreferencesWindow = window
+        preferencesCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] note in
+            let closing = note.object as? NSWindow
+            MainActor.assumeIsolated {
+                DispatchQueue.main.async { self?.syncActivationPolicy(ignoring: closing) }
+            }
+        }
+    }
+
+    private weak var observedPreferencesWindow: NSWindow?
+    private var preferencesCloseObserver: NSObjectProtocol?
+
+    private func preferencesWindow() -> NSWindow? {
+        NSApp.windows.first { window in
+            guard window.isVisible, !window.isKind(of: NSPanel.self) else { return false }
+            return window.identifier?.rawValue == "preferences" || window.title.contains("Preferences")
+        }
+    }
+
+    private func syncActivationPolicy(ignoring closed: NSWindow? = nil) {
+        let showDock = NSApp.windows.contains { window in
+            guard window !== closed, window.isVisible, !window.isKind(of: NSPanel.self) else { return false }
+            return window.identifier?.rawValue == "preferences" || window.title.contains("Preferences")
+        }
+        NSApp.setActivationPolicy(showDock ? .regular : .accessory)
     }
 
     func handleRemote(_ target: String) -> String {

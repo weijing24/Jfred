@@ -16,7 +16,10 @@ struct PreferencesShell: View {
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
             window.title = "Jfred Preferences"
             window.titlebarAppearsTransparent = false
+            window.toolbarStyle = .unifiedCompact
+            window.titlebarSeparatorStyle = .none
             window.setContentSize(NSSize(width: 1120, height: 720))
+            model.notePreferencesWindow(window)
         })
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -28,7 +31,7 @@ struct PreferencesShell: View {
                         .frame(width: 180)
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 5)
+                .padding(.vertical, 2)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.55)))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black.opacity(0.12)))
             }
@@ -171,6 +174,7 @@ struct GeneralPane: View {
                                 model.preferences.hotkey = Hotkey(keyCode: code, modifiers: flags)
                             },
                             onFocus: { focused in
+                                model.hotkeyFieldFocused = focused
                                 if focused {
                                     HotkeyCenter.shared.suspend()
                                 } else {
@@ -182,7 +186,10 @@ struct GeneralPane: View {
                     .frame(width: 280, height: 26)
                     .padding(.horizontal, 8)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(JfredColor.line))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(model.hotkeyFieldFocused ? Color(nsColor: .keyboardFocusIndicatorColor) : JfredColor.line, lineWidth: model.hotkeyFieldFocused ? 2 : 1)
+                    )
                     Button {
                     } label: {
                         Image(systemName: "questionmark.circle")

@@ -53,7 +53,7 @@ final class LauncherController {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.globalMouse(event)
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.localMouse(event) ?? event
         }
     }
@@ -69,14 +69,21 @@ final class LauncherController {
 
     func layout() {
         guard let panel else { return }
-        let rows = CGFloat(model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : max(model.results.count, 1))
+        let filled = model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : max(model.results.count, 1)
+        let rows = CGFloat(min(filled, LauncherMetrics.visibleRows))
         let buffer: CGFloat = model.fileBuffer.isEmpty ? 0 : 34
-        let height = 96 + buffer + rows * 62 + (rows > 0 ? 12 : 8)
+        let height = 96 + buffer + rows * LauncherMetrics.rowStride + (rows > 0 ? 12 : 8)
         let width: CGFloat = 760
         var frame = panel.frame
         let top = pinnedTop ?? frame.maxY
         frame.size = NSSize(width: width, height: height)
         frame.origin.y = top - height
+        if let screen = panel.screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            if frame.minY < visible.minY {
+                frame.origin.y = max(visible.minY, visible.maxY - frame.height)
+            }
+        }
         panel.setFrame(frame, display: true)
         pinnedTop = panel.frame.maxY
     }
@@ -145,7 +152,15 @@ final class LauncherController {
     }
 
     private func localMouse(_ event: NSEvent) -> NSEvent? {
-        guard let panel, event.window === panel else { return event }
+        guard let panel else { return event }
+        if model.launcherVisible, event.type == .leftMouseDown || event.type == .rightMouseDown {
+            let inside = event.window === panel && panel.frame.contains(NSEvent.mouseLocation)
+            if !inside {
+                model.hideLauncher(reactivate: false)
+                return event
+            }
+        }
+        guard event.window === panel else { return event }
         let loc = NSEvent.mouseLocation
         switch event.type {
         case .leftMouseDown:
@@ -238,24 +253,9 @@ struct LauncherRoot: View {
                 }
             }
             if !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                VStack(spacing: 2) {
-                    if model.results.isEmpty {
-                        Text("No matches")
-                            .font(.system(size: 14))
-                            .foregroundStyle(theme.subtitle)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 12)
-                    } else {
-                        ForEach(Array(model.results.enumerated()), id: \.element.id) { index, item in
-                            LauncherRow(item: item, index: index, selected: index == model.selection, theme: theme)
-                                .contentShape(Rectangle())
-                                .onTapGesture { model.commitIndex(index) }
-                        }
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 10)
+                resultList(theme)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 10)
             }
         }
         .background {
@@ -275,6 +275,39 @@ struct LauncherRoot: View {
         )
         .shadow(color: .black.opacity(0.28), radius: 28, y: 16)
         .onChange(of: model.query) { _, _ in model.scheduleSearch() }
+    }
+
+    private func resultList(_ theme: LauncherTheme) -> some View {
+        let shown = min(max(model.results.count, 1), LauncherMetrics.visibleRows)
+        return ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(spacing: 2) {
+                    if model.results.isEmpty {
+                        Text("No matches")
+                            .font(.system(size: 14))
+                            .foregroundStyle(theme.subtitle)
+                            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+                            .padding(.horizontal, 14)
+                    } else {
+                        ForEach(Array(model.results.enumerated()), id: \.element.id) { index, item in
+                            LauncherRow(item: item, index: index, selected: index == model.selection, theme: theme)
+                                .id(index)
+                                .contentShape(Rectangle())
+                                .onTapGesture { model.commitIndex(index) }
+                        }
+                    }
+                }
+            }
+            .scrollIndicators(model.results.count > LauncherMetrics.visibleRows ? .visible : .hidden)
+            .frame(height: CGFloat(shown) * LauncherMetrics.rowStride - 2)
+            .onChange(of: model.selection) { _, newValue in
+                proxy.scrollTo(newValue)
+            }
+            .onChange(of: model.results.map(\.id)) { _, _ in
+                let index = model.results.isEmpty ? 0 : min(model.selection, model.results.count - 1)
+                proxy.scrollTo(index, anchor: .top)
+            }
+        }
     }
 
     private func queryFont(_ theme: LauncherTheme) -> NSFont {
@@ -330,6 +363,11 @@ struct QueryField: NSViewRepresentable {
             onChange(field.stringValue)
         }
     }
+}
+
+enum LauncherMetrics {
+    static let visibleRows = 9
+    static let rowStride: CGFloat = 62
 }
 
 struct LauncherRow: View {

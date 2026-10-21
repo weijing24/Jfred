@@ -1,7 +1,8 @@
 import Foundation
 
 public enum Search {
-    public static let resultLimit = 8
+    /// Matches kept for the launcher. The window shows a shorter viewport and scrolls.
+    public static let resultLimit = 40
 
     public static func results(for raw: String, context: SearchContext) -> [SearchResult] {
         if raw.hasPrefix(" ") {
@@ -123,7 +124,8 @@ public enum Search {
             ))
         }
         if context.preferences.systemSettingsEnabled {
-            for setting in context.settings {
+            let foldedQuery = fold(needle)
+            for setting in context.settings where !foldedQuery.isEmpty && fold(setting.name).contains(foldedQuery) {
                 push(scored(
                     query: needle,
                     fields: [setting.name],
@@ -247,15 +249,15 @@ public enum Search {
             }
         }
 
-        let ranked = dedupe(found)
+        let ranked = dedupe(found, query: needle)
         if context.preferences.fallbackMode == "always" {
             let head = Array(ranked.prefix(resultLimit))
             return Array((head + fallbacks(for: trimmed, context: context, score: 0.2)).prefix(resultLimit + 3))
         }
         if ranked.isEmpty && context.preferences.fallbackMode != "never" {
-            return cap(fallbacks(for: trimmed, context: context, score: 1))
+            return cap(fallbacks(for: trimmed, context: context, score: 1), query: needle)
         }
-        return cap(ranked)
+        return cap(ranked, query: needle)
     }
 
     public static func wantsFiles(raw: String, preferences: Preferences) -> Bool {
@@ -425,8 +427,21 @@ public enum Search {
         SearchResult(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: score)
     }
 
-    private static func dedupe(_ items: [SearchResult]) -> [SearchResult] {
+    /// Apps whose names contain the query, then System Settings panes that contain it,
+    /// then every other app, then the rest.
+    private static func rankBand(_ item: SearchResult, query: String) -> Int {
+        let folded = fold(query)
+        if item.kind == "app", !folded.isEmpty, fold(item.title).contains(folded) { return 0 }
+        if item.kind == "settings" { return 1 }
+        if item.kind == "app" { return 2 }
+        return 3
+    }
+
+    private static func dedupe(_ items: [SearchResult], query: String = "") -> [SearchResult] {
         let sorted = items.sorted { lhs, rhs in
+            let lhsBand = rankBand(lhs, query: query)
+            let rhsBand = rankBand(rhs, query: query)
+            if lhsBand != rhsBand { return lhsBand < rhsBand }
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
@@ -434,8 +449,17 @@ public enum Search {
         return sorted.filter { seen.insert($0.id).inserted }
     }
 
-    private static func cap(_ items: [SearchResult]) -> [SearchResult] {
-        Array(dedupe(items).prefix(resultLimit))
+    private static func cap(_ items: [SearchResult], query: String = "") -> [SearchResult] {
+        let ranked = dedupe(items, query: query)
+        let settings = ranked.filter { $0.kind == "settings" }
+        guard ranked.count > resultLimit, !settings.isEmpty else {
+            return Array(ranked.prefix(resultLimit))
+        }
+        let others = ranked.filter { $0.kind != "settings" }
+        let room = max(0, resultLimit - settings.count)
+        let keptOthers = Array(others.prefix(room))
+        let merged = dedupe(keptOthers + settings, query: query)
+        return Array(merged.prefix(resultLimit))
     }
 
     private static func volumeValue(_ query: String) -> Int? {
