@@ -72,7 +72,8 @@ final class LauncherController {
         let filled = model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : max(model.results.count, 1)
         let rows = CGFloat(min(filled, LauncherMetrics.visibleRows))
         let buffer: CGFloat = model.fileBuffer.isEmpty ? 0 : 34
-        let height = 96 + buffer + rows * LauncherMetrics.rowStride + (rows > 0 ? 12 : 8)
+        let header: CGFloat = rows > 0 ? 80 : LauncherMetrics.queryHeight
+        let height = header + buffer + rows * LauncherMetrics.rowStride + (rows > 0 ? 12 : 0)
         let width: CGFloat = 760
         var frame = panel.frame
         let top = pinnedTop ?? frame.maxY
@@ -226,17 +227,21 @@ struct LauncherRoot: View {
 
     var body: some View {
         let theme = LauncherTheme.by(id: model.preferences.themeID)
+        let searching = !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         VStack(alignment: .leading, spacing: 0) {
             QueryField(
                 text: model.query,
                 token: model.focusToken,
-                font: queryFont(theme),
-                color: NSColor(theme.query),
+                font: NSFont.systemFont(ofSize: 22),
+                color: NSColor(white: 0.08, alpha: 1),
                 onChange: { model.query = $0 }
             )
             .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 8)
+            .frame(height: LauncherMetrics.queryHeight)
+            .background { SpotlightFieldBackground() }
+            .padding(.horizontal, searching ? 12 : 0)
+            .padding(.top, searching ? 12 : 0)
+            .padding(.bottom, searching ? 8 : 0)
             if !model.fileBuffer.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -259,19 +264,21 @@ struct LauncherRoot: View {
             }
         }
         .background {
-            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
-                .fill(theme.background)
-                .background {
-                    if theme.material != nil {
-                        RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
-                            .fill(theme.material ?? .ultraThin)
+            if searching {
+                RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+                    .fill(theme.background)
+                    .background {
+                        if theme.material != nil {
+                            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+                                .fill(theme.material ?? .ultraThin)
+                        }
                     }
-                }
+            }
         }
-        .clipShape(RoundedRectangle(cornerRadius: theme.radius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: searching ? theme.radius : LauncherMetrics.queryHeight / 2, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
-                .stroke(Color.white.opacity(0.28), lineWidth: 0.6)
+            RoundedRectangle(cornerRadius: searching ? theme.radius : LauncherMetrics.queryHeight / 2, style: .continuous)
+                .stroke(Color.white.opacity(searching ? 0.28 : 0), lineWidth: 0.6)
         )
         .shadow(color: .black.opacity(0.28), radius: 28, y: 16)
         .onChange(of: model.query) { _, _ in model.scheduleSearch() }
@@ -309,13 +316,6 @@ struct LauncherRoot: View {
             }
         }
     }
-
-    private func queryFont(_ theme: LauncherTheme) -> NSFont {
-        if let name = theme.fontName, let font = NSFont(name: name, size: theme.querySize) {
-            return font
-        }
-        return NSFont.systemFont(ofSize: theme.querySize)
-    }
 }
 
 struct QueryField: NSViewRepresentable {
@@ -334,8 +334,19 @@ struct QueryField: NSViewRepresentable {
         field.focusRingType = .none
         field.font = font
         field.textColor = color
+        field.placeholderString = ""
+        field.appearance = NSAppearance(named: .aqua)
+        let cell = VerticallyCenteredTextFieldCell(textCell: text)
+        cell.font = font
+        cell.textColor = color
+        cell.isEditable = true
+        cell.isSelectable = true
+        cell.isBordered = false
+        cell.drawsBackground = false
+        cell.focusRingType = .none
+        cell.usesSingleLineMode = true
+        field.cell = cell
         field.delegate = context.coordinator
-        field.placeholderString = "Search"
         return field
     }
 
@@ -368,6 +379,42 @@ struct QueryField: NSViewRepresentable {
 enum LauncherMetrics {
     static let visibleRows = 9
     static let rowStride: CGFloat = 70
+    static let queryHeight: CGFloat = 58
+}
+
+struct SpotlightFieldBackground: View {
+    var body: some View {
+        Capsule(style: .continuous)
+            .fill(.ultraThinMaterial)
+            .environment(\.colorScheme, .light)
+            .overlay {
+                LinearGradient(
+                    colors: [Color.white.opacity(0.62), Color(white: 0.72).opacity(0.28)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .clipShape(Capsule(style: .continuous))
+            }
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(Color.white.opacity(0.85), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
+    }
+}
+
+final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
+    override func drawingRect(forBounds rect: NSRect) -> NSRect {
+        let original = super.drawingRect(forBounds: rect)
+        let textHeight = cellSize(forBounds: rect).height
+        let y = rect.origin.y + (rect.height - textHeight) / 2
+        return NSRect(x: original.origin.x, y: y, width: original.width, height: textHeight)
+    }
+
+    override func select(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText, delegate: Any?, start selStart: Int, length selLength: Int) {
+        let inset = drawingRect(forBounds: rect)
+        super.select(withFrame: inset, in: controlView, editor: textObj, delegate: delegate, start: selStart, length: selLength)
+    }
 }
 
 struct LauncherRow: View {
@@ -446,11 +493,15 @@ struct PreviewLauncher: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Co")
-                .font(theme.font(size: theme.querySize))
-                .foregroundStyle(theme.query)
+                .font(.system(size: 22))
+                .foregroundStyle(Color(white: 0.08))
                 .padding(.horizontal, 22)
-                .padding(.top, 16)
-                .padding(.bottom, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: LauncherMetrics.queryHeight)
+                .background { SpotlightFieldBackground() }
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
             VStack(spacing: 2) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     HStack(spacing: 12) {
