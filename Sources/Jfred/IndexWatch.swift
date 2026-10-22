@@ -88,6 +88,10 @@ enum FileCatalog {
                 continue
             }
             let ext = url.pathExtension.lowercased()
+            if ext == "photoslibrary" || ext == "musiclibrary" || ext == "tvlibrary" || ext == "aplibrary" {
+                enumerator.skipDescendants()
+                continue
+            }
             if ext == "app" || ext == "prefpane" {
                 enumerator.skipDescendants()
                 continue

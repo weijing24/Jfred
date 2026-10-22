@@ -97,7 +97,7 @@ struct FeaturesPane: View {
             labeled("Search Scope:") {
                 HStack(spacing: 16) {
                     Toggle("macOS Applications folder", isOn: model.bindPref(\.scopeApplications))
-                    Toggle("Folders in Home - Excluding ~/Library", isOn: model.bindPref(\.scopeHome))
+                    Toggle("Folders in Home, excluding Library, Music, and network volumes", isOn: model.bindPref(\.scopeHome))
                 }
             }
             scopeList

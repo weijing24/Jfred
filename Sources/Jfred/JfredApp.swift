@@ -17,6 +17,10 @@ struct JfredApp: App {
         .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .appTermination) {
+                Button("Quit Jfred") { delegate.model.quit() }
+                    .keyboardShortcut("q", modifiers: .command)
+            }
             CommandGroup(after: .appSettings) {
                 Button("Show Jfred") { delegate.model.toggleLauncher() }
             }
@@ -46,6 +50,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if AppRuntime.explicitQuit { return .terminateNow }
+        if let event = NSApp.currentEvent, event.type == .keyDown, event.modifierFlags.contains(.command), event.charactersIgnoringModifiers?.lowercased() == "q" {
+            return .terminateNow
+        }
+        // Dock Quit and the last preferences window closing must not kill the hotkey.
+        model.leaveDock()
+        return .terminateCancel
+    }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {

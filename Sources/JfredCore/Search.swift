@@ -95,7 +95,7 @@ public enum Search {
             if let item { found.append(item) }
         }
 
-        for app in context.apps {
+        for app in context.apps where includeApp(path: app.path) {
             push(scored(
                 query: needle,
                 fields: [app.name],
@@ -420,12 +420,26 @@ public enum Search {
         } else if let floor {
             match = FieldMatch(tier: 0, score: floor)
         }
-        guard let match else { return nil }
+        // Alfred keeps a query to a name or word prefix. A mid-word
+        // substring ("Sharing" for "ha") or a fuzzy hit ("Hostpane") stays out.
+        guard let match, match.tier <= 2 else { return nil }
         return make(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: match.score, tier: match.tier)
     }
 
     private static func make(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double, tier: Int = 0) -> SearchResult {
         SearchResult(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: score, tier: tier)
+    }
+
+    /// Background helpers under CoreServices are not launcher apps.
+    /// `/System/Library/CoreServices/Applications` and Finder stay.
+    private static func includeApp(path: String) -> Bool {
+        let folded = fold(path)
+        let marker = "/system/library/coreservices/"
+        guard let range = folded.range(of: marker) else { return true }
+        let rest = folded[range.upperBound...]
+        if rest.hasPrefix("applications/") { return true }
+        if rest == "finder.app" || rest.hasPrefix("finder.app/") { return true }
+        return false
     }
 
     /// `/Applications` apps whose names contain the query, then other apps that contain it,

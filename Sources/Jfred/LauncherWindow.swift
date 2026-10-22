@@ -62,7 +62,10 @@ final class LauncherController {
         guard let panel else { return }
         if pinnedTop == nil { placeInitially() }
         layout()
-        panel.makeKeyAndOrderFront(nil)
+        // A nonactivating panel can take keystrokes without pulling other
+        // Jfred windows, such as Preferences, in front of Finder.
+        panel.orderFrontRegardless()
+        panel.makeKey()
     }
 
     func hide() { panel?.orderOut(nil) }

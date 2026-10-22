@@ -104,6 +104,20 @@ struct CoreTests {
         #expect(alpine! < alpha!)
     }
 
+    @Test func shortQueryKeepsWordPrefixesOnly() {
+        var context = SearchContext()
+        context.apps = [
+            AppRecord(id: "enhanced", name: "Enhanced Logging", path: "/System/Library/CoreServices/Enhanced Logging.app"),
+            AppRecord(id: "handler", name: "CalendarFileHandler", path: "/System/Library/CoreServices/CalendarFileHandler.app"),
+            AppRecord(id: "host", name: "Hostpane", path: "/Applications/Hostpane.app"),
+            AppRecord(id: "hagi", name: "HagimiMonitor", path: "/Applications/HagimiMonitor.app"),
+            AppRecord(id: "claude", name: "Claude Code URL Handler", path: "/Users/jim/Applications/Claude Code URL Handler.app"),
+        ]
+        context.settings = [SettingRecord(id: "sharing", name: "Sharing", url: "x-apple.systempreferences:com.apple.Sharing-Settings.extension")]
+        let rows = Search.results(for: "ha", context: context)
+        #expect(rows.map(\.title) == ["HagimiMonitor", "Claude Code URL Handler"])
+    }
+
     @Test func applicationsFolderRanksBeforeOtherApps() {
         var context = SearchContext()
         context.apps = [
@@ -125,15 +139,29 @@ struct CoreTests {
     @Test func appsRankBeforeOtherMatches() {
         var context = SearchContext()
         context.apps = [
-            AppRecord(id: "cal", name: "Calendar", path: "/Applications/Calendar.app"),
+            AppRecord(id: "safari", name: "Safari", path: "/Applications/Safari.app"),
         ]
-        let rows = Search.results(for: "a", context: context)
-        let calendar = rows.firstIndex { $0.title == "Calendar" }
-        let restart = rows.firstIndex { $0.title == "Restart" }
+        let rows = Search.results(for: "s", context: context)
+        let safari = rows.firstIndex { $0.title == "Safari" }
+        let sleep = rows.firstIndex { $0.title == "Sleep" }
         #expect(rows.first?.kind == "app")
-        #expect(calendar != nil)
-        #expect(restart != nil)
-        #expect(calendar! < restart!)
+        #expect(safari != nil)
+        #expect(sleep != nil)
+        #expect(safari! < sleep!)
+    }
+
+    @Test func coreServicesHelpersStayOut() {
+        var context = SearchContext()
+        context.apps = [
+            AppRecord(id: "enhanced", name: "Enhanced Logging", path: "/System/Library/CoreServices/Enhanced Logging.app"),
+            AppRecord(id: "finder", name: "Finder", path: "/System/Library/CoreServices/Finder.app"),
+            AppRecord(id: "keychain", name: "Keychain Access", path: "/System/Library/CoreServices/Applications/Keychain Access.app"),
+        ]
+        let rows = Search.results(for: "f", context: context)
+        #expect(rows.contains { $0.title == "Finder" })
+        #expect(!Search.results(for: "en", context: context).contains { $0.title == "Enhanced Logging" })
+        let key = Search.results(for: "key", context: context)
+        #expect(key.contains { $0.title == "Keychain Access" })
     }
 
     @Test func fileModeDoesNotReturnApps() {

@@ -72,7 +72,6 @@ enum AppIndexer {
         if preferences.includeSystemApps || preferences.scopeApplications {
             roots.append(("/Applications", 4))
             roots.append(("/System/Applications", 4))
-            roots.append(("/System/Library/CoreServices", 2))
         }
         if preferences.includeUserApps {
             roots.append(((NSHomeDirectory() as NSString).appendingPathComponent("Applications"), 4))
@@ -88,6 +87,13 @@ enum AppIndexer {
         return roots
     }
 
+    /// Finder lives in CoreServices, which is not scanned. Keep it searchable.
+    private static func finderRecord() -> AppRecord? {
+        let path = "/System/Library/CoreServices/Finder.app"
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        return AppRecord(id: path, name: "Finder", path: path)
+    }
+
     static func applications(preferences: Preferences) -> [AppRecord] {
         let roots = roots(preferences: preferences)
         var seen = Set<String>()
@@ -96,6 +102,9 @@ enum AppIndexer {
             for app in scan(root: root, maxDepth: depth) where seen.insert(app.path).inserted {
                 apps.append(app)
             }
+        }
+        if preferences.includeSystemApps, let finder = finderRecord(), seen.insert(finder.path).inserted {
+            apps.append(finder)
         }
         return apps.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -247,16 +256,27 @@ enum FileSearch {
         if preferences.scopeHome {
             let home = URL(fileURLWithPath: NSHomeDirectory())
             if let items = try? FileManager.default.contentsOfDirectory(at: home, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
-                for url in items where url.lastPathComponent != "Library" {
+                for url in items where shouldIndex(url.path) {
                     roots.append(url.path)
                 }
             }
         }
         for path in preferences.scopePaths {
             let expanded = (path as NSString).expandingTildeInPath
-            if FileManager.default.fileExists(atPath: expanded) { roots.append(expanded) }
+            if shouldIndex(expanded) { roots.append(expanded) }
         }
         return roots
+    }
+
+    /// Home music libraries and network mounts each raise a privacy prompt.
+    private static func shouldIndex(_ path: String) -> Bool {
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return false }
+        let name = (path as NSString).lastPathComponent
+        if name == "Library" || name == "Music" { return false }
+        var info = statfs()
+        guard statfs(path, &info) == 0 else { return false }
+        return info.f_flags & UInt32(MNT_LOCAL) != 0
     }
 }
 

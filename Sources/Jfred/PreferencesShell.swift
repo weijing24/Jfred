@@ -161,7 +161,7 @@ struct GeneralPane: View {
             FormRow(label: "Startup:") {
                 HStack(spacing: 12) {
                     Toggle("Launch Jfred at login", isOn: model.bindPref(\.launchAtLogin))
-                    Button("Quit Jfred") { NSApp.terminate(nil) }
+                    Button("Quit Jfred") { model.quit() }
                 }
             }
             HelpNote(text: "If selected, Jfred will still launch at login after using the \"Quit Jfred\" button.")

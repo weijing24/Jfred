@@ -6,6 +6,8 @@ import ServiceManagement
 enum AppRuntime {
     @MainActor static var model: AppModel?
     @MainActor static var openPreferences: (() -> Void)?
+    /// Quit Jfred, the status menu, and killing this process. Dock Quit stays resident.
+    @MainActor static var explicitQuit = false
 }
 
 struct DiskState: Codable {
@@ -235,7 +237,7 @@ final class AppModel {
         launcherVisible = true
         focusToken += 1
         SnippetExpander.shared.setSuspended(true)
-        NSApp.activate(ignoringOtherApps: true)
+        if previousApp != nil { sinkPreferencesBehindOtherApps() }
         launcher?.show()
         scheduleSearch()
     }
@@ -244,7 +246,31 @@ final class AppModel {
         launcherVisible = false
         SnippetExpander.shared.setSuspended(false)
         launcher?.hide()
-        if reactivate { previousApp?.activate(options: [.activateIgnoringOtherApps]) }
+        if reactivate, let previousApp {
+            previousApp.activate(options: [.activateIgnoringOtherApps])
+            DispatchQueue.main.async { self.restorePreferencesLevel() }
+        } else {
+            restorePreferencesLevel()
+        }
+    }
+
+    private var preferencesLevelBeforeLauncher: NSWindow.Level?
+
+    /// Preferences is a normal window. Once this app activates, macOS raises it
+    /// over Finder. Drop it below normal windows while the launcher is up.
+    private func sinkPreferencesBehindOtherApps() {
+        guard let window = preferencesWindow(), preferencesLevelBeforeLauncher == nil else { return }
+        preferencesLevelBeforeLauncher = window.level
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.normalWindow)) - 1)
+    }
+
+    private func restorePreferencesLevel() {
+        guard let window = preferencesWindow(), let level = preferencesLevelBeforeLauncher else {
+            preferencesLevelBeforeLauncher = nil
+            return
+        }
+        preferencesLevelBeforeLauncher = nil
+        window.level = level
     }
 
     func move(_ delta: Int) {
@@ -372,7 +398,7 @@ final class AppModel {
         case "process":
             if let pid = Int32(item.payload), pid > 100 {
                 if pid == ProcessInfo.processInfo.processIdentifier {
-                    NSApp.terminate(nil)
+                    quit()
                 } else {
                     kill(pid, SIGTERM)
                     debugLine = "Killed \(item.title) (\(pid))"
@@ -635,7 +661,30 @@ final class AppModel {
             guard window !== closed, window.isVisible, !window.isKind(of: NSPanel.self) else { return false }
             return window.identifier?.rawValue == "preferences" || window.title.contains("Preferences")
         }
-        NSApp.setActivationPolicy(showDock ? .regular : .accessory)
+        let policy: NSApplication.ActivationPolicy = showDock ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        NSApp.setActivationPolicy(policy)
+        // Changing policy drops Carbon hot keys registered on the old target.
+        applyHotkeys()
+    }
+
+    private var leavingDock = false
+
+    /// Leave the Dock without exiting. The launcher hotkey keeps working.
+    func leaveDock() {
+        guard !leavingDock else { return }
+        leavingDock = true
+        for window in NSApp.windows where !(window is NSPanel) && (window.identifier?.rawValue == "preferences" || window.title.contains("Preferences")) {
+            window.close()
+        }
+        NSApp.setActivationPolicy(.accessory)
+        applyHotkeys()
+        leavingDock = false
+    }
+
+    func quit() {
+        AppRuntime.explicitQuit = true
+        NSApp.terminate(nil)
     }
 
     func handleRemote(_ target: String) -> String {
@@ -1116,7 +1165,7 @@ final class AppModel {
 
     @objc private func statusShow() { showLauncher() }
     @objc private func statusPrefs() { showPreferences() }
-    @objc private func statusQuit() { NSApp.terminate(nil) }
+    @objc private func statusQuit() { quit() }
 }
 
 enum PrefSection: String, CaseIterable, Identifiable {
