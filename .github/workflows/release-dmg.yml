@@ -1,0 +1,147 @@
+name: Release DMG
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semver component to increment
+        type: choice
+        options: [minor, patch, major]
+        default: minor
+
+concurrency:
+  group: release-dmg
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    # The version commit is pushed with the workflow token. Skip it if that
+    # push still starts a run, or the next release would bump forever.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use HTTPS for Swift package GitHub URLs
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+      - name: Select latest Xcode
+        run: |
+          set -euo pipefail
+          xcode="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$xcode" ]; then
+            echo "No Xcode.app found" >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          swift --version
+          swift --version | grep -E 'Swift version 6\.([2-9]|[1-9][0-9])' >/dev/null
+          echo "Using $xcode"
+
+      - name: Next version
+        id: version
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          last="$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+          # A push to main starts the next minor line. Patch stays on the
+          # current line. Major is chosen from the workflow dispatch form.
+          bump="${{ github.event.inputs.bump || 'minor' }}"
+          plist="Info.plist"
+          if [ -z "$last" ]; then
+            ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
+          else
+            ver="${last#v}"
+            maj="${ver%%.*}"
+            rest="${ver#*.}"
+            min="${rest%%.*}"
+            pat="${rest#*.}"
+            case "$bump" in
+              major)
+                maj=$((maj + 1))
+                min=0
+                pat=0
+                ;;
+              minor)
+                min=$((min + 1))
+                pat=0
+                ;;
+              *)
+                pat=$((pat + 1))
+                ;;
+            esac
+            ver="${maj}.${min}.${pat}"
+          fi
+          tag="v${ver}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists" >&2
+            exit 1
+          fi
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $ver" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $ver" "$plist"
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prev=${last:-}" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag (bump=$bump, previous=${last:-none})"
+
+      - name: Build DMG
+        run: ./scripts/package-dmg.sh --ci
+
+      - name: Tag and publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          prev="${{ steps.version.outputs.prev }}"
+          dmg="$(ls dist/Jfred-*.dmg)"
+          notes="${RUNNER_TEMP}/release-notes.md"
+          {
+            echo "## What's Changed"
+            if [ -n "$prev" ]; then
+              git log --pretty=format:'- %s' "${prev}..HEAD"
+            else
+              git log --pretty=format:'- %s'
+            fi | sed 's/\.$//'
+            echo
+            echo
+            if [ -n "$prev" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
+            fi
+          } > "$notes"
+          if ! grep -q '^- ' "$notes"; then
+            subject="$(git log -1 --pretty=format:'%s' | sed 's/\.$//')"
+            {
+              echo "## What's Changed"
+              echo "- ${subject}"
+              echo
+              if [ -n "$prev" ]; then
+                echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
+              fi
+            } > "$notes"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ver="${{ steps.version.outputs.ver }}"
+          git add Info.plist
+          if ! git diff --cached --quiet; then
+            git commit -m "Set version to ${ver}. [skip ci]"
+          fi
+          git tag -a "$tag" -m "$tag"
+          git push origin HEAD
+          git push origin "$tag"
+          gh release create "$tag" "$dmg" \
+            --title "$tag" \
+            --notes-file "$notes" \
+            --latest

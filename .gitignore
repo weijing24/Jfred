@@ -1,4 +1,5 @@
 .build/
 build/
+dist/
 *.xcuserstate
 .DS_Store
