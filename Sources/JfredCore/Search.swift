@@ -5,7 +5,7 @@ public enum Search {
     public static let resultLimit = 40
 
     public static func results(for raw: String, context: SearchContext) -> [SearchResult] {
-        if raw.hasPrefix(" ") {
+        if raw.hasPrefix(" "), context.preferences.quickSearchEnabled {
             return cap(fileResults(query: raw.trimmingCharacters(in: .whitespacesAndNewlines), context: context), context: context)
         }
         if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return [] }
@@ -26,8 +26,22 @@ public enum Search {
                 score: 2
             )]
         }
-        if let openQuery = argument(of: "open", in: trimmed) ?? argument(of: "find", in: trimmed) {
-            return cap(fileResults(query: openQuery, context: context), context: context)
+        let prefs = context.preferences
+        func keywordQuery(_ keyword: String, enabled: Bool) -> String? {
+            let key = keyword.trimmingCharacters(in: .whitespaces)
+            guard enabled, !key.isEmpty else { return nil }
+            return argument(of: key, in: trimmed)
+        }
+        if let openQuery = keywordQuery(prefs.fileOpenKeyword, enabled: prefs.fileOpenEnabled)
+            ?? keywordQuery(prefs.fileFindKeyword, enabled: prefs.fileFindEnabled) {
+            let rows = fileResults(query: openQuery, context: context)
+            return Array(rows.prefix(max(1, prefs.fileSearchMax)))
+        }
+        if let inside = keywordQuery(prefs.fileInsideKeyword, enabled: prefs.fileInsideEnabled), let spotlight = context.spotlight {
+            return spotlightFileResults(spotlight(inside, false), context: context, limit: prefs.fileSearchMax)
+        }
+        if let tags = keywordQuery(prefs.fileTagsKeyword, enabled: prefs.fileTagsEnabled), let spotlight = context.spotlight {
+            return spotlightFileResults(spotlight(tags, true), context: context, limit: prefs.fileSearchMax)
         }
         if let volume = volumeValue(trimmed) {
             return [make(
@@ -141,12 +155,21 @@ public enum Search {
             }
         }
         for snippet in context.snippets where context.preferences.snippetsEnabled {
+            let snippetFields: [String]
+            switch context.preferences.snippetMatching {
+            case "name": snippetFields = [snippet.name]
+            case "keyword": snippetFields = [snippet.keyword]
+            default: snippetFields = [snippet.name, snippet.keyword]
+            }
+            let snippetSubtitle = context.preferences.snippetShowKeywordInResult
+                ? snippet.keyword + "  ·  " + snippet.text.replacingOccurrences(of: "\n", with: " ")
+                : snippet.text.replacingOccurrences(of: "\n", with: " ")
             push(scored(
                 query: needle,
-                fields: [snippet.name, snippet.keyword],
+                fields: snippetFields,
                 id: "snip:\(snippet.id.uuidString)",
                 title: snippet.name,
-                subtitle: snippet.keyword + "  ·  " + snippet.text.replacingOccurrences(of: "\n", with: " "),
+                subtitle: snippetSubtitle,
                 icon: "symbol:text.quote",
                 kind: "snippet",
                 payload: snippet.id.uuidString,
@@ -157,9 +180,11 @@ public enum Search {
         }
         for command in SystemCommand.all {
             if command.category == "music" { continue }
+            let customKeyword = context.preferences.systemKeywords[command.id]
+            let commandFields = customKeyword.map { [$0, command.title] } ?? ([command.title] + command.keywords)
             push(scored(
                 query: needle,
-                fields: [command.title] + command.keywords,
+                fields: commandFields,
                 id: "sys:\(command.id)",
                 title: command.title,
                 subtitle: command.subtitle,
@@ -199,10 +224,20 @@ public enum Search {
                 dampen: 0.9
             ))
         }
-        if needle.count >= 2 {
+        let bookmarkMode = context.preferences.bookmarkResultMode
+        var bookmarkNeedle = needle
+        var showBookmarks = bookmarkMode == "default"
+        if bookmarkMode == "keyword" {
+            let keyword = context.preferences.bookmarkKeyword.lowercased()
+            if !keyword.isEmpty, needle.lowercased().hasPrefix(keyword + " ") {
+                showBookmarks = true
+                bookmarkNeedle = String(needle.dropFirst(keyword.count + 1)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        if showBookmarks, bookmarkNeedle.count >= 2 {
             for link in context.links {
                 push(scored(
-                    query: needle,
+                    query: bookmarkNeedle,
                     fields: [link.title, link.url],
                     id: "link:\(link.id)",
                     title: link.title.isEmpty ? link.url : link.title,
@@ -216,15 +251,34 @@ public enum Search {
                 ))
             }
         }
-        if context.preferences.clipboardEnabled, let clipQuery = argument(of: "clip", in: trimmed) ?? argument(of: "clipboard", in: trimmed) {
+        if context.preferences.clipboardEnabled, let clipQuery = argument(of: context.preferences.clipboardViewerKeyword, in: trimmed) ?? argument(of: "clip", in: trimmed) {
             let filtered = context.clips.filter { clipQuery.isEmpty || fold($0.text).contains(fold(clipQuery)) }
             for clip in filtered.prefix(8) {
                 let preview = clip.text.replacingOccurrences(of: "\n", with: " ")
+                let kind = clip.kind ?? "text"
+                let title: String
+                let subtitle: String
+                let icon: String
+                switch kind {
+                case "image":
+                    title = "Image"
+                    subtitle = "Clipboard image"
+                    icon = clip.imageFile.map { "file:\($0)" } ?? "symbol:photo"
+                case "file":
+                    let paths = clip.filePaths ?? []
+                    title = paths.prefix(2).map { ($0 as NSString).lastPathComponent }.joined(separator: ", ")
+                    subtitle = paths.joined(separator: "  ·  ")
+                    icon = paths.first.map { "file:\($0)" } ?? "symbol:doc"
+                default:
+                    title = String(preview.prefix(80))
+                    subtitle = "Clipboard"
+                    icon = "symbol:doc.on.clipboard"
+                }
                 found.append(make(
                     id: "clip:\(clip.id.uuidString)",
-                    title: String(preview.prefix(80)),
-                    subtitle: "Clipboard",
-                    icon: "symbol:doc.on.clipboard",
+                    title: title,
+                    subtitle: subtitle,
+                    icon: icon,
                     kind: "clipboard",
                     payload: clip.id.uuidString,
                     category: "clipboard",
@@ -261,9 +315,15 @@ public enum Search {
     }
 
     public static func wantsFiles(raw: String, preferences: Preferences) -> Bool {
-        if raw.hasPrefix(" ") { return true }
+        if raw.hasPrefix(" "), preferences.quickSearchEnabled { return true }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if argument(of: "open", in: trimmed) != nil || argument(of: "find", in: trimmed) != nil { return true }
+        let keywords = [
+            (preferences.fileOpenKeyword, preferences.fileOpenEnabled),
+            (preferences.fileFindKeyword, preferences.fileFindEnabled),
+        ]
+        for (keyword, enabled) in keywords where enabled && !keyword.isEmpty {
+            if argument(of: keyword, in: trimmed) != nil { return true }
+        }
         if preferences.searchAllFileTypes && trimmed.count >= 3 { return true }
         let extras = preferences.extraFolders || preferences.extraDocuments || preferences.extraText || preferences.extraImages || preferences.extraArchives || preferences.extraScripts
         return extras && trimmed.count >= 3
@@ -368,7 +428,8 @@ public enum Search {
         if query.isEmpty {
             return [make(id: "file:hint", title: "File search", subtitle: "Type a file name", icon: "symbol:doc", kind: "text", payload: "", category: "navigation", score: 1)]
         }
-        return context.files.compactMap { file in
+        let hidden = Set(context.preferences.hiddenFileTypes)
+        return context.files.filter { !isHiddenFile($0.path, hiddenTypes: hidden) }.compactMap { file in
             scored(
                 query: query,
                 fields: [file.name, URL(fileURLWithPath: file.path).lastPathComponent],
@@ -380,6 +441,41 @@ public enum Search {
                 payload: file.path,
                 category: "navigation",
                 context: context
+            )
+        }
+    }
+
+    private static let hiddenExtensions: [String: Set<String>] = [
+        "Emails": ["eml", "msg", "email"],
+        "Contacts": ["vcf"],
+        "Calendar": ["ics"],
+        "Bookmarks": ["webloc", "url", "plist"],
+        "Images": ["png", "jpg", "jpeg", "gif", "heic", "tiff", "bmp", "webp", "svg"],
+        "Messages": ["ichat"],
+        "Music": ["mp3", "m4a", "aac", "flac", "wav", "aiff", "ogg"],
+        "Plist files": ["plist"],
+        "Source files": ["swift", "c", "h", "m", "mm", "cpp", "hpp", "py", "js", "ts", "jsx", "tsx", "go", "rs", "java", "kt", "rb", "sh", "zsh", "fish", "lua", "php"],
+    ]
+
+    private static func isHiddenFile(_ path: String, hiddenTypes: Set<String>) -> Bool {
+        guard !hiddenTypes.isEmpty else { return false }
+        let ext = (path as NSString).pathExtension.lowercased()
+        guard !ext.isEmpty else { return false }
+        for type in hiddenTypes where hiddenExtensions[type]?.contains(ext) == true { return true }
+        return false
+    }
+
+    private static func spotlightFileResults(_ records: [AppRecord], context: SearchContext, limit: Int) -> [SearchResult] {
+        records.prefix(max(1, limit)).map { record in
+            make(
+                id: "file:\(record.path)",
+                title: record.name,
+                subtitle: record.path,
+                icon: "file:\(record.path)",
+                kind: "file",
+                payload: record.path,
+                category: "navigation",
+                score: 2
             )
         }
     }

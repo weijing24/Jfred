@@ -75,8 +75,9 @@ final class LauncherController {
         let filled = model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : max(model.results.count, 1)
         let rows = CGFloat(min(filled, LauncherMetrics.visibleRows))
         let buffer: CGFloat = model.fileBuffer.isEmpty ? 0 : 34
-        let header: CGFloat = rows > 0 ? 80 : LauncherMetrics.queryHeight
-        let height = header + buffer + rows * LauncherMetrics.rowStride + (rows > 0 ? 12 : 0)
+        // 10pt panel inset above the field, 8pt below it when results follow.
+        let header: CGFloat = 10 + LauncherMetrics.queryHeight + (rows > 0 ? 8 : 10)
+        let height = header + buffer + rows * LauncherMetrics.rowStride + (rows > 0 ? 8 : 0)
         let width: CGFloat = 760
         var frame = panel.frame
         let top = pinnedTop ?? frame.maxY
@@ -93,8 +94,11 @@ final class LauncherController {
     }
 
     func showLarge(_ text: String, size: Double, font: String) {
+        let mouse = NSEvent.mouseLocation
+        let mouseScreen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+        let target = model.preferences.largeTypeShowOnMouseScreen ? (mouseScreen ?? NSScreen.main) : NSScreen.main
         let panel = NSPanel(
-            contentRect: NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600),
+            contentRect: target?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -104,12 +108,12 @@ final class LauncherController {
         panel.isOpaque = false
         panel.hasShadow = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        let host = NSHostingView(rootView: LargeTypeView(text: text, size: size, fontName: font) { [weak self] in
+        let host = NSHostingView(rootView: LargeTypeView(text: text, size: size, fontName: font, fitBackground: model.preferences.largeTypeBackgroundMode == "fit") { [weak self] in
             self?.largePanel?.orderOut(nil)
             self?.largePanel = nil
         })
         panel.contentView = host
-        if let screen = NSScreen.main ?? NSScreen.screens.first {
+        if let screen = target ?? NSScreen.screens.first {
             panel.setFrame(screen.frame, display: true)
         }
         panel.makeKeyAndOrderFront(nil)
@@ -231,20 +235,21 @@ struct LauncherRoot: View {
     var body: some View {
         let theme = LauncherTheme.by(id: model.preferences.themeID)
         let searching = !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let panel = RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             QueryField(
                 text: model.query,
                 token: model.focusToken,
                 font: NSFont.systemFont(ofSize: 22),
-                color: NSColor(white: 0.08, alpha: 1),
+                color: NSColor(theme.query),
                 onChange: { model.query = $0 }
             )
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 16)
             .frame(height: LauncherMetrics.queryHeight)
-            .background { SpotlightFieldBackground() }
-            .padding(.horizontal, searching ? 12 : 0)
-            .padding(.top, searching ? 12 : 0)
-            .padding(.bottom, searching ? 8 : 0)
+            .background { LauncherFieldBackground() }
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, searching ? 8 : 10)
             if !model.fileBuffer.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -267,23 +272,19 @@ struct LauncherRoot: View {
             }
         }
         .background {
-            if searching {
-                RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
-                    .fill(theme.background)
-                    .background {
-                        if theme.material != nil {
-                            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
-                                .fill(theme.material ?? .ultraThin)
-                        }
+            panel
+                .fill(theme.background)
+                .background {
+                    if theme.material != nil {
+                        panel.fill(theme.material ?? .ultraThin)
                     }
-            }
+                }
         }
-        .clipShape(RoundedRectangle(cornerRadius: searching ? theme.radius : LauncherMetrics.queryHeight / 2, style: .continuous))
+        .clipShape(panel)
         .overlay(
-            RoundedRectangle(cornerRadius: searching ? theme.radius : LauncherMetrics.queryHeight / 2, style: .continuous)
-                .stroke(Color.white.opacity(searching ? 0.28 : 0), lineWidth: 0.6)
+            panel.strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
         )
-        .shadow(color: .black.opacity(0.28), radius: 28, y: 16)
+        .shadow(color: .black.opacity(0.26), radius: 24, y: 12)
         .onChange(of: model.query) { _, _ in model.scheduleSearch() }
     }
 
@@ -385,24 +386,18 @@ enum LauncherMetrics {
     static let queryHeight: CGFloat = 58
 }
 
-struct SpotlightFieldBackground: View {
+/// Alfred-style field: a flat, slightly recessed rounded rectangle that sits
+/// inside the panel, rather than a bright capsule floating over it. Because
+/// the panel is always drawn, the field has the same backdrop and colour in
+/// the empty and expanded states.
+struct LauncherFieldBackground: View {
     var body: some View {
-        Capsule(style: .continuous)
-            .fill(.ultraThinMaterial)
-            .environment(\.colorScheme, .light)
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color.black.opacity(0.11))
             .overlay {
-                LinearGradient(
-                    colors: [Color.white.opacity(0.62), Color(white: 0.72).opacity(0.28)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .clipShape(Capsule(style: .continuous))
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.45), lineWidth: 1)
             }
-            .overlay {
-                Capsule(style: .continuous)
-                    .stroke(Color.white.opacity(0.85), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
     }
 }
 
@@ -464,17 +459,27 @@ struct LargeTypeView: View {
     var text: String
     var size: Double
     var fontName: String
+    var fitBackground: Bool
     var dismiss: () -> Void
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.28).ignoresSafeArea()
+            if !fitBackground {
+                Color.black.opacity(0.28).ignoresSafeArea()
+            }
             Text(text)
                 .font(fontName == "System" ? .system(size: size, weight: .semibold) : .custom(fontName, size: size))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.2)
-                .padding(48)
+                .padding(.horizontal, fitBackground ? 64 : 48)
+                .padding(.vertical, fitBackground ? 44 : 48)
+                .background {
+                    if fitBackground {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(Color.black.opacity(0.60))
+                    }
+                }
                 .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
         }
         .onTapGesture { dismiss() }
@@ -497,13 +502,13 @@ struct PreviewLauncher: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Co")
                 .font(.system(size: 22))
-                .foregroundStyle(Color(white: 0.08))
-                .padding(.horizontal, 22)
+                .foregroundStyle(theme.query)
+                .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: LauncherMetrics.queryHeight)
-                .background { SpotlightFieldBackground() }
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
+                .background { LauncherFieldBackground() }
+                .padding(.horizontal, 10)
+                .padding(.top, 10)
                 .padding(.bottom, 8)
             VStack(spacing: 2) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
@@ -530,9 +535,20 @@ struct PreviewLauncher: View {
         }
         .frame(width: 640)
         .background {
-            RoundedRectangle(cornerRadius: theme.radius, style: .continuous).fill(theme.background)
+            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+                .fill(theme.background)
+                .background {
+                    if theme.material != nil {
+                        RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+                            .fill(theme.material ?? .ultraThin)
+                    }
+                }
         }
         .clipShape(RoundedRectangle(cornerRadius: theme.radius, style: .continuous))
-        .shadow(color: .black.opacity(0.3), radius: 24, y: 12)
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
+        )
+        .shadow(color: .black.opacity(0.26), radius: 24, y: 12)
     }
 }

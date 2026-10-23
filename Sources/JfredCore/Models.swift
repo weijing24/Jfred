@@ -79,6 +79,7 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var includePreferencePanes: Bool
     public var fallbackMode: String
     public var webSearches: [WebSearch]
+    public var urlHistory: [String]
     public var themeID: String
     public var storeTypedQuery: Bool
     public var showLatestQuery: Bool
@@ -114,6 +115,59 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var safariBookmarks: Bool
     public var chromeBookmarks: Bool
     public var fileBufferEnabled: Bool
+
+    // File search keywords, filters and result limit.
+    public var quickSearchEnabled: Bool
+    public var fileOpenKeyword: String
+    public var fileFindKeyword: String
+    public var fileInsideKeyword: String
+    public var fileTagsKeyword: String
+    public var hiddenFileTypes: [String]
+    public var fileOpenEnabled: Bool
+    public var fileFindEnabled: Bool
+    public var fileInsideEnabled: Bool
+    public var fileTagsEnabled: Bool
+
+    // Bookmark result behaviour.
+    public var bookmarkResultMode: String
+    public var bookmarkOpenMode: String
+    public var bookmarkKeyword: String
+    public var fileOpenWithFinder: Bool
+    public var clipboardIgnoreDuplicates: Bool
+    public var clipboardClearOnQuit: Bool
+    public var clipboardIgnoreUniversalText: Bool
+    public var clipboardIgnoreUniversalFiles: Bool
+
+    // Clipboard history.
+    public var clipboardKeepText: Bool
+    public var clipboardKeepImages: Bool
+    public var clipboardKeepFiles: Bool
+    public var clipboardRetention: String
+    public var clipboardViewerKeyword: String
+    public var clipboardClearKeyword: String
+
+    // Snippets.
+    public var snippetKeyword: String
+    public var snippetShowKeywordInResult: Bool
+    public var snippetMatching: String
+    public var snippetWordBased: Bool
+
+    // Large type.
+    public var largeTypeBackgroundMode: String
+    public var largeTypeAutoHide: Bool
+    public var largeTypeShowOnMouseScreen: Bool
+
+    // Previews.
+    public var richPreviewsEnabled: Bool
+    public var noPreviewTypes: [String]
+    public var noPreviewPaths: [String]
+
+    // System commands.
+    public var systemKeywords: [String: String]
+    public var systemConfirm: [String]
+    public var ejectScope: String
+    public var ejectAllEnabled: Bool
+    public var ejectExclusions: [String]
 
     public static let defaultScope: [String] = [
         "/Applications/Xcode.app/Contents/Applications",
@@ -157,6 +211,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         includePreferencePanes = true
         fallbackMode = "none"
         webSearches = WebSearch.defaults
+        urlHistory = []
         themeID = "modern"
         storeTypedQuery = true
         showLatestQuery = false
@@ -192,6 +247,178 @@ public struct Preferences: Codable, Equatable, Sendable {
         safariBookmarks = true
         chromeBookmarks = true
         fileBufferEnabled = true
+        quickSearchEnabled = true
+        fileOpenKeyword = "open"
+        fileFindKeyword = "find"
+        fileInsideKeyword = "in"
+        fileTagsKeyword = "tags"
+        hiddenFileTypes = []
+        fileOpenEnabled = true
+        fileFindEnabled = true
+        fileInsideEnabled = true
+        fileTagsEnabled = true
+        bookmarkResultMode = "default"
+        bookmarkOpenMode = "macos"
+        bookmarkKeyword = "bm"
+        fileOpenWithFinder = false
+        clipboardIgnoreDuplicates = true
+        clipboardClearOnQuit = false
+        clipboardIgnoreUniversalText = false
+        clipboardIgnoreUniversalFiles = false
+        clipboardKeepText = true
+        clipboardKeepImages = true
+        clipboardKeepFiles = true
+        clipboardRetention = "3 months"
+        clipboardViewerKeyword = "clipboard"
+        clipboardClearKeyword = "clear"
+        snippetKeyword = "snip"
+        snippetShowKeywordInResult = true
+        snippetMatching = "nameandkeyword"
+        snippetWordBased = true
+        largeTypeBackgroundMode = "fit"
+        largeTypeAutoHide = true
+        largeTypeShowOnMouseScreen = false
+        richPreviewsEnabled = true
+        noPreviewTypes = []
+        noPreviewPaths = []
+        systemKeywords = [:]
+        systemConfirm = []
+        ejectScope = "local"
+        ejectAllEnabled = false
+        ejectExclusions = []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case launchAtLogin, hotkey, location, useDotCom, systemSettingsEnabled
+        case extraFolders, extraDocuments, extraText, extraImages, extraArchives, extraScripts
+        case searchAllFileTypes, scopeApplications, scopeHome, scopePaths
+        case includeSystemApps, includeUserApps, includePreferencePanes
+        case fallbackMode, webSearches, urlHistory, themeID
+        case storeTypedQuery, showLatestQuery, topResultLatching
+        case removeNotificationWhenClicked, showNotificationIcons, useHTTPProxy
+        case selectionHotkeyMode, forceKeyboard, modifierControl, modifierOption, modifierCommand
+        case syncFolder, snippetsEnabled, clipboardEnabled, clipboardLimit
+        case calculatorEnabled, dictionaryEnabled, onePasswordEnabled
+        case largeTypeSize, largeTypeFont, quickLookEnabled, terminalApp, fileSearchMax
+        case remoteEnabled, remoteLocalOnly, remoteToken, remotePort, autoUpdateCheck
+        case recentQueries, lastQueryDate, newsletterEmail, safariBookmarks, chromeBookmarks
+        case fileBufferEnabled
+        case quickSearchEnabled, fileOpenKeyword, fileFindKeyword, fileInsideKeyword
+        case fileTagsKeyword, hiddenFileTypes, fileOpenEnabled, fileFindEnabled
+        case fileInsideEnabled, fileTagsEnabled, bookmarkResultMode, bookmarkOpenMode, bookmarkKeyword
+        case fileOpenWithFinder, clipboardIgnoreDuplicates, clipboardClearOnQuit
+        case clipboardIgnoreUniversalText, clipboardIgnoreUniversalFiles
+        case clipboardKeepText, clipboardKeepImages, clipboardKeepFiles, clipboardRetention
+        case clipboardViewerKeyword, clipboardClearKeyword
+        case snippetKeyword, snippetShowKeywordInResult, snippetMatching, snippetWordBased
+        case largeTypeBackgroundMode, largeTypeAutoHide, largeTypeShowOnMouseScreen
+        case richPreviewsEnabled, noPreviewTypes, noPreviewPaths
+        case systemKeywords, systemConfirm, ejectScope, ejectAllEnabled, ejectExclusions
+    }
+
+    /// Decodes older saved state: every key is optional and falls back to the
+    /// current default, so adding a preference never wipes existing settings.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = Preferences()
+        func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
+            (try? c.decode(T.self, forKey: key)) ?? fallback
+        }
+        launchAtLogin = value(.launchAtLogin, d.launchAtLogin)
+        hotkey = value(.hotkey, d.hotkey)
+        location = value(.location, d.location)
+        useDotCom = value(.useDotCom, d.useDotCom)
+        systemSettingsEnabled = value(.systemSettingsEnabled, d.systemSettingsEnabled)
+        extraFolders = value(.extraFolders, d.extraFolders)
+        extraDocuments = value(.extraDocuments, d.extraDocuments)
+        extraText = value(.extraText, d.extraText)
+        extraImages = value(.extraImages, d.extraImages)
+        extraArchives = value(.extraArchives, d.extraArchives)
+        extraScripts = value(.extraScripts, d.extraScripts)
+        searchAllFileTypes = value(.searchAllFileTypes, d.searchAllFileTypes)
+        scopeApplications = value(.scopeApplications, d.scopeApplications)
+        scopeHome = value(.scopeHome, d.scopeHome)
+        scopePaths = value(.scopePaths, d.scopePaths)
+        includeSystemApps = value(.includeSystemApps, d.includeSystemApps)
+        includeUserApps = value(.includeUserApps, d.includeUserApps)
+        includePreferencePanes = value(.includePreferencePanes, d.includePreferencePanes)
+        fallbackMode = value(.fallbackMode, d.fallbackMode)
+        webSearches = value(.webSearches, d.webSearches)
+        urlHistory = value(.urlHistory, d.urlHistory)
+        themeID = value(.themeID, d.themeID)
+        storeTypedQuery = value(.storeTypedQuery, d.storeTypedQuery)
+        showLatestQuery = value(.showLatestQuery, d.showLatestQuery)
+        topResultLatching = value(.topResultLatching, d.topResultLatching)
+        removeNotificationWhenClicked = value(.removeNotificationWhenClicked, d.removeNotificationWhenClicked)
+        showNotificationIcons = value(.showNotificationIcons, d.showNotificationIcons)
+        useHTTPProxy = value(.useHTTPProxy, d.useHTTPProxy)
+        selectionHotkeyMode = value(.selectionHotkeyMode, d.selectionHotkeyMode)
+        forceKeyboard = value(.forceKeyboard, d.forceKeyboard)
+        modifierControl = value(.modifierControl, d.modifierControl)
+        modifierOption = value(.modifierOption, d.modifierOption)
+        modifierCommand = value(.modifierCommand, d.modifierCommand)
+        syncFolder = value(.syncFolder, d.syncFolder)
+        snippetsEnabled = value(.snippetsEnabled, d.snippetsEnabled)
+        clipboardEnabled = value(.clipboardEnabled, d.clipboardEnabled)
+        clipboardLimit = value(.clipboardLimit, d.clipboardLimit)
+        calculatorEnabled = value(.calculatorEnabled, d.calculatorEnabled)
+        dictionaryEnabled = value(.dictionaryEnabled, d.dictionaryEnabled)
+        onePasswordEnabled = value(.onePasswordEnabled, d.onePasswordEnabled)
+        largeTypeSize = value(.largeTypeSize, d.largeTypeSize)
+        largeTypeFont = value(.largeTypeFont, d.largeTypeFont)
+        quickLookEnabled = value(.quickLookEnabled, d.quickLookEnabled)
+        terminalApp = value(.terminalApp, d.terminalApp)
+        fileSearchMax = value(.fileSearchMax, d.fileSearchMax)
+        remoteEnabled = value(.remoteEnabled, d.remoteEnabled)
+        remoteLocalOnly = value(.remoteLocalOnly, d.remoteLocalOnly)
+        remoteToken = value(.remoteToken, d.remoteToken)
+        remotePort = value(.remotePort, d.remotePort)
+        autoUpdateCheck = value(.autoUpdateCheck, d.autoUpdateCheck)
+        recentQueries = value(.recentQueries, d.recentQueries)
+        lastQueryDate = value(.lastQueryDate, d.lastQueryDate)
+        newsletterEmail = value(.newsletterEmail, d.newsletterEmail)
+        safariBookmarks = value(.safariBookmarks, d.safariBookmarks)
+        chromeBookmarks = value(.chromeBookmarks, d.chromeBookmarks)
+        fileBufferEnabled = value(.fileBufferEnabled, d.fileBufferEnabled)
+        quickSearchEnabled = value(.quickSearchEnabled, d.quickSearchEnabled)
+        fileOpenKeyword = value(.fileOpenKeyword, d.fileOpenKeyword)
+        fileFindKeyword = value(.fileFindKeyword, d.fileFindKeyword)
+        fileInsideKeyword = value(.fileInsideKeyword, d.fileInsideKeyword)
+        fileTagsKeyword = value(.fileTagsKeyword, d.fileTagsKeyword)
+        hiddenFileTypes = value(.hiddenFileTypes, d.hiddenFileTypes)
+        fileOpenEnabled = value(.fileOpenEnabled, d.fileOpenEnabled)
+        fileFindEnabled = value(.fileFindEnabled, d.fileFindEnabled)
+        fileInsideEnabled = value(.fileInsideEnabled, d.fileInsideEnabled)
+        fileTagsEnabled = value(.fileTagsEnabled, d.fileTagsEnabled)
+        bookmarkResultMode = value(.bookmarkResultMode, d.bookmarkResultMode)
+        bookmarkOpenMode = value(.bookmarkOpenMode, d.bookmarkOpenMode)
+        bookmarkKeyword = value(.bookmarkKeyword, d.bookmarkKeyword)
+        fileOpenWithFinder = value(.fileOpenWithFinder, d.fileOpenWithFinder)
+        clipboardIgnoreDuplicates = value(.clipboardIgnoreDuplicates, d.clipboardIgnoreDuplicates)
+        clipboardClearOnQuit = value(.clipboardClearOnQuit, d.clipboardClearOnQuit)
+        clipboardIgnoreUniversalText = value(.clipboardIgnoreUniversalText, d.clipboardIgnoreUniversalText)
+        clipboardIgnoreUniversalFiles = value(.clipboardIgnoreUniversalFiles, d.clipboardIgnoreUniversalFiles)
+        clipboardKeepText = value(.clipboardKeepText, d.clipboardKeepText)
+        clipboardKeepImages = value(.clipboardKeepImages, d.clipboardKeepImages)
+        clipboardKeepFiles = value(.clipboardKeepFiles, d.clipboardKeepFiles)
+        clipboardRetention = value(.clipboardRetention, d.clipboardRetention)
+        clipboardViewerKeyword = value(.clipboardViewerKeyword, d.clipboardViewerKeyword)
+        clipboardClearKeyword = value(.clipboardClearKeyword, d.clipboardClearKeyword)
+        snippetKeyword = value(.snippetKeyword, d.snippetKeyword)
+        snippetShowKeywordInResult = value(.snippetShowKeywordInResult, d.snippetShowKeywordInResult)
+        snippetMatching = value(.snippetMatching, d.snippetMatching)
+        snippetWordBased = value(.snippetWordBased, d.snippetWordBased)
+        largeTypeBackgroundMode = value(.largeTypeBackgroundMode, d.largeTypeBackgroundMode)
+        largeTypeAutoHide = value(.largeTypeAutoHide, d.largeTypeAutoHide)
+        largeTypeShowOnMouseScreen = value(.largeTypeShowOnMouseScreen, d.largeTypeShowOnMouseScreen)
+        richPreviewsEnabled = value(.richPreviewsEnabled, d.richPreviewsEnabled)
+        noPreviewTypes = value(.noPreviewTypes, d.noPreviewTypes)
+        noPreviewPaths = value(.noPreviewPaths, d.noPreviewPaths)
+        systemKeywords = value(.systemKeywords, d.systemKeywords)
+        systemConfirm = value(.systemConfirm, d.systemConfirm)
+        ejectScope = value(.ejectScope, d.ejectScope)
+        ejectAllEnabled = value(.ejectAllEnabled, d.ejectAllEnabled)
+        ejectExclusions = value(.ejectExclusions, d.ejectExclusions)
     }
 
     public var googleHost: String {
@@ -312,17 +539,19 @@ public struct Snippet: Codable, Equatable, Sendable, Identifiable {
     public var keyword: String
     public var text: String
     public var autoExpand: Bool
+    public var collection: String
 
-    public init(id: UUID = UUID(), name: String, keyword: String, text: String, autoExpand: Bool = true) {
+    public init(id: UUID = UUID(), name: String, keyword: String, text: String, autoExpand: Bool = true, collection: String = "") {
         self.id = id
         self.name = name
         self.keyword = keyword
         self.text = text
         self.autoExpand = autoExpand
+        self.collection = collection
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, keyword, text, autoExpand
+        case id, name, keyword, text, autoExpand, collection
     }
 
     public init(from decoder: Decoder) throws {
@@ -332,6 +561,7 @@ public struct Snippet: Codable, Equatable, Sendable, Identifiable {
         keyword = try container.decode(String.self, forKey: .keyword)
         text = try container.decode(String.self, forKey: .text)
         autoExpand = try container.decodeIfPresent(Bool.self, forKey: .autoExpand) ?? true
+        collection = try container.decodeIfPresent(String.self, forKey: .collection) ?? ""
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -341,6 +571,7 @@ public struct Snippet: Codable, Equatable, Sendable, Identifiable {
         try container.encode(keyword, forKey: .keyword)
         try container.encode(text, forKey: .text)
         try container.encode(autoExpand, forKey: .autoExpand)
+        try container.encode(collection, forKey: .collection)
     }
 }
 
@@ -348,11 +579,18 @@ public struct ClipItem: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var text: String
     public var date: Date
+    /// "text", "image" or "file"; older saved clips have nil and are treated as text.
+    public var kind: String?
+    public var imageFile: String?
+    public var filePaths: [String]?
 
-    public init(id: UUID = UUID(), text: String, date: Date) {
+    public init(id: UUID = UUID(), text: String, date: Date, kind: String? = nil, imageFile: String? = nil, filePaths: [String]? = nil) {
         self.id = id
         self.text = text
         self.date = date
+        self.kind = kind
+        self.imageFile = imageFile
+        self.filePaths = filePaths
     }
 }
 
@@ -514,6 +752,8 @@ public struct SearchContext: Sendable {
     public var selections: [String: SelectionStat]
     public var now: Date
     public var forcedResults: [SearchResult]?
+    /// Spotlight-backed lookup for file contents (tags == false) or file tags (tags == true).
+    public var spotlight: (@Sendable (String, Bool) -> [AppRecord])?
 
     public init(
         preferences: Preferences = Preferences(),
@@ -535,7 +775,8 @@ public struct SearchContext: Sendable {
         knowledge: [String: String] = [:],
         selections: [String: SelectionStat] = [:],
         now: Date = Date(),
-        forcedResults: [SearchResult]? = nil
+        forcedResults: [SearchResult]? = nil,
+        spotlight: (@Sendable (String, Bool) -> [AppRecord])? = nil
     ) {
         self.preferences = preferences
         self.workflows = workflows
@@ -557,6 +798,7 @@ public struct SearchContext: Sendable {
         self.selections = selections
         self.now = now
         self.forcedResults = forcedResults
+        self.spotlight = spotlight
     }
 }
 

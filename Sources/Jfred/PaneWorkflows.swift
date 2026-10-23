@@ -18,7 +18,6 @@ struct WorkflowsPane: View {
             }
             footer
         }
-        .background(Color(hex: 0x1E1E1E))
         .sheet(isPresented: Binding(
             get: { model.editingWorkflowID != nil },
             set: { presented in if !presented { model.cancelWorkflowEdit() } }
@@ -60,7 +59,8 @@ struct WorkflowsPane: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                             .foregroundStyle(.white)
-                            .background(model.selectedWorkflow == workflow.id ? Color.white.opacity(0.12) : Color.clear)
+                            .background(model.selectedWorkflow == workflow.id ? JfredColor.sidebarRowSelected : Color.clear)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -68,7 +68,7 @@ struct WorkflowsPane: View {
             }
         }
         .frame(width: 280)
-        .background(Color(hex: 0x3A145C))
+        .background(JfredColor.sidebarDeep)
     }
 
     private var cards: some View {
@@ -86,17 +86,24 @@ struct WorkflowsPane: View {
     private func card(_ symbol: String, _ title: String, _ text: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                Image(systemName: symbol).font(.system(size: 26)).frame(width: 54)
+                Image(systemName: symbol)
+                    .font(.system(size: 26))
+                    .frame(width: 54)
+                    .foregroundStyle(JfredColor.hotkey)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 16, weight: .semibold))
-                    Text(text).font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(JfredColor.ink)
+                    Text(text)
+                        .font(.system(size: 12))
+                        .foregroundStyle(JfredColor.sub)
                 }
                 Spacer()
             }
-            .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .frame(height: 78)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: 0x2A2A2A)))
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(JfredColor.line))
         }
         .buttonStyle(.plain)
     }
@@ -115,7 +122,10 @@ struct WorkflowsPane: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 28)
-        .background(Color(white: 0.93))
+        .background(Color(white: 0.95))
+        .overlay(alignment: .top) {
+            Rectangle().fill(JfredColor.line).frame(height: 1)
+        }
         .foregroundStyle(.black)
     }
 

@@ -25,14 +25,15 @@ struct AppearancePane: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .foregroundStyle(.white)
-                            .background(model.preferences.themeID == theme.id ? Color.white.opacity(0.18) : Color.clear)
+                            .background(model.preferences.themeID == theme.id ? JfredColor.sidebarRowSelected : Color.clear)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
-            .frame(width: 230)
-            .background(Color.black.opacity(0.28))
+            .frame(width: 250)
+            .background(JfredColor.sidebarDeep)
             ZStack {
                 WallpaperArt()
                 PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID))
@@ -59,14 +60,15 @@ struct RemotePane: View {
                         }
                         .padding(8)
                         .foregroundStyle(.white)
-                        .background(model.remoteCategory == category ? Color.white.opacity(0.12) : Color.clear)
+                        .background(model.remoteCategory == category ? JfredColor.sidebarRowSelected : Color.clear)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
                 Spacer()
             }
-            .frame(width: 230)
-            .background(JfredColor.sidebar)
+            .frame(width: 250)
+            .background(JfredColor.sidebarDeep)
             ZStack {
                 Color(hex: 0x161616)
                 VStack(spacing: 18) {
@@ -214,7 +216,6 @@ struct AdvancedPane: View {
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(JfredColor.canvas)
     }
 
     private var supportLabel: String {

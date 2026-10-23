@@ -8,6 +8,8 @@ enum AppRuntime {
     @MainActor static var openPreferences: (() -> Void)?
     /// Quit Jfred, the status menu, and killing this process. Dock Quit stays resident.
     @MainActor static var explicitQuit = false
+    /// True when macOS started Jfred as a login item; don't steal focus then.
+    @MainActor static var launchedAsLoginItem = false
 }
 
 struct DiskState: Codable {
@@ -89,6 +91,15 @@ final class AppModel {
     var remoteWarning = ""
     var debugLine = "Debugger Stopped"
     var prefsQuery = ""
+    var fileSearchTab = "Search"
+    var clipboardTab = "History"
+    var snippetCollectionFilter = ""
+    var snippetSearch = ""
+    var selectedSnippetID: UUID?
+    var webSearchTab = "Search"
+    var webSearchFilter = ""
+    var webSearchOnlyEnabled = false
+    var selectedWebSearchID: String?
     var section: PrefSection = .general
     var feature: FeatureID = .defaultResults
     var remoteCategory: RemoteCategory = .system
@@ -303,7 +314,9 @@ final class AppModel {
     func largeTypeSelected() {
         guard results.indices.contains(selection) else { return }
         let item = results[selection]
-        hideLauncher(reactivate: false)
+        if preferences.largeTypeAutoHide {
+            hideLauncher(reactivate: false)
+        }
         showLarge(item.kind == "calculation" || item.kind == "copy" ? item.payload : item.title)
     }
 
@@ -311,6 +324,9 @@ final class AppModel {
         guard preferences.quickLookEnabled, results.indices.contains(selection) else { return }
         let path = results[selection].payload
         guard path.hasPrefix("/") else { return }
+        if preferences.noPreviewPaths.contains(where: { !$0.isEmpty && path.hasPrefix($0) }) { return }
+        let ext = (path as NSString).pathExtension.lowercased()
+        if !ext.isEmpty, preferences.noPreviewTypes.contains(where: { $0.lowercased() == ext || $0.lowercased() == "public.\(ext)" }) { return }
         Task.detached { _ = Shell.run("/usr/bin/qlmanage", ["-p", path], timeout: 30) }
     }
 
@@ -363,11 +379,22 @@ final class AppModel {
             hideLauncher(reactivate: false)
         case "file":
             let paths = fileBuffer.isEmpty ? [item.payload] : fileBuffer.map(\.payload)
-            for path in paths { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
+            if preferences.fileOpenWithFinder {
+                NSWorkspace.shared.activateFileViewerSelecting(paths.map { URL(fileURLWithPath: $0) })
+            } else {
+                for path in paths { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
+            }
             fileBuffer = []
             hideLauncher(reactivate: false)
         case "url":
-            if let url = URL(string: item.payload) { NSWorkspace.shared.open(url) }
+            if let url = URL(string: item.payload) {
+                if preferences.bookmarkOpenMode == "source", item.id.hasPrefix("link:") {
+                    openInSourceBrowser(url, linkID: item.id)
+                } else {
+                    NSWorkspace.shared.open(url)
+                }
+                noteURLHistory(item.payload)
+            }
             hideLauncher(reactivate: false)
         case "settings":
             if let url = URL(string: item.payload) { NSWorkspace.shared.open(url) }
@@ -375,12 +402,17 @@ final class AppModel {
         case "place":
             openPlace(item.payload)
             hideLauncher(reactivate: false)
-        case "calculation", "copy", "clipboard", "snippet":
+        case "clipclear":
+            clearClipboardHistory()
+            hideLauncher(reactivate: false)
+        case "clipboard":
+            if let clip = clips.first(where: { $0.id.uuidString == item.payload }) {
+                pasteClipboardItem(clip)
+            }
+        case "calculation", "copy", "snippet":
             let text: String
             if item.kind == "snippet" {
                 text = expandTokens(snippets.first { $0.id.uuidString == item.payload }?.text ?? item.title)
-            } else if item.kind == "clipboard" {
-                text = clips.first { $0.id.uuidString == item.payload }?.text ?? item.title
             } else {
                 text = item.payload.isEmpty ? item.title : item.payload
             }
@@ -516,6 +548,23 @@ final class AppModel {
         if selectedWorkflow == nil { selectedWorkflow = workflows.first?.id }
     }
 
+    private func openInSourceBrowser(_ url: URL, linkID: String) {
+        let bundle = linkID.lowercased().contains("chrome") ? "com.google.Chrome" : "com.apple.Safari"
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        NSWorkspace.shared.open([url], withApplicationAt: app, configuration: configuration)
+    }
+
+    private func noteURLHistory(_ url: String) {
+        preferences.urlHistory.removeAll { $0 == url }
+        preferences.urlHistory.insert(url, at: 0)
+        if preferences.urlHistory.count > 100 { preferences.urlHistory.removeLast(preferences.urlHistory.count - 100) }
+        scheduleSave()
+    }
+
     func snippetsChanged() {
         scheduleSave()
         applyExpander()
@@ -617,18 +666,38 @@ final class AppModel {
 
     func showPreferences() {
         NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
         if let window = preferencesWindow() {
             window.deminiaturize(nil)
             window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            // The policy change and activation can race when the app was idle;
+            // re-assert once the window is on screen.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                guard let self else { return }
+                NSApp.activate(ignoringOtherApps: true)
+                self.preferencesWindow()?.makeKeyAndOrderFront(nil)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+                guard let self else { return }
+                NSApp.activate(ignoringOtherApps: true)
+                self.preferencesWindow()?.makeKeyAndOrderFront(nil)
+            }
             return
         }
         AppRuntime.openPreferences?()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            self.preferencesWindow()?.makeKeyAndOrderFront(nil)
+        }
     }
 
     func notePreferencesWindow(_ window: NSWindow) {
         window.identifier = NSUserInterfaceItemIdentifier("preferences")
         NSApp.setActivationPolicy(.regular)
+        if !AppRuntime.launchedAsLoginItem {
+            activatePreferencesWindow(window)
+        }
         guard observedPreferencesWindow !== window else { return }
         if let preferencesCloseObserver {
             NotificationCenter.default.removeObserver(preferencesCloseObserver)
@@ -642,6 +711,17 @@ final class AppModel {
             let closing = note.object as? NSWindow
             MainActor.assumeIsolated {
                 DispatchQueue.main.async { self?.syncActivationPolicy(ignoring: closing) }
+            }
+        }
+    }
+
+    private func activatePreferencesWindow(_ window: NSWindow) {
+        for delay in [0.05, 0.3, 0.8, 1.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak window] in
+                guard let window, window.isVisible, !NSApp.isActive else { return }
+                NSApp.setActivationPolicy(.regular)
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
             }
         }
     }
@@ -683,6 +763,10 @@ final class AppModel {
     }
 
     func quit() {
+        if preferences.clipboardClearOnQuit {
+            clips = []
+            save()
+        }
         AppRuntime.explicitQuit = true
         NSApp.terminate(nil)
     }
@@ -837,7 +921,18 @@ final class AppModel {
             knowledge: knowledge,
             selections: selections,
             now: Date(),
-            forcedResults: forced
+            forcedResults: forced,
+            spotlight: { term, tags in
+                let escaped = term.replacingOccurrences(of: "'", with: "\\'")
+                let predicate = tags
+                    ? "kMDItemUserTags == '\(escaped)'cd"
+                    : "kMDItemTextContent == '*\(escaped)*'cd"
+                let output = Shell.run("/usr/bin/mdfind", [predicate], timeout: 3)
+                return output.split(separator: "\n").prefix(40).map { line in
+                    let path = String(line)
+                    return AppRecord(id: path, name: (path as NSString).lastPathComponent, path: path)
+                }
+            }
         )
     }
 
@@ -899,6 +994,27 @@ final class AppModel {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
+    private func pasteClipboardItem(_ clip: ClipItem) {
+        let board = NSPasteboard.general
+        board.clearContents()
+        switch clip.kind {
+        case "image":
+            if let path = clip.imageFile, let image = NSImage(contentsOfFile: path) {
+                board.writeObjects([image])
+            }
+        case "file":
+            if let paths = clip.filePaths {
+                board.writeObjects(paths.map { URL(fileURLWithPath: $0) as NSURL })
+            }
+        default:
+            board.setString(clip.text, forType: .string)
+        }
+        hideLauncher(reactivate: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            postKey(9, flags: .maskCommand)
+        }
+    }
+
     private func pasteToPrevious(_ text: String) {
         let restore = preferences.selectionHotkeyMode == "restore"
         let board = NSPasteboard.general
@@ -932,6 +1048,14 @@ final class AppModel {
             let value = id.dropFirst("volume:".count)
             _ = Shell.osascript("set volume output volume \(value)")
             return
+        }
+        if preferences.systemConfirm.contains(id) {
+            let alert = NSAlert()
+            alert.messageText = "Run this system command?"
+            alert.informativeText = "This action may interrupt what you are doing."
+            alert.addButton(withTitle: "Continue")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         switch id {
         case "sleep": _ = Shell.osascript("tell application \"System Events\" to sleep")
@@ -1051,7 +1175,7 @@ final class AppModel {
     }
 
     func applyExpander() {
-        SnippetExpander.shared.update(enabled: preferences.snippetsEnabled, snippets: snippets)
+        SnippetExpander.shared.update(enabled: preferences.snippetsEnabled, snippets: snippets, wordBased: preferences.snippetWordBased)
     }
 
     func applyRemote() {
@@ -1066,14 +1190,93 @@ final class AppModel {
         }
     }
 
+    private var clipboardStableChange = -1
+
     private func pollClipboard() {
         let board = NSPasteboard.general
         guard preferences.clipboardEnabled, board.changeCount != clipChange else { return }
+        // Wait for one extra poll so transient intermediate pasteboard states
+        // (apps writing then rewriting, drag sessions) are not captured.
+        if clipboardStableChange != board.changeCount {
+            clipboardStableChange = board.changeCount
+            return
+        }
         clipChange = board.changeCount
+        pruneClipboard()
+        let types = Set(board.types ?? [])
+        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+            || types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+            || types.contains(NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")) {
+            return
+        }
+        let remote = types.contains(NSPasteboard.PasteboardType("com.apple.is-remote-clipboard"))
+        if preferences.clipboardKeepFiles,
+           !(remote && preferences.clipboardIgnoreUniversalFiles),
+           let urls = clipboardFileURLs(board), !urls.isEmpty {
+            let paths = urls.map(\.path)
+            if clips.first?.filePaths == paths { return }
+            clips.insert(ClipItem(text: urls.map(\.lastPathComponent).joined(separator: ", "), date: Date(), kind: "file", filePaths: paths), at: 0)
+            if clips.count > preferences.clipboardLimit { clips = Array(clips.prefix(preferences.clipboardLimit)) }
+            scheduleSave()
+            return
+        }
+        if preferences.clipboardKeepImages,
+           !(remote && preferences.clipboardIgnoreUniversalText),
+           let path = saveClipboardImage(board) {
+            if clips.first?.imageFile == path { return }
+            clips.insert(ClipItem(text: "Image", date: Date(), kind: "image", imageFile: path), at: 0)
+            if clips.count > preferences.clipboardLimit { clips = Array(clips.prefix(preferences.clipboardLimit)) }
+            scheduleSave()
+            return
+        }
+        guard preferences.clipboardKeepText,
+              !(remote && preferences.clipboardIgnoreUniversalText) else { return }
         guard let text = board.string(forType: .string), !text.isEmpty else { return }
         if clips.first?.text == text { return }
         clips.insert(ClipItem(text: String(text.prefix(20_000)), date: Date()), at: 0)
         if clips.count > preferences.clipboardLimit { clips = Array(clips.prefix(preferences.clipboardLimit)) }
+        scheduleSave()
+    }
+
+    private func clipboardFileURLs(_ board: NSPasteboard) -> [URL]? {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        return board.readObjects(forClasses: [NSURL.self], options: options) as? [URL]
+    }
+
+    private func saveClipboardImage(_ board: NSPasteboard) -> String? {
+        guard let data = board.data(forType: .png) ?? board.data(forType: .tiff) else { return nil }
+        let dir = supportDirectory().appendingPathComponent("ClipImages", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("\(UUID().uuidString).png")
+        if let rep = NSBitmapImageRep(data: data), let png = rep.representation(using: .png, properties: [:]) {
+            try? png.write(to: url)
+        } else if let image = NSImage(data: data), let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {
+            try? png.write(to: url)
+        } else {
+            return nil
+        }
+        return url.path
+    }
+
+    private var clipRetentionInterval: TimeInterval? {
+        switch preferences.clipboardRetention {
+        case "1 day": return 86_400
+        case "1 week": return 7 * 86_400
+        case "1 month": return 30 * 86_400
+        case "3 months": return 90 * 86_400
+        case "1 year": return 365 * 86_400
+        default: return nil
+        }
+    }
+
+    private func pruneClipboard() {
+        guard let interval = clipRetentionInterval, !clips.isEmpty else { return }
+        let cutoff = Date().addingTimeInterval(-interval)
+        clips.removeAll { $0.date < cutoff }
+    }
+
+    func clearClipboardHistory() {
+        clips = []
         scheduleSave()
     }
 

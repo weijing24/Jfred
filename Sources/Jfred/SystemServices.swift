@@ -530,9 +530,12 @@ final class SnippetExpander: @unchecked Sendable {
     private var source: CFRunLoopSource?
     private var ignore = 0
 
-    func update(enabled: Bool, snippets: [Snippet]) {
+    private var wordBased = true
+
+    func update(enabled: Bool, snippets: [Snippet], wordBased: Bool = true) {
         lock.lock()
         self.enabled = enabled
+        self.wordBased = wordBased
         self.snippets = Dictionary(snippets.filter(\.autoExpand).map { ($0.keyword, $0.text) }, uniquingKeysWith: { first, _ in first })
         lock.unlock()
         if enabled { install() }
@@ -577,6 +580,7 @@ final class SnippetExpander: @unchecked Sendable {
         }
         let active = enabled && !suspended
         let table = snippets
+        let wordBasedMatch = wordBased
         lock.unlock()
         guard active else { return }
         let flags = event.flags
@@ -599,7 +603,7 @@ final class SnippetExpander: @unchecked Sendable {
         lock.unlock()
         guard character == " " || character == "\t" else { return }
         let stem = String(current.dropLast())
-        guard let (keyword, replacement) = Self.match(stem: stem, table: table) else { return }
+        guard let (keyword, replacement) = Self.match(stem: stem, table: table, wordBased: wordBasedMatch) else { return }
         let expanded = expandTokens(replacement)
         let deletes = keyword.count + 1
         DispatchQueue.main.async {
@@ -615,11 +619,12 @@ final class SnippetExpander: @unchecked Sendable {
         }
     }
 
-    private static func match(stem: String, table: [String: String]) -> (String, String)? {
+    private static func match(stem: String, table: [String: String], wordBased: Bool) -> (String, String)? {
         for key in table.keys.sorted(by: { $0.count > $1.count }) where key.count >= 2 {
             guard let value = table[key] else { continue }
             if stem == key { return (key, value) }
             if stem.hasSuffix(key) {
+                if !wordBased { return (key, value) }
                 let prefix = stem.dropLast(key.count)
                 if prefix.last?.isWhitespace == true { return (key, value) }
             }

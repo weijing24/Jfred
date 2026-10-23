@@ -16,6 +16,53 @@ extension AppModel {
         )
     }
 
+    func bindElement(_ keyPath: WritableKeyPath<Preferences, [String]>, _ index: Int) -> Binding<String> {
+        Binding(
+            get: { MainActor.assumeIsolated { self.preferences[keyPath: keyPath].indices.contains(index) ? self.preferences[keyPath: keyPath][index] : "" } },
+            set: { newValue in
+                MainActor.assumeIsolated {
+                    var list = self.preferences[keyPath: keyPath]
+                    guard list.indices.contains(index) else { return }
+                    list[index] = newValue
+                    self.preferences[keyPath: keyPath] = list
+                }
+            }
+        )
+    }
+
+    func bindSystemKeyword(_ id: String, default fallback: String) -> Binding<String> {
+        Binding(
+            get: { MainActor.assumeIsolated { self.preferences.systemKeywords[id] ?? fallback } },
+            set: { newValue in
+                MainActor.assumeIsolated {
+                    let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+                    if trimmed.isEmpty {
+                        self.preferences.systemKeywords.removeValue(forKey: id)
+                    } else {
+                        self.preferences.systemKeywords[id] = trimmed
+                    }
+                }
+            }
+        )
+    }
+
+    func bindMember(_ keyPath: WritableKeyPath<Preferences, [String]>, _ value: String) -> Binding<Bool> {
+        Binding(
+            get: { MainActor.assumeIsolated { self.preferences[keyPath: keyPath].contains(value) } },
+            set: { on in
+                MainActor.assumeIsolated {
+                    var list = self.preferences[keyPath: keyPath]
+                    if on {
+                        if !list.contains(value) { list.append(value) }
+                    } else {
+                        list.removeAll { $0 == value }
+                    }
+                    self.preferences[keyPath: keyPath] = list
+                }
+            }
+        )
+    }
+
     func bindWeb<T: Sendable>(_ index: Int, _ keyPath: WritableKeyPath<WebSearch, T>) -> Binding<T> {
         Binding(
             get: { MainActor.assumeIsolated { self.preferences.webSearches[index][keyPath: keyPath] } },

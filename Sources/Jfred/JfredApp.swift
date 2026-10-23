@@ -43,10 +43,34 @@ struct JfredApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
 
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if let event = NSAppleEventManager.shared().currentAppleEvent,
+           event.eventID == kAEOpenApplication {
+            let loginItemCode = FourCharCode(0x6C676974) // 'lgit'
+            let flag = event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == loginItemCode
+                || event.attributeDescriptor(forKeyword: loginItemCode) != nil
+            AppRuntime.launchedAsLoginItem = flag
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A raw bitmap assigned here skips the system squircle, so the Dock draws a square.
         AppRuntime.model = model
         model.start()
+        // Launching Jfred from a launcher should show its settings, the same
+        // way it would if the window had been restored from the last session.
+        guard !AppRuntime.launchedAsLoginItem else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.model.showPreferences()
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Launching the already running app from a launcher should bring its
+        // settings forward instead of doing nothing.
+        model.showPreferences()
+        return true
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

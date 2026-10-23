@@ -2,13 +2,16 @@ import JfredCore
 import SwiftUI
 
 enum JfredColor {
-    static let sidebar = Color(hex: 0x561D7E)
-    static let sidebarSelected = Color(hex: 0x330D4E)
-    static let canvas = Color(hex: 0xF2F2F2)
-    static let ink = Color(hex: 0x2C2C2C)
+    /// Alfred-style two-level purple sidebar: a lighter rail, a deep list.
+    static let sidebar = Color(hex: 0x4F217A)
+    static let sidebarDeep = Color(hex: 0x2F104B)
+    static let sidebarSelected = Color(hex: 0x3A1465)
+    static let sidebarRowSelected = Color(hex: 0x583F70)
+    static let canvas = Color(hex: 0xEDEDEC)
+    static let ink = Color(hex: 0x303030)
     static let sub = Color(hex: 0x6E6E6E)
     static let hotkey = Color(hex: 0x8E2BB8)
-    static let line = Color.black.opacity(0.14)
+    static let line = Color.black.opacity(0.12)
 }
 
 extension Color {

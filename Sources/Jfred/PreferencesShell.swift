@@ -7,33 +7,48 @@ struct PreferencesShell: View {
     var body: some View {
         HStack(spacing: 0) {
             IconRail(model: model)
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ZStack(alignment: .topLeading) {
+                JfredColor.canvas
+                DamaskBackground()
+                detail
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(JfredColor.canvas)
-        .preferredColorScheme(model.section == .workflows ? .dark : .light)
+        .preferredColorScheme(.light)
         .background(WindowReader { window in
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
-            window.title = "Jfred Preferences"
+            window.title = ""
+            window.titleVisibility = .visible
             window.titlebarAppearsTransparent = false
             window.toolbarStyle = .unifiedCompact
             window.titlebarSeparatorStyle = .none
-            window.setContentSize(NSSize(width: 1120, height: 720))
+            window.backgroundColor = NSColor(JfredColor.canvas)
+            window.setContentSize(NSSize(width: 1180, height: 766))
+            if let screen = window.screen ?? NSScreen.main {
+                let visible = screen.visibleFrame
+                var frame = window.frame
+                frame.origin.x = max(visible.minX, min(frame.origin.x, visible.maxX - frame.width))
+                frame.origin.y = max(visible.minY, min(frame.origin.y, visible.maxY - frame.height))
+                window.setFrame(frame, display: false)
+            }
             model.notePreferencesWindow(window)
         })
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color(hex: 0x7A7A7A))
                     TextField("Search Preferences", text: model.bind(\.prefsQuery))
                         .textFieldStyle(.plain)
-                        .frame(width: 180)
+                        .font(.system(size: 13))
+                        .frame(width: 220)
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.55)))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black.opacity(0.12)))
+                .frame(height: 26)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xE3E3E3)))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black.opacity(0.10), lineWidth: 1))
             }
         }
         .onChange(of: model.preferences) { old, _ in model.preferencesChanged(from: old) }
@@ -74,23 +89,24 @@ struct IconRail: View {
                 railButton(section)
             }
         }
-        .padding(.vertical, 8)
-        .frame(width: 86)
+        .padding(.vertical, 10)
+        .frame(width: 82)
         .frame(maxHeight: .infinity)
         .background(JfredColor.sidebar)
+        .layoutPriority(2)
     }
 
     private func railButton(_ section: PrefSection) -> some View {
         Button {
             model.section = section
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 if section == .general {
-                    HoodMark().frame(width: 28, height: 26)
+                    HoodMark().frame(width: 30, height: 28)
                 } else {
                     Image(systemName: section.symbol)
-                        .font(.system(size: 20))
-                        .frame(height: 26)
+                        .font(.system(size: 22, weight: .regular))
+                        .frame(height: 28)
                 }
                 Text(section.title)
                     .font(.system(size: 11))
@@ -98,7 +114,7 @@ struct IconRail: View {
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .background(model.section == section ? JfredColor.sidebarSelected : Color.clear)
             .contentShape(Rectangle())
         }
@@ -130,7 +146,6 @@ struct PreferenceSearchList: View {
             .buttonStyle(.plain)
         }
         .scrollContentBackground(.hidden)
-        .background(JfredColor.canvas)
     }
 }
 
@@ -139,20 +154,17 @@ struct GeneralPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                JfredColor.canvas
-                DamaskBackground()
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(AppRelease.version)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color(hex: 0x8A8A8A))
-                        .padding(.top, 6)
-                        .padding(.leading, 12)
-                    form
-                        .padding(.top, 46)
-                    Spacer(minLength: 0)
-                }
+            HStack {
+                Text(AppRelease.version)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: 0x8A8A8A))
+                Spacer()
             }
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+            form
+                .padding(.top, 44)
+            Spacer(minLength: 0)
         }
     }
 
@@ -223,7 +235,8 @@ struct GeneralPane: View {
             }
             HelpNote(text: model.importNote.isEmpty ? "Copies this Mac's launcher settings into Jfred and reads that copy. The original folder is left unchanged. Built-in workflow keywords are reset to match." : model.importNote)
         }
-        .frame(maxWidth: 760)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: 760, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.trailing, 46)
     }
 }
