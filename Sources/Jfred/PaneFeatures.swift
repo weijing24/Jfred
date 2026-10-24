@@ -705,6 +705,9 @@ struct FeaturesPane: View {
             }
             SettingsNote("Hotkey and keyword to open Jfred's clipboard viewer.")
             SettingsLabeled(title: "Clear Keyword:") {
+                Toggle("", isOn: model.bindPref(\.clipboardClearKeywordEnabled))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
                 TextField("clear", text: model.bindPref(\.clipboardClearKeyword))
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 182)

@@ -283,6 +283,20 @@ public enum Search {
                 ))
             }
         }
+        if context.preferences.clipboardEnabled, context.preferences.clipboardClearKeywordEnabled,
+           let cleared = clearKeywordQuery(trimmed, keyword: context.preferences.clipboardClearKeyword) {
+            let title = cleared == nil ? "Clear All Clipboard History" : "Clear Clipboard History (last \(cleared!) minutes)"
+            found.append(make(
+                id: "clipclear:\(cleared.map(String.init) ?? "all")",
+                title: title,
+                subtitle: "Clear Jfred's clipboard history",
+                icon: "symbol:trash",
+                kind: "clipclear",
+                payload: cleared.map(String.init) ?? "all",
+                category: "clipboard",
+                score: 2
+            ))
+        }
         if context.preferences.clipboardEnabled, let clipQuery = argument(of: context.preferences.clipboardViewerKeyword, in: trimmed) ?? argument(of: "clip", in: trimmed) {
             let filtered = context.clips.filter { clipQuery.isEmpty || fold($0.text).contains(fold(clipQuery)) }
             for clip in filtered.prefix(8) {
@@ -563,6 +577,17 @@ public enum Search {
         let keptOthers = Array(others.prefix(room))
         let merged = dedupe(keptOthers + settings, query: query, context: context)
         return Array(merged.prefix(resultLimit))
+    }
+
+    private static func clearKeywordQuery(_ query: String, keyword: String) -> Int?? {
+        let key = keyword.trimmingCharacters(in: .whitespaces)
+        guard !key.isEmpty else { return nil }
+        let folded = fold(query.trimmingCharacters(in: .whitespaces))
+        guard folded == fold(key) || folded.hasPrefix(fold(key) + " ") else { return nil }
+        let rest = query.trimmingCharacters(in: .whitespaces).dropFirst(key.count).trimmingCharacters(in: .whitespaces)
+        if rest.isEmpty { return .some(nil) }
+        if let minutes = Int(rest), minutes == 5 || minutes == 15 { return .some(minutes) }
+        return nil
     }
 
     private static func volumeValue(_ query: String) -> Int? {

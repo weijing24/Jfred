@@ -202,6 +202,18 @@ struct CoreTests {
         #expect(Search.results(for: "sleep", context: context).contains { $0.id == "sys:sleep" })
     }
 
+    @Test func clipboardClearKeyword() {
+        var context = SearchContext()
+        context.preferences.clipboardEnabled = true
+        context.preferences.clipboardClearKeywordEnabled = true
+        let all = Search.results(for: "clear", context: context)
+        #expect(all.contains { $0.kind == "clipclear" && $0.payload == "all" })
+        let five = Search.results(for: "clear 5", context: context)
+        #expect(five.contains { $0.kind == "clipclear" && $0.payload == "5" })
+        context.preferences.clipboardClearKeywordEnabled = false
+        #expect(!Search.results(for: "clear", context: context).contains { $0.kind == "clipclear" })
+    }
+
     @Test func customTerminalPrefix() {
         var context = SearchContext()
         context.preferences.terminalPrefix = "!"

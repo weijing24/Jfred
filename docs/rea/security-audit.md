@@ -48,7 +48,7 @@
 
 ```bash
 swift build
-./scripts/test.sh          # 16 个测试，全部通过
+./scripts/test.sh          # 17 个测试，全部通过
 ./scripts/build-app.sh
 open build/Jfred.app
 ```

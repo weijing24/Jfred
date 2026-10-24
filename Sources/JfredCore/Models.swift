@@ -200,6 +200,7 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var clipboardRetention: String
     public var clipboardViewerKeyword: String
     public var clipboardClearKeyword: String
+    public var clipboardClearKeywordEnabled: Bool
 
     // Snippets.
     public var snippetKeyword: String
@@ -405,6 +406,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         clipboardRetention = "3 months"
         clipboardViewerKeyword = "clipboard"
         clipboardClearKeyword = "clear"
+        clipboardClearKeywordEnabled = true
         snippetKeyword = "snip"
         snippetShowKeywordInResult = true
         snippetMatching = "nameandkeyword"
@@ -505,7 +507,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case fileOpenWithFinder, clipboardIgnoreDuplicates, clipboardClearOnQuit
         case clipboardIgnoreUniversalText, clipboardIgnoreUniversalFiles
         case clipboardKeepText, clipboardKeepImages, clipboardKeepFiles, clipboardRetention
-        case clipboardViewerKeyword, clipboardClearKeyword
+        case clipboardViewerKeyword, clipboardClearKeyword, clipboardClearKeywordEnabled
         case snippetKeyword, snippetShowKeywordInResult, snippetMatching, snippetWordBased
         case snippetExpandPlaySound, snippetExpandRestoreClipboard
         case largeTypeBackgroundMode, largeTypeAutoHide, largeTypeShowOnMouseScreen
@@ -620,6 +622,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         clipboardRetention = value(.clipboardRetention, d.clipboardRetention)
         clipboardViewerKeyword = value(.clipboardViewerKeyword, d.clipboardViewerKeyword)
         clipboardClearKeyword = value(.clipboardClearKeyword, d.clipboardClearKeyword)
+        clipboardClearKeywordEnabled = value(.clipboardClearKeywordEnabled, d.clipboardClearKeywordEnabled)
         snippetKeyword = value(.snippetKeyword, d.snippetKeyword)
         snippetShowKeywordInResult = value(.snippetShowKeywordInResult, d.snippetShowKeywordInResult)
         snippetMatching = value(.snippetMatching, d.snippetMatching)

@@ -535,7 +535,7 @@ final class AppModel {
             openPlace(item.payload)
             hideLauncher(reactivate: false)
         case "clipclear":
-            clearClipboardHistory()
+            if let minutes = Int(item.payload) { clearClipboardHistory(lastMinutes: minutes) } else { clearClipboardHistory() }
             hideLauncher(reactivate: false)
         case "clipboard":
             if let clip = clips.first(where: { $0.id.uuidString == item.payload }) {
@@ -1634,6 +1634,12 @@ final class AppModel {
 
     func clearClipboardHistory() {
         clips = []
+        scheduleSave()
+    }
+
+    func clearClipboardHistory(lastMinutes minutes: Int) {
+        let cutoff = Date().addingTimeInterval(-TimeInterval(minutes * 60))
+        clips.removeAll { $0.date >= cutoff }
         scheduleSave()
     }
 
