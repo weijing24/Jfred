@@ -100,12 +100,24 @@ struct WorkflowsPane: View {
         Button("Export Metadata…") { export(workflow, metadataOnly: true) }
         Button("Reload Workflows") { model.reloadWorkflowsFromAlfred() }
         Divider()
+        Button("Import Workflow…") { chooseWorkflowToImport() }
         Button("Delete", role: .destructive) {
             model.workflows.removeAll { $0.id == workflow.id }
             if model.selectedWorkflow == workflow.id {
                 model.selectedWorkflow = model.workflows.first?.id
             }
         }
+    }
+
+    private func chooseWorkflowToImport() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if let type = UTType(filenameExtension: "alfredworkflow") {
+            panel.allowedContentTypes = [type]
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.importWorkflow(at: url)
     }
 
     private func export(_ workflow: Workflow, metadataOnly: Bool) {
@@ -137,6 +149,7 @@ struct WorkflowsPane: View {
     private var cards: some View {
         ScrollView {
             VStack(spacing: 12) {
+                card("square.and.arrow.down", "Import an Alfred Workflow", "Add a .alfredworkflow file from Finder.") { chooseWorkflowToImport() }
                 card("point.3.connected.trianglepath.dotted", "Create a new Workflow", "Jump in and create a blank Workflow.") { model.beginWorkflowEdit(blank()) }
                 card("square.on.square", "Create a Workflow from a Template", "New to workflows? Try one of our Getting Started templates.") { model.showTemplates = true }
             }
@@ -172,6 +185,7 @@ struct WorkflowsPane: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
+            Button("Import…") { chooseWorkflowToImport() }
             Button("+") { model.beginWorkflowEdit(blank()) }
             Button("−") {
                 guard let id = model.selectedWorkflow else { return }

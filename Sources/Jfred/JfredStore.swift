@@ -207,11 +207,49 @@ enum JfredStore {
         try? FileManager.default.moveItem(at: url, to: destination)
     }
 
+    static func importedWorkflowsURL() -> URL {
+        snapshotURL().deletingLastPathComponent().appendingPathComponent("ImportedWorkflows", isDirectory: true)
+    }
+
+    @MainActor
+    @discardableResult
+    static func importWorkflow(at url: URL) -> String? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let root = importedWorkflowsURL()
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let destination = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        process.arguments = ["-x", "-k", url.path, destination.path]
+        do { try process.run() } catch { return nil }
+        process.waitUntilExit()
+        let infoURL = destination.appendingPathComponent("info.plist")
+        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: infoURL.path) else {
+            try? FileManager.default.removeItem(at: destination)
+            return nil
+        }
+        let bundle = plist(at: infoURL)?["bundleid"] as? String
+        if let bundle, let entries = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            for entry in entries where entry != destination {
+                if let other = plist(at: entry.appendingPathComponent("info.plist")),
+                   other["bundleid"] as? String == bundle {
+                    try? FileManager.default.removeItem(at: entry)
+                }
+            }
+        }
+        return bundle
+    }
+
     private static func loadCatalog(root: URL) -> ScriptCatalog {
         var catalog = ScriptCatalog()
-        let workflows = root.appendingPathComponent("workflows")
+        loadWorkflows(into: &catalog, from: root.appendingPathComponent("workflows"))
+        loadWorkflows(into: &catalog, from: importedWorkflowsURL())
+        return catalog
+    }
+
+    private static func loadWorkflows(into catalog: inout ScriptCatalog, from workflows: URL) {
         guard let directories = try? FileManager.default.contentsOfDirectory(at: workflows, includingPropertiesForKeys: nil) else {
-            return catalog
+            return
         }
         for directory in directories {
             guard let info = plist(at: directory.appendingPathComponent("info.plist")) else { continue }
@@ -256,7 +294,6 @@ enum JfredStore {
             }
             catalog.workflows.append(ImportedWorkflow(bundle: bundle, name: name, author: author, keyword: firstKeyword, enabled: enabled))
         }
-        return catalog
     }
 
     private static func readHotkey(root: URL) -> Hotkey? {

@@ -87,6 +87,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
+            if url.pathExtension.lowercased() == "alfredworkflow" {
+                model.importWorkflow(at: url)
+                continue
+            }
             guard url.scheme == "jfredlocal" else { continue }
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let query = items.first { $0.name == "q" }?.value ?? ""

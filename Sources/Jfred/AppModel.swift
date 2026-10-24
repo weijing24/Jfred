@@ -847,6 +847,22 @@ final class AppModel {
             .map { URL(fileURLWithPath: $0.cwd, isDirectory: true) }
     }
 
+    func importWorkflow(at url: URL) {
+        guard let bundle = JfredStore.importWorkflow(at: url) else {
+            importNote = "Could not import \(url.lastPathComponent)."
+            return
+        }
+        let catalog = JfredStore.catalog()
+        scriptCatalog = catalog
+        JfredStore.syncWorkflows(self, catalog.workflows)
+        if let imported = workflows.first(where: { $0.builtin == bundle }) {
+            selectedWorkflow = imported.id
+        }
+        section = .workflows
+        showPreferences()
+        importNote = "Imported \(url.lastPathComponent)."
+    }
+
     func reloadWorkflowsFromAlfred() {
         guard let catalog = JfredStore.reloadCatalog() else { return }
         scriptCatalog = catalog
