@@ -1521,6 +1521,7 @@ final class AppModel {
             ))
             return
         }
+        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.finder" else { return }
         let files = Accessibility.finderSelection()
         guard let first = files.first else { return }
         let title = (first as NSString).lastPathComponent

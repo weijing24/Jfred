@@ -29,8 +29,9 @@
 3. **Clipboard 历史是明文数据库。** 已用 0600 限制本机其他用户读取，但没有加密。若把 `syncFolder` 指向 iCloud/Dropbox 等同步目录，历史会随云同步；UI 已提示可退出清空。
 4. **工作流可以执行任意 shell / AppleScript。** 这是 Alfred 兼容工作流的固有能力，不是漏洞；只应导入可信来源的 `.alfredworkflow`。导入路径已做 zip-slip 校验，但没有沙箱化脚本执行。
 5. **AppleScript / Terminal 是用户显式触发的。** `>` 前缀、Terminal 动作、工作流脚本都会执行用户输入；这是功能本身。已对唯一可被远程触发的 `volume:` 做数值校验。
-6. **Accessibility / Automation / Contacts 权限较大。** 这些权限用于窗口命令、浏览器标签、联系人搜索；不授权时对应功能会返回空结果，不会崩溃。
-7. **REA/Hopper 逆向仅用于本机互操作。** 没有把 Alfred 的资源、nib、字符串表或反编译代码放进仓库；合规边界见 `docs/rea/README.md`。
+6. **Universal Actions 只在明确前台上下文读取选择。** 选中文本通过 AX `kAXSelectedText` 读取；Finder 文件列表只在 Finder 为前台进程时通过 AppleScript 读取，避免在任意 App 上触发无关的 Automation 授权提示。
+7. **Accessibility / Automation / Contacts 权限较大。** 这些权限用于窗口命令、浏览器标签、联系人搜索；不授权时对应功能会返回空结果，不会崩溃。
+8. **REA/Hopper 逆向仅用于本机互操作。** 没有把 Alfred 的资源、nib、字符串表或反编译代码放进仓库；合规边界见 `docs/rea/README.md`。
 
 ## 隐私数据清单
 
