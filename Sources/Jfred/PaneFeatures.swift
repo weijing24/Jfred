@@ -1144,6 +1144,7 @@ struct FeaturesPane: View {
                     Button("Play / Pause") { _ = MusicService.playPause() }
                     Button("Previous") { _ = MusicService.previous() }
                     Button("Next") { _ = MusicService.next() }
+                    Button("Open Mini Player") { model.showMusicPlayer() }
                 }
             }
             SettingsNote("Music control uses AppleScript and requires Automation access to Music.app. Jfred never reads or uploads your music library.")

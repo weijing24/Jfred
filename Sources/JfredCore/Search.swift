@@ -158,6 +158,18 @@ public enum Search {
             }
         }
         if context.preferences.musicEnabled {
+            if trimmed.compare(context.preferences.musicKeyword, options: .caseInsensitive) == .orderedSame {
+                found.append(make(
+                    id: "music:player",
+                    title: "Music Mini Player",
+                    subtitle: "Search and play music from your library",
+                    icon: "symbol:music.note",
+                    kind: "musicplayer",
+                    payload: "",
+                    category: "music",
+                    score: 2
+                ))
+            }
             if let song = argument(of: context.preferences.musicKeyword, in: trimmed) ?? argument(of: "play", in: trimmed), !song.isEmpty {
                 found.append(make(
                     id: "music:play:\(song)",

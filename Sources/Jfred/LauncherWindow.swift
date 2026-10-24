@@ -12,6 +12,7 @@ final class LauncherController {
     let model: AppModel
     private var panel: LauncherPanel?
     private var largePanel: NSPanel?
+    private var musicPanel: NSPanel?
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var pinnedTop: CGFloat?
@@ -91,6 +92,38 @@ final class LauncherController {
         }
         panel.setFrame(frame, display: true)
         pinnedTop = panel.frame.maxY
+    }
+
+    func showMusicPlayer() {
+        if let musicPanel {
+            model.refreshMusicPanel()
+            musicPanel.makeKeyAndOrderFront(nil)
+            return
+        }
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 560),
+            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.isFloatingPanel = true
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isMovableByWindowBackground = true
+        let host = NSHostingView(rootView: MusicMiniPlayer(model: model) { [weak self] in
+            self?.musicPanel?.orderOut(nil)
+            self?.musicPanel = nil
+        })
+        host.frame = panel.contentView?.bounds ?? .zero
+        host.autoresizingMask = [.width, .height]
+        panel.contentView = host
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        musicPanel = panel
+        model.refreshMusicPanel()
     }
 
     func showLarge(_ text: String, size: Double, font: String) {

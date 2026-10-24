@@ -76,7 +76,67 @@ enum MusicService {
         return result.contains("playing")
     }
 
-    private static func appleScriptEscaped(_ value: String) -> String {
+}
+
+extension MusicService {
+    struct Info: Sendable {
+        var title: String
+        var artist: String
+        var playing: Bool
+    }
+
+    static func info() -> Info {
+        let text = Shell.osascript("""
+        tell application "Music"
+          if it is running then
+            if player state is playing then
+              return (name of current track) & tab & (artist of current track) & tab & "playing"
+            else
+              return (name of current track) & tab & (artist of current track) & tab & "paused"
+            end if
+          end if
+        end tell
+        """)
+        let parts = text.components(separatedBy: "\t")
+        return Info(
+            title: parts.count > 0 ? parts[0].trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            artist: parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            playing: text.contains("playing")
+        )
+    }
+
+    struct Track: Identifiable, Sendable {
+        var id: String { "\(title) — \(artist)" }
+        var title: String
+        var artist: String
+    }
+
+    static func searchTracks(_ query: String) -> [Track] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return [] }
+        let escaped = appleScriptEscaped(q)
+        let text = Shell.osascript("""
+        tell application "Music"
+          if it is not running then return ""
+          set matches to (every track whose name contains "\(escaped)")
+          set output to ""
+          set total to count of matches
+          if total > 20 then set total to 20
+          repeat with i from 1 to total
+            set t to item i of matches
+            set output to output & (name of t) & tab & (artist of t) & linefeed
+          end repeat
+          return output
+        end tell
+        """, timeout: 10)
+        return text.split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
+            guard let title = parts.first, !title.isEmpty else { return nil }
+            return Track(title: String(title), artist: parts.count > 1 ? String(parts[1]) : "")
+        }
+    }
+
+    static func appleScriptEscaped(_ value: String) -> String {
         value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")

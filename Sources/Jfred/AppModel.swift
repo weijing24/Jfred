@@ -71,6 +71,11 @@ final class AppModel {
     var links: [LinkRecord] = []
     var contacts: [ContactRecord] = []
     var musicTrack = ""
+    var musicSearch = ""
+    var musicTracks: [MusicService.Track] = []
+    var musicNowTitle = ""
+    var musicNowArtist = ""
+    var musicNowPlaying = false
     var contactsTab = "Contacts"
     var musicTab = "General"
     var actionsTab = "General"
@@ -521,6 +526,9 @@ final class AppModel {
         case "musicplay":
             hideLauncher(reactivate: false)
             Task.detached { _ = MusicService.playSearch(item.payload) }
+        case "musicplayer":
+            hideLauncher(reactivate: false)
+            showMusicPlayer()
         case "dictionary":
             let body = item.subtitle == "Open Dictionary" ? item.title : item.subtitle
             if let url = URL(string: "dict://\(item.payload.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.payload)") {
@@ -1336,6 +1344,45 @@ final class AppModel {
             let track = MusicService.currentTrack()
             await MainActor.run { self.musicTrack = track }
         }
+    }
+
+    func refreshMusicPanel() {
+        Task.detached {
+            let info = MusicService.info()
+            await MainActor.run {
+                self.musicNowTitle = info.title
+                self.musicNowArtist = info.artist
+                self.musicNowPlaying = info.playing
+                self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
+            }
+        }
+    }
+
+    func searchMusic() {
+        let query = musicSearch
+        Task.detached {
+            let tracks = MusicService.searchTracks(query)
+            await MainActor.run { self.musicTracks = tracks }
+        }
+    }
+
+    func playMusic(_ track: MusicService.Track) {
+        Task.detached {
+            _ = MusicService.playSearch(track.title)
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            let info = MusicService.info()
+            await MainActor.run {
+                self.musicNowTitle = info.title
+                self.musicNowArtist = info.artist
+                self.musicNowPlaying = info.playing
+                self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
+            }
+        }
+    }
+
+    func showMusicPlayer() {
+        refreshMusicPanel()
+        launcher?.showMusicPlayer()
     }
 
     func reloadContacts() {
