@@ -681,9 +681,9 @@ struct FeaturesPane: View {
         VStack(alignment: .leading, spacing: 14) {
             SettingsLabeled(title: "Clipboard History:") {
                 HStack(alignment: .top, spacing: 12) {
-                    clipKeepBox("Keep Plain Text", isOn: model.bindPref(\.clipboardKeepText), enabled: true)
-                    clipKeepBox("Keep Images", isOn: model.bindPref(\.clipboardKeepImages), enabled: true)
-                    clipKeepBox("Keep File Lists", isOn: model.bindPref(\.clipboardKeepFiles), enabled: true)
+                    clipKeepBox("Keep Plain Text", isOn: model.bindPref(\.clipboardKeepText), retention: model.bindPref(\.clipboardRetentionText), enabled: true)
+                    clipKeepBox("Keep Images", isOn: model.bindPref(\.clipboardKeepImages), retention: model.bindPref(\.clipboardRetentionImages), enabled: true)
+                    clipKeepBox("Keep File Lists", isOn: model.bindPref(\.clipboardKeepFiles), retention: model.bindPref(\.clipboardRetentionFiles), enabled: true)
                 }
             }
             SettingsNote("When disabled, the clipboard viewer can still show your snippets.")
@@ -832,13 +832,13 @@ struct FeaturesPane: View {
         }
     }
 
-    private func clipKeepBox(_ title: String, isOn: Binding<Bool>, enabled: Bool) -> some View {
+    private func clipKeepBox(_ title: String, isOn: Binding<Bool>, retention: Binding<String>, enabled: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(title, isOn: isOn)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 12))
                 .disabled(!enabled)
-            Picker("", selection: model.bindPref(\.clipboardRetention)) {
+            Picker("", selection: retention) {
                 ForEach(["1 day", "1 week", "1 month", "3 months", "1 year", "never"], id: \.self) { Text($0).tag($0) }
             }
             .labelsHidden()

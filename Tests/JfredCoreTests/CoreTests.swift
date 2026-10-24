@@ -247,6 +247,7 @@ struct CoreTests {
         prefs.uaSelectionHotkey = "⌥⌘K"
         prefs.snippetExpandPlaySound = false
         prefs.clipboardIgnoreApps = ["Keychain Access", "CustomApp"]
+        prefs.clipboardRetentionImages = "1 week"
         prefs.customThemes = [CustomTheme(name: "Test Theme", width: 600)]
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(Preferences.self, from: data)
@@ -261,6 +262,7 @@ struct CoreTests {
         #expect(decoded.uaSelectionHotkey == "⌥⌘K")
         #expect(decoded.snippetExpandPlaySound == false)
         #expect(decoded.clipboardIgnoreApps == ["Keychain Access", "CustomApp"])
+        #expect(decoded.clipboardRetentionImages == "1 week")
         #expect(decoded.customThemes.first?.name == "Test Theme")
         #expect(decoded.customThemes.first?.width == 600)
     }

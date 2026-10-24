@@ -198,6 +198,9 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var clipboardKeepImages: Bool
     public var clipboardKeepFiles: Bool
     public var clipboardRetention: String
+    public var clipboardRetentionText: String
+    public var clipboardRetentionImages: String
+    public var clipboardRetentionFiles: String
     public var clipboardViewerKeyword: String
     public var clipboardClearKeyword: String
     public var clipboardClearKeywordEnabled: Bool
@@ -404,6 +407,9 @@ public struct Preferences: Codable, Equatable, Sendable {
         clipboardKeepImages = true
         clipboardKeepFiles = true
         clipboardRetention = "3 months"
+        clipboardRetentionText = "3 months"
+        clipboardRetentionImages = "3 months"
+        clipboardRetentionFiles = "3 months"
         clipboardViewerKeyword = "clipboard"
         clipboardClearKeyword = "clear"
         clipboardClearKeywordEnabled = true
@@ -507,6 +513,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case fileOpenWithFinder, clipboardIgnoreDuplicates, clipboardClearOnQuit
         case clipboardIgnoreUniversalText, clipboardIgnoreUniversalFiles
         case clipboardKeepText, clipboardKeepImages, clipboardKeepFiles, clipboardRetention
+        case clipboardRetentionText, clipboardRetentionImages, clipboardRetentionFiles
         case clipboardViewerKeyword, clipboardClearKeyword, clipboardClearKeywordEnabled
         case snippetKeyword, snippetShowKeywordInResult, snippetMatching, snippetWordBased
         case snippetExpandPlaySound, snippetExpandRestoreClipboard
@@ -620,6 +627,9 @@ public struct Preferences: Codable, Equatable, Sendable {
         clipboardKeepImages = value(.clipboardKeepImages, d.clipboardKeepImages)
         clipboardKeepFiles = value(.clipboardKeepFiles, d.clipboardKeepFiles)
         clipboardRetention = value(.clipboardRetention, d.clipboardRetention)
+        clipboardRetentionText = value(.clipboardRetentionText, d.clipboardRetentionText)
+        clipboardRetentionImages = value(.clipboardRetentionImages, d.clipboardRetentionImages)
+        clipboardRetentionFiles = value(.clipboardRetentionFiles, d.clipboardRetentionFiles)
         clipboardViewerKeyword = value(.clipboardViewerKeyword, d.clipboardViewerKeyword)
         clipboardClearKeyword = value(.clipboardClearKeyword, d.clipboardClearKeyword)
         clipboardClearKeywordEnabled = value(.clipboardClearKeywordEnabled, d.clipboardClearKeywordEnabled)
