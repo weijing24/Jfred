@@ -86,6 +86,7 @@ final class AppModel {
     var debugLines: [String] = []
     var debugQuery = "test"
     var showThemeEditor = false
+    var helpQuery = ""
     var actionPanelVisible = false
     var actionIndex = 0
     var launcherActions: [LauncherAction] = []

@@ -387,6 +387,13 @@ struct WorkflowEditor: View {
                 Text("Use {query} for the text typed after the keyword.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Button("← Move Left") { moveAction(index, -1) }
+                        .disabled(index == 0)
+                    Button("Move Right →") { moveAction(index, 1) }
+                        .disabled(index >= actions.count - 1)
+                }
+                .controlSize(.small)
                 Button("Remove Object", role: .destructive) { removeAction(index) }
             } else {
                 field("Name", model.bindWorkflow(workflowID, \.name))
@@ -494,6 +501,15 @@ struct WorkflowEditor: View {
         case .appleScript: "Run AppleScript"
         case .terminal: "Open in Terminal"
         }
+    }
+
+    private func moveAction(_ index: Int, _ delta: Int) {
+        guard let wf = model.workflows.firstIndex(where: { $0.id == workflowID }),
+              model.workflows[wf].actions.indices.contains(index) else { return }
+        let target = index + delta
+        guard model.workflows[wf].actions.indices.contains(target) else { return }
+        model.workflows[wf].actions.swapAt(index, target)
+        model.workflowSelection = target
     }
 
     private func removeAction(_ index: Int) {

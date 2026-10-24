@@ -95,6 +95,7 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 - **System**：每个命令的 enable + confirm + keyword；Eject / Eject All / 排除卷。
 - **Universal Actions**：General / Actions 两 tab；Show Actions 的 →/fn/ctrl/⌘ 开关、Selection Hotkey、Action Ordering。
 - **Appearance**：290pt 主题列表、80×50 缩略图、实时预览；支持 `.alfredappearance` 导入/导出、自定义主题与 Options 编辑器（宽度/圆角/内边距/字号/颜色）。
+- **Help**：版本/诊断、权限与支持目录、可搜索的排障主题列表、Copy Diagnostics。
 - **1Password**：绿色 “1Password 8 Integration” 卡片 + 获取工作流按钮、集成开关、加载状态。
 - **Clipboard Advanced**：Ignore Apps 可编辑列表；File Buffer 支持超时/动作后清空。
 - **Snippets**：Viewer Hotkey、Snippet Keyword、Show Keyword in Result、Matching + Word based、右侧 Auto Expansion 卡与 Options 面板、Collection 列表 + Name/Keyword/Snippet 表。

@@ -730,6 +730,29 @@ struct PowerpackPane: View {
 struct HelpPane: View {
     var model: AppModel
 
+    private struct Topic: Identifiable {
+        var id: String { title }
+        var title: String
+        var detail: String
+    }
+
+    private let topics: [Topic] = [
+        Topic(title: "Permissions", detail: "Accessibility is needed for snippets, window commands and global hotkeys. Automation is needed for Finder, Terminal, browsers and Music. Contacts is only requested when you press Grant Access. Full Disk Access improves file search completeness."),
+        Topic(title: "Hotkey does not open the launcher", detail: "Another app may already own the shortcut. Open General, click the hotkey field and press a different combination. Jfred keeps running as a menu bar accessory even when the settings window closes."),
+        Topic(title: "Clipboard history is empty", detail: "Check that Clipboard History is enabled, that the source app is not in Ignore Apps, and that the item was not marked Concealed or Auto Generated. Password managers are deliberately excluded."),
+        Topic(title: "Snippets do not expand", detail: "Auto expansion needs Accessibility permission. Keep the snippet keyword unique and make sure the snippet is enabled and its collection is not filtered out."),
+        Topic(title: "A workflow does not run", detail: "Imported workflows run their own scripts with the same permissions as Jfred. Check the workflow's script interpreter, its working directory, and the shell PATH. Use the workflow Debugger to see the first failing action."),
+        Topic(title: "Remote page cannot connect", detail: "Enable the server, keep This Mac only on unless you need LAN access, and use the exact token from the Remote pane. If a token or QR code leaked, press Regenerate Token."),
+        Topic(title: "Theme import or export failed", detail: "Theme files are .alfredappearance JSON. Jfred reads the window/search/result fields and ignores unknown keys. Export produces a compatible file; importing a broken file leaves the current theme unchanged."),
+        Topic(title: "File search is slow", detail: "Reduce Search Scope, turn off Search all file types, or disable unnecessary Extras. Use the open, find, in and tags keywords instead of searching every file in the default results."),
+    ]
+
+    private var visibleTopics: [Topic] {
+        let query = model.helpQuery.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return topics }
+        return topics.filter { $0.title.localizedCaseInsensitiveContains(query) || $0.detail.localizedCaseInsensitiveContains(query) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             PageHeaderBand(
@@ -743,14 +766,10 @@ struct HelpPane: View {
                     VStack(alignment: .leading, spacing: 18) {
                         Text("Jfred \(AppRelease.version) [local]")
                             .font(.system(size: 18, weight: .semibold))
-                        Text("Jfred is an independent Alfred-compatible launcher. If a feature is not working, check macOS permissions first: Accessibility is needed for snippets and window commands, Automation for browsers and Music, Contacts for the contact viewer, and Full Disk Access for complete file search.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(JfredColor.sub)
-                            .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 10) {
                             Button("Request Permissions…") { model.requestPermissions() }
                             Button("Reveal Support Folder") { model.revealSupportFolder() }
-                            Button("Open Log") { model.section = .advanced }
+                            Button("Copy Diagnostics") { copyDiagnostics() }
                         }
                         Divider()
                         VStack(alignment: .leading, spacing: 8) {
@@ -761,6 +780,23 @@ struct HelpPane: View {
                             helpRow("Clipboard items", "\(model.clips.count)")
                         }
                         Divider()
+                        SettingsFilterField(placeholder: "Search Help", text: model.bind(\.helpQuery), width: 320)
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(visibleTopics) { topic in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(topic.title)
+                                        .font(.system(size: 13, weight: .semibold))
+                                    Text(topic.detail)
+                                        .font(.system(size: 11.5))
+                                        .foregroundStyle(JfredColor.sub)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .padding(10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xF7F7F7)))
+                            }
+                        }
+                        Divider()
                         Text("Alfred is a trademark of Running with Crayons Ltd. Jfred is not affiliated with or endorsed by Running with Crayons.")
                             .font(.system(size: 11))
                             .foregroundStyle(JfredColor.sub)
@@ -768,6 +804,20 @@ struct HelpPane: View {
                 }
             }
         }
+    }
+
+    private func copyDiagnostics() {
+        let lines = [
+            "Jfred \(AppRelease.version)",
+            "Support folder: \(SupportPaths.directory(syncFolder: model.preferences.syncFolder).path)",
+            "Contacts: \(model.contacts.count)",
+            "Workflows: \(model.workflows.count)",
+            "Snippets: \(model.snippets.count)",
+            "Clipboard items: \(model.clips.count)",
+            "Remote enabled: \(model.preferences.remoteEnabled)",
+        ]
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
     }
 
     private func helpRow(_ title: String, _ value: String) -> some View {

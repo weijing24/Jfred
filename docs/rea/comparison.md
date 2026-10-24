@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 11,997 |
+| Swift 行数（含测试） | 9,083 | 12,064 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 16 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,914 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,981 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -48,7 +48,8 @@
 - System 每个命令补 enable 开关；禁用后搜索结果和 Remote `/run` 都会拒绝执行。
 - Appearance 改为 290pt 主题列表 + 80×50 主题缩略图 + 实时启动器预览；Workflows 改为 Alfred 的深色空态画布、五张引导卡片和底部工具栏。
 - Workflows 选中工作流后不再是弹出的表单，而是在主窗口内显示画布：Keyword 节点 → Action 节点 → Add Action，右侧白色 Inspector 编辑名称/关键词/作者/图标/颜色或动作类型/值；底部 Add Action / Cancel / Save。
-- Workflows 补基础 Debugger：输入测试 query，Run 按顺序执行内部动作并记录结果/输出，底部面板可 Clear/Close；Add Action 改成动作类型菜单。
+- Workflows 补基础 Debugger：输入测试 query，Run 按顺序执行内部动作并记录结果/输出，底部面板可 Clear/Close；Add Action 改成动作类型菜单，动作可左右移动排序。
+- Help 补搜索框、按主题分组的排障说明、Copy Diagnostics 与支持目录/索引计数；工作流动作支持调序。
 - Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `jfredlocal://music` 可打开。
 - Remote 补 “Add iOS Remote” QR 配对面板（本地 URL + token，可复制）与一键 Regenerate Token，仍不实现 Alfred 的私有 iOS 配对协议。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。
