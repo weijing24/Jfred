@@ -1,14 +1,20 @@
 import SwiftUI
 import JfredCore
 import CoreImage.CIFilterBuiltins
+import UniformTypeIdentifiers
 
 struct AppearancePane: View {
     var model: AppModel
+
+    private var themes: [LauncherTheme] {
+        LauncherTheme.all + model.preferences.customThemes.map { LauncherTheme(custom: $0) }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(LauncherTheme.all) { theme in
+                    ForEach(themes) { theme in
                         Button {
                             model.preferences.themeID = theme.id
                         } label: {
@@ -36,12 +42,21 @@ struct AppearancePane: View {
             .jfredSidebar(tint: JfredColor.sidebarDeep)
             ZStack(alignment: .bottom) {
                 WallpaperArt()
-                PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID))
+                PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes))
                     .padding(.top, 30)
                 HStack(spacing: 10) {
+                    Button("Import…") { importTheme() }
+                        .controlSize(.small)
+                    Button("Export…") { exportTheme() }
+                        .controlSize(.small)
+                    if model.preferences.customThemes.contains(where: { $0.id == model.preferences.themeID }) {
+                        Button("Remove") { removeTheme() }
+                            .controlSize(.small)
+                    }
                     Button("Help") { model.section = .help }
+                        .controlSize(.small)
                     Spacer()
-                    Text("Themes are independent presets derived from Alfred's published metrics.")
+                    Text("Theme files are read/written locally; no assets are uploaded.")
                         .font(.system(size: 10))
                         .foregroundStyle(.white.opacity(0.65))
                 }
@@ -50,6 +65,35 @@ struct AppearancePane: View {
                 .background(.black.opacity(0.35))
             }
         }
+    }
+
+    private func importTheme() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if let type = UTType(filenameExtension: "alfredappearance") {
+            panel.allowedContentTypes = [type]
+        }
+        guard panel.runModal() == .OK, let url = panel.url, let custom = ThemeFiles.read(url) else { return }
+        model.preferences.customThemes.append(custom)
+        model.preferences.themeID = custom.id
+    }
+
+    private func exportTheme() {
+        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = theme.name + ".alfredappearance"
+        if let type = UTType(filenameExtension: "alfredappearance") {
+            panel.allowedContentTypes = [type]
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        _ = ThemeFiles.write(theme, to: url)
+    }
+
+    private func removeTheme() {
+        guard model.preferences.customThemes.contains(where: { $0.id == model.preferences.themeID }) else { return }
+        model.preferences.customThemes.removeAll { $0.id == model.preferences.themeID }
+        model.preferences.themeID = "alfred"
     }
 }
 

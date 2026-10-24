@@ -94,6 +94,7 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 - **Music**：General / Keywords / Advanced 三个 tab；Mini Player 开关与 keyword、Playback、Now Playing、Play/Pause/Previous/Next。
 - **System**：每个命令的 enable + confirm + keyword；Eject / Eject All / 排除卷。
 - **Universal Actions**：General / Actions 两 tab；Show Actions 的 →/fn/ctrl/⌘ 开关、Selection Hotkey、Action Ordering。
+- **Appearance**：290pt 主题列表、80×50 缩略图、实时预览；支持 `.alfredappearance` 导入/导出与自定义主题。
 - **1Password**：绿色 “1Password 8 Integration” 卡片 + 获取工作流按钮、集成开关、加载状态。
 - **Snippets**：Viewer Hotkey、Snippet Keyword、Show Keyword in Result、Matching + Word based、右侧 Auto Expansion 卡与 Options 面板、Collection 列表 + Name/Keyword/Snippet 表。
 - **Workflows**：深色空态（Alfred Gallery / Getting Started / Create / Template / Documentation 五卡）；选中后内嵌画布，Keyword → Action 节点链，右侧 Inspector，底部 Add Action / Cancel / Save。

@@ -78,6 +78,72 @@ struct LauncherTheme: Identifiable {
 
     var queryBoxHeight: CGFloat { querySize + 16 }
 
+    init(id: String, name: String, detail: String, query: Color, title: Color, subtitle: Color, selected: Color, selectedTitle: Color, selectedSubtitle: Color, background: Color, material: Material?, radius: CGFloat, querySize: CGFloat, fontName: String?, width: CGFloat = 559, paddingH: CGFloat = 9, paddingV: CGFloat = 8, iconSize: CGFloat = 40, iconPadding: CGFloat = 4, rowPaddingV: CGFloat = 3, textSpacing: CGFloat = 5, resultTextSize: CGFloat = 18, resultSubtextSize: CGFloat = 12, shortcutSize: CGFloat = 16, searchBackground: Color = Color.black.opacity(0.10), searchSelected: Color = Color(hex: 0x480069), border: Color = Color.black.opacity(0.50), blur: Double = 15, searchWeight: Font.Weight = .regular) {
+        self.id = id
+        self.name = name
+        self.detail = detail
+        self.query = query
+        self.title = title
+        self.subtitle = subtitle
+        self.selected = selected
+        self.selectedTitle = selectedTitle
+        self.selectedSubtitle = selectedSubtitle
+        self.background = background
+        self.material = material
+        self.radius = radius
+        self.querySize = querySize
+        self.fontName = fontName
+        self.width = width
+        self.paddingH = paddingH
+        self.paddingV = paddingV
+        self.iconSize = iconSize
+        self.iconPadding = iconPadding
+        self.rowPaddingV = rowPaddingV
+        self.textSpacing = textSpacing
+        self.resultTextSize = resultTextSize
+        self.resultSubtextSize = resultSubtextSize
+        self.shortcutSize = shortcutSize
+        self.searchBackground = searchBackground
+        self.searchSelected = searchSelected
+        self.border = border
+        self.blur = blur
+        self.searchWeight = searchWeight
+    }
+
+    init(custom: CustomTheme) {
+        self.init(
+            id: custom.id,
+            name: custom.name,
+            detail: "Custom Theme",
+            query: Color(hexString: custom.query),
+            title: Color(hexString: custom.title),
+            subtitle: Color(hexString: custom.subtitle),
+            selected: Color(hexString: custom.selected),
+            selectedTitle: Color(hexString: custom.selectedTitle),
+            selectedSubtitle: Color(hexString: custom.selectedSubtitle),
+            background: Color(hexString: custom.background),
+            material: nil,
+            radius: CGFloat(custom.radius),
+            querySize: CGFloat(custom.querySize),
+            fontName: custom.fontName,
+            width: CGFloat(custom.width),
+            paddingH: CGFloat(custom.paddingH),
+            paddingV: CGFloat(custom.paddingV),
+            iconSize: CGFloat(custom.iconSize),
+            iconPadding: CGFloat(custom.iconPadding),
+            rowPaddingV: CGFloat(custom.rowPaddingV),
+            textSpacing: CGFloat(custom.textSpacing),
+            resultTextSize: CGFloat(custom.resultTextSize),
+            resultSubtextSize: CGFloat(custom.resultSubtextSize),
+            shortcutSize: CGFloat(custom.shortcutSize),
+            searchBackground: Color(hexString: custom.searchBackground),
+            searchSelected: Color(hexString: custom.selected),
+            border: Color(hexString: custom.border),
+            blur: 0,
+            searchWeight: .regular
+        )
+    }
+
     static let all: [LauncherTheme] = [
         LauncherTheme(
             id: "alfred", name: "Alfred", detail: "Alfred Default Theme",
@@ -191,7 +257,10 @@ struct LauncherTheme: Identifiable {
         ),
     ]
 
-    static func by(id: String) -> LauncherTheme {
+    static func by(id: String, custom: [CustomTheme] = []) -> LauncherTheme {
+        if let custom = custom.first(where: { $0.id == id }) {
+            return LauncherTheme(custom: custom)
+        }
         let legacy = [
             "jfred": "alfred", "jfred-dark": "alfred-dark", "modern": "alfred-modern",
             "modern-dark": "alfred-modern-dark", "classic": "alfred-classic",
@@ -211,6 +280,12 @@ extension Color {
             blue: Double((rgba >> 8) & 0xFF) / 255,
             opacity: Double(rgba & 0xFF) / 255
         )
+    }
+
+    init(hexString: String) {
+        let cleaned = hexString.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        let value = UInt32(cleaned, radix: 16) ?? 0x000000FF
+        self.init(rgba: cleaned.count >= 8 ? value : (value << 8 | 0xFF))
     }
 }
 

@@ -73,7 +73,7 @@ final class LauncherController {
 
     func layout() {
         guard let panel else { return }
-        let theme = LauncherTheme.by(id: model.preferences.themeID)
+        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
         let filled = model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : max(model.results.count, 1)
         let rows = CGFloat(min(filled, LauncherMetrics.visibleRows))
         let buffer: CGFloat = model.fileBuffer.isEmpty ? 0 : 34
@@ -280,7 +280,7 @@ struct LauncherRoot: View {
     var model: AppModel
 
     var body: some View {
-        let theme = LauncherTheme.by(id: model.preferences.themeID)
+        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
         let searching = !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let panel = RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {

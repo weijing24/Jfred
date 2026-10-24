@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 11,410 |
+| Swift 行数（含测试） | 9,083 | 11,707 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 16 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,327 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,624 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -32,6 +32,7 @@
 - Universal Actions 改为 General / Actions 两 tab，补 Show Actions 的 →/fn/ctrl/⌘ 开关、Selection Hotkey、Action Ordering，Actions 页列出可用动作。
 - Snippets 补 Viewer Hotkey、右侧 Auto Expansion 卡片与 Options 面板（展开声音、剪贴板恢复），集合列表加 Get Collections 入口。
 - 1Password 页改为 Alfred 的绿色 Integration 卡片 + 1Password 7/8 说明 + 集成开关，并保留基于 `op` CLI 的实际加载与状态。
+- Appearance 支持导入/导出 `.alfredappearance`：读取 window/search/result 的数字与颜色字段生成自定义主题，导出为同结构 JSON；自定义主题可删除。
 - 新增统一的 `PageHeaderBand` 与 `FormPanel`：46pt 图标、20pt 标题、12.5pt 副标题、白色圆角表单。
 - Features 列表行高 42pt、图标 34pt、宽 240pt，16 项与 Alfred 顺序一致。
 - 底部 rail 新增 Powerpack、Help，顺序为 Powerpack / Usage / Help / Update。
@@ -61,7 +62,7 @@
 ## 仍未对齐（诚实清单）
 
 - Music Mini Player 已有独立窗口与曲目搜索，但没有唱片封面、播放列表/专辑浏览和随机播放逻辑。
-- Appearance 的主题应用/预览已对齐，但主题编辑器（自定义颜色、导入/导出 `.alfredappearance`）未实现。
+- Appearance 已支持 `.alfredappearance` 导入/导出与自定义主题删除，但没有逐项颜色编辑器/实时主题调试器。
 - Workflows 的画布节点拖拽/自由连线、对象库、调试器仍是结构级；空态、列表、导入、模板、基础节点画布与 Inspector 已对齐。
 - Remote 的私有 iOS 配对协议、Powerpack/Help 的完整内容仍是结构级（QR 配对面板已有）。
 - Alfred 的手绘图标/主题壁纸没有复制（版权与独立性考虑），Jfred 用 SF Symbols + 同色块。

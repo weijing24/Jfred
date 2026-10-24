@@ -58,6 +58,60 @@ public struct WebSearch: Codable, Equatable, Sendable, Identifiable {
     ]
 }
 
+public struct CustomTheme: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var width: Double
+    public var radius: Double
+    public var paddingH: Double
+    public var paddingV: Double
+    public var querySize: Double
+    public var resultTextSize: Double
+    public var resultSubtextSize: Double
+    public var shortcutSize: Double
+    public var iconSize: Double
+    public var iconPadding: Double
+    public var rowPaddingV: Double
+    public var textSpacing: Double
+    public var background: String
+    public var query: String
+    public var title: String
+    public var subtitle: String
+    public var selected: String
+    public var selectedTitle: String
+    public var selectedSubtitle: String
+    public var searchBackground: String
+    public var border: String
+    public var fontName: String?
+
+    public init(id: String = UUID().uuidString, name: String, width: Double = 559, radius: Double = 3, paddingH: Double = 9, paddingV: Double = 8, querySize: Double = 34, resultTextSize: Double = 18, resultSubtextSize: Double = 12, shortcutSize: Double = 16, iconSize: Double = 40, iconPadding: Double = 4, rowPaddingV: Double = 3, textSpacing: Double = 5, background: String = "#FFFFFFDB", query: String = "#000000FF", title: String = "#000000E5", subtitle: String = "#00000065", selected: String = "#480069E4", selectedTitle: String = "#FFFFFFFF", selectedSubtitle: String = "#FFFFFFC4", searchBackground: String = "#0000001A", border: String = "#0000007F", fontName: String? = nil) {
+        self.id = id
+        self.name = name
+        self.width = width
+        self.radius = radius
+        self.paddingH = paddingH
+        self.paddingV = paddingV
+        self.querySize = querySize
+        self.resultTextSize = resultTextSize
+        self.resultSubtextSize = resultSubtextSize
+        self.shortcutSize = shortcutSize
+        self.iconSize = iconSize
+        self.iconPadding = iconPadding
+        self.rowPaddingV = rowPaddingV
+        self.textSpacing = textSpacing
+        self.background = background
+        self.query = query
+        self.title = title
+        self.subtitle = subtitle
+        self.selected = selected
+        self.selectedTitle = selectedTitle
+        self.selectedSubtitle = selectedSubtitle
+        self.searchBackground = searchBackground
+        self.border = border
+        self.fontName = fontName
+    }
+}
+
 public struct Preferences: Codable, Equatable, Sendable {
     public var launchAtLogin: Bool
     public var hotkey: Hotkey
@@ -81,6 +135,7 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var webSearches: [WebSearch]
     public var urlHistory: [String]
     public var themeID: String
+    public var customThemes: [CustomTheme]
     public var storeTypedQuery: Bool
     public var showLatestQuery: Bool
     public var topResultLatching: Bool
@@ -290,6 +345,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         webSearches = WebSearch.defaults
         urlHistory = []
         themeID = "alfred"
+        customThemes = []
         storeTypedQuery = true
         showLatestQuery = false
         topResultLatching = true
@@ -431,7 +487,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case extraFolders, extraDocuments, extraText, extraImages, extraArchives, extraScripts
         case searchAllFileTypes, scopeApplications, scopeHome, scopePaths
         case includeSystemApps, includeUserApps, includePreferencePanes
-        case fallbackMode, webSearches, urlHistory, themeID
+        case fallbackMode, webSearches, urlHistory, themeID, customThemes
         case storeTypedQuery, showLatestQuery, topResultLatching
         case removeNotificationWhenClicked, showNotificationIcons, useHTTPProxy
         case selectionHotkeyMode, forceKeyboard, modifierControl, modifierOption, modifierCommand
@@ -502,6 +558,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         webSearches = value(.webSearches, d.webSearches)
         urlHistory = value(.urlHistory, d.urlHistory)
         themeID = value(.themeID, d.themeID)
+        customThemes = value(.customThemes, d.customThemes)
         storeTypedQuery = value(.storeTypedQuery, d.storeTypedQuery)
         showLatestQuery = value(.showLatestQuery, d.showLatestQuery)
         topResultLatching = value(.topResultLatching, d.topResultLatching)
