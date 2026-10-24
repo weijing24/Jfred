@@ -45,6 +45,8 @@ struct AppearancePane: View {
                 PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes))
                     .padding(.top, 30)
                 HStack(spacing: 10) {
+                    Button("Options…") { model.showThemeEditor = true }
+                        .controlSize(.small)
                     Button("Import…") { importTheme() }
                         .controlSize(.small)
                     Button("Export…") { exportTheme() }
@@ -64,6 +66,9 @@ struct AppearancePane: View {
                 .frame(height: 24)
                 .background(.black.opacity(0.35))
             }
+        }
+        .sheet(isPresented: model.bind(\.showThemeEditor)) {
+            ThemeEditorSheet(model: model)
         }
     }
 
@@ -94,6 +99,111 @@ struct AppearancePane: View {
         guard model.preferences.customThemes.contains(where: { $0.id == model.preferences.themeID }) else { return }
         model.preferences.customThemes.removeAll { $0.id == model.preferences.themeID }
         model.preferences.themeID = "alfred"
+    }
+}
+
+struct ThemeEditorSheet: View {
+    var model: AppModel
+
+    private var index: Int? {
+        model.preferences.customThemes.firstIndex { $0.id == model.preferences.themeID }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Theme Options").font(.system(size: 16, weight: .semibold))
+                Spacer()
+                Button("Done") { model.showThemeEditor = false }
+                    .keyboardShortcut(.defaultAction)
+            }
+            if let index {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        field("Name", binding(index, \.name))
+                        numberField("Window width", binding(index, \.width))
+                        numberField("Corner radius", binding(index, \.radius))
+                        numberField("Horizontal padding", binding(index, \.paddingH))
+                        numberField("Vertical padding", binding(index, \.paddingV))
+                        numberField("Search size", binding(index, \.querySize))
+                        numberField("Result title size", binding(index, \.resultTextSize))
+                        numberField("Result subtitle size", binding(index, \.resultSubtextSize))
+                        numberField("Shortcut size", binding(index, \.shortcutSize))
+                        numberField("Icon size", binding(index, \.iconSize))
+                        Divider()
+                        field("Background", binding(index, \.background))
+                        field("Search background", binding(index, \.searchBackground))
+                        field("Selected background", binding(index, \.selected))
+                        field("Border", binding(index, \.border))
+                        field("Query text", binding(index, \.query))
+                        field("Result text", binding(index, \.title))
+                        field("Result subtitle", binding(index, \.subtitle))
+                        field("Selected text", binding(index, \.selectedTitle))
+                        field("Selected subtitle", binding(index, \.selectedSubtitle))
+                        Text("Colours use #RRGGBBAA. Changes apply to the live launcher immediately.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(JfredColor.sub)
+                        HStack {
+                            Button("Delete Theme", role: .destructive) {
+                                model.preferences.customThemes.remove(at: index)
+                                model.preferences.themeID = "alfred"
+                                model.showThemeEditor = false
+                            }
+                            Spacer()
+                            Button("Export…") {
+                                let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
+                                let panel = NSSavePanel()
+                                panel.nameFieldStringValue = theme.name + ".alfredappearance"
+                                if let type = UTType(filenameExtension: "alfredappearance") {
+                                    panel.allowedContentTypes = [type]
+                                }
+                                if panel.runModal() == .OK, let url = panel.url { _ = ThemeFiles.write(theme, to: url) }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("The selected theme is a built-in preset. Duplicate it to edit its metrics and colours.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(JfredColor.sub)
+                    Button("Duplicate as Custom Theme") {
+                        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
+                        let custom = ThemeFiles.custom(from: theme)
+                        model.preferences.customThemes.append(custom)
+                        model.preferences.themeID = custom.id
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(width: 580, height: 640)
+    }
+
+    private func field(_ title: String, _ binding: Binding<String>) -> some View {
+        HStack(spacing: 10) {
+            Text(title).font(.system(size: 12)).frame(width: 160, alignment: .trailing)
+            TextField("", text: binding).textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func numberField(_ title: String, _ binding: Binding<Double>) -> some View {
+        HStack(spacing: 10) {
+            Text(title).font(.system(size: 12)).frame(width: 160, alignment: .trailing)
+            TextField("", value: binding, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 120)
+            Spacer()
+        }
+    }
+
+    private func binding<T>(_ index: Int, _ keyPath: WritableKeyPath<CustomTheme, T>) -> Binding<T> {
+        Binding(
+            get: { model.preferences.customThemes[index][keyPath: keyPath] },
+            set: { model.preferences.customThemes[index][keyPath: keyPath] = $0 }
+        )
     }
 }
 

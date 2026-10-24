@@ -82,6 +82,7 @@ final class AppModel {
     var showRemoteQR = false
     var showSnippetExpansionOptions = false
     var workflowSelection: Int? = nil
+    var showThemeEditor = false
     var actionPanelVisible = false
     var actionIndex = 0
     var launcherActions: [LauncherAction] = []

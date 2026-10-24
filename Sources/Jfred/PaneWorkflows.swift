@@ -313,8 +313,10 @@ struct WorkflowEditor: View {
                     ) { model.workflowSelection = index }
                 }
                 connector
-                Button {
-                    appendAction()
+                Menu {
+                    ForEach(WorkflowAction.Kind.allCases, id: \.self) { kind in
+                        Button(label(for: kind)) { appendAction(kind) }
+                    }
                 } label: {
                     VStack(spacing: 6) {
                         Image(systemName: "plus").font(.system(size: 18))
@@ -325,6 +327,8 @@ struct WorkflowEditor: View {
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.04)))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.16), style: StrokeStyle(lineWidth: 1, dash: [4])))
                 }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .buttonStyle(.plain)
             }
             .padding(28)
@@ -370,7 +374,7 @@ struct WorkflowEditor: View {
             if let index = model.workflowSelection, actions.indices.contains(index) {
                 Picker("Type", selection: model.bindAction(workflowID, index, \.kind)) {
                     ForEach(WorkflowAction.Kind.allCases, id: \.self) { kind in
-                        Text(kind.rawValue).tag(kind)
+                        Text(label(for: kind)).tag(kind)
                     }
                 }
                 TextEditor(text: model.bindAction(workflowID, index, \.value))
@@ -401,7 +405,13 @@ struct WorkflowEditor: View {
 
     private var footer: some View {
         HStack {
-            Button("Add Action") { appendAction() }
+            Menu("Add Action") {
+                ForEach(WorkflowAction.Kind.allCases, id: \.self) { kind in
+                    Button(label(for: kind)) { appendAction(kind) }
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 120)
             Spacer()
             Button("Cancel") { model.cancelWorkflowEdit() }
             Button("Save") { model.saveWorkflowEdit() }.keyboardShortcut(.defaultAction)
@@ -434,10 +444,23 @@ struct WorkflowEditor: View {
         }
     }
 
-    private func appendAction() {
+    private func appendAction(_ kind: WorkflowAction.Kind = .copy) {
         guard let index = model.workflows.firstIndex(where: { $0.id == workflowID }) else { return }
-        model.workflows[index].actions.append(WorkflowAction(kind: .copy, value: "{query}"))
+        let value = kind == .openURL ? "https://www.google.com/search?q={query}" : (kind == .copy ? "{query}" : "")
+        model.workflows[index].actions.append(WorkflowAction(kind: kind, value: value))
         model.workflowSelection = model.workflows[index].actions.count - 1
+    }
+
+    private func label(for kind: WorkflowAction.Kind) -> String {
+        switch kind {
+        case .openURL: "Open URL"
+        case .openApp: "Open App"
+        case .shell: "Run Script"
+        case .copy: "Copy to Clipboard"
+        case .largeType: "Large Type"
+        case .appleScript: "Run AppleScript"
+        case .terminal: "Open in Terminal"
+        }
     }
 
     private func removeAction(_ index: Int) {

@@ -110,7 +110,35 @@ enum ThemeFiles {
         return (try? data.write(to: url, options: .atomic)) != nil
     }
 
-    private static func hex(_ color: Color) -> String {
+    static func custom(from theme: LauncherTheme) -> CustomTheme {
+        CustomTheme(
+            name: theme.name + " Custom",
+            width: Double(theme.width),
+            radius: Double(theme.radius),
+            paddingH: Double(theme.paddingH),
+            paddingV: Double(theme.paddingV),
+            querySize: Double(theme.querySize),
+            resultTextSize: Double(theme.resultTextSize),
+            resultSubtextSize: Double(theme.resultSubtextSize),
+            shortcutSize: Double(theme.shortcutSize),
+            iconSize: Double(theme.iconSize),
+            iconPadding: Double(theme.iconPadding),
+            rowPaddingV: Double(theme.rowPaddingV),
+            textSpacing: Double(theme.textSpacing),
+            background: hex(theme.background),
+            query: hex(theme.query),
+            title: hex(theme.title),
+            subtitle: hex(theme.subtitle),
+            selected: hex(theme.selected),
+            selectedTitle: hex(theme.selectedTitle),
+            selectedSubtitle: hex(theme.selectedSubtitle),
+            searchBackground: hex(theme.searchBackground),
+            border: hex(theme.border),
+            fontName: theme.fontName
+        )
+    }
+
+    static func hex(_ color: Color) -> String {
         let ns = NSColor(color).usingColorSpace(.sRGB) ?? .black
         let r = Int((ns.redComponent * 255).rounded())
         let g = Int((ns.greenComponent * 255).rounded())
