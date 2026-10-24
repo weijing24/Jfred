@@ -146,6 +146,8 @@ struct RemotePane: View {
                 Text("Token \(model.preferences.remoteToken)")
                     .font(.system(size: 12, design: .monospaced))
                     .textSelection(.enabled)
+                Button("Regenerate Token") { model.regenerateRemoteToken() }
+                    .controlSize(.small)
                 Spacer()
                 VStack(spacing: 8) {
                     Text("Jfred Remote for iOS")

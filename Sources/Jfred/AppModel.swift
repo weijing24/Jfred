@@ -1410,6 +1410,12 @@ final class AppModel {
         }
     }
 
+    func regenerateRemoteToken() {
+        preferences.remoteToken = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        scheduleSave()
+        applyRemote()
+    }
+
     func applyRemote() {
         if preferences.remoteToken.count < 24 {
             preferences.remoteToken = UUID().uuidString.replacingOccurrences(of: "-", with: "")

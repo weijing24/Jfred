@@ -24,11 +24,12 @@
 ## 仍然存在 / 已接受的风险
 
 1. **Remote 使用明文 HTTP。** 当用户关闭 “This Mac only” 时，token 会在局域网中以明文传输。已在 UI 显示红色警告，默认仍是仅本机。需要跨设备使用时，建议只在自己信任的网络，或后续改成 TLS/配对码。
-2. **Clipboard 历史是明文数据库。** 已用 0600 限制本机其他用户读取，但没有加密。若把 `syncFolder` 指向 iCloud/Dropbox 等同步目录，历史会随云同步；UI 已提示可退出清空。
-3. **工作流可以执行任意 shell / AppleScript。** 这是 Alfred 兼容工作流的固有能力，不是漏洞；只应导入可信来源的 `.alfredworkflow`。导入路径已做 zip-slip 校验，但没有沙箱化脚本执行。
-4. **AppleScript / Terminal 是用户显式触发的。** `>` 前缀、Terminal 动作、工作流脚本都会执行用户输入；这是功能本身。已对唯一可被远程触发的 `volume:` 做数值校验。
-5. **Accessibility / Automation / Contacts 权限较大。** 这些权限用于窗口命令、浏览器标签、联系人搜索；不授权时对应功能会返回空结果，不会崩溃。
-6. **REA/Hopper 逆向仅用于本机互操作。** 没有把 Alfred 的资源、nib、字符串表或反编译代码放进仓库；合规边界见 `docs/rea/README.md`。
+2. **Remote token 会出现在 URL/QR 中。** 用户主动打开 “Add iOS Remote” 时会显示含 token 的二维码；截图或投屏会泄露 token。Remote 页已提供 “Regenerate Token”，可立即作废旧链接并重启服务。
+3. **Clipboard 历史是明文数据库。** 已用 0600 限制本机其他用户读取，但没有加密。若把 `syncFolder` 指向 iCloud/Dropbox 等同步目录，历史会随云同步；UI 已提示可退出清空。
+4. **工作流可以执行任意 shell / AppleScript。** 这是 Alfred 兼容工作流的固有能力，不是漏洞；只应导入可信来源的 `.alfredworkflow`。导入路径已做 zip-slip 校验，但没有沙箱化脚本执行。
+5. **AppleScript / Terminal 是用户显式触发的。** `>` 前缀、Terminal 动作、工作流脚本都会执行用户输入；这是功能本身。已对唯一可被远程触发的 `volume:` 做数值校验。
+6. **Accessibility / Automation / Contacts 权限较大。** 这些权限用于窗口命令、浏览器标签、联系人搜索；不授权时对应功能会返回空结果，不会崩溃。
+7. **REA/Hopper 逆向仅用于本机互操作。** 没有把 Alfred 的资源、nib、字符串表或反编译代码放进仓库；合规边界见 `docs/rea/README.md`。
 
 ## 隐私数据清单
 
@@ -36,7 +37,7 @@
 | --- | --- | --- |
 | 剪贴板历史 | `~/Library/Application Support/JfredLocal/state.json` + `ClipImages/` | 0600/0700，屏蔽密码管理器，可退出清空 |
 | 联系人姓名/邮箱/电话/职位 | 内存，运行时从 Contacts 读取 | 不写入 state.json；不读取 note（需要额外 entitlement） |
-| Remote token | `state.json` | 0600，32 hex，常量时间比较 |
+| Remote token | `state.json`、Remote QR 面板 | 0600，32 hex，常量时间比较，可一键轮换 |
 | 书签/浏览器标签/Chrome profile | 运行时读取 | 仅用于搜索结果，不写盘 |
 | 搜索历史/使用统计 | `state.json` | 0600，可关闭 `showLatestQuery` |
 | Newsletter 邮箱 | `state.json` | 仅本地保存，Subscribe 按钮不发送网络请求 |
