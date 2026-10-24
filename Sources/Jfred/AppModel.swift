@@ -323,6 +323,13 @@ final class AppModel {
     func showActions() {
         guard results.indices.contains(selection) else { return }
         launcherActions = actions(for: results[selection])
+        if preferences.uaSortByUsage {
+            launcherActions.sort { lhs, rhs in
+                let left = Int(knowledge["ua.\(lhs.kind.rawValue)"] ?? "") ?? 0
+                let right = Int(knowledge["ua.\(rhs.kind.rawValue)"] ?? "") ?? 0
+                return left > right
+            }
+        }
         guard !launcherActions.isEmpty else { return }
         actionPanelVisible = true
         actionIndex = 0
@@ -345,6 +352,8 @@ final class AppModel {
         guard actionPanelVisible, launcherActions.indices.contains(actionIndex), results.indices.contains(selection) else { return }
         let item = results[selection]
         let action = launcherActions[actionIndex]
+        knowledge["ua.\(action.kind.rawValue)"] = String((Int(knowledge["ua.\(action.kind.rawValue)"] ?? "") ?? 0) + 1)
+        scheduleSave()
         let value = item.payload.isEmpty ? item.title : item.payload
         closeActions()
         switch action.kind {
