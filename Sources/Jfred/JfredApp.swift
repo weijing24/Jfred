@@ -99,6 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 model.showLauncher()
             } else if url.host == "music" {
                 model.showMusicPlayer()
+            } else if url.host == "actions" {
+                model.query = query
+                model.showLauncher()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.model.showActions() }
             } else if url.host == "run", let keyword = items.first(where: { $0.name == "keyword" })?.value {
                 model.query = keyword + " "
                 model.showLauncher()
