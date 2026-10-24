@@ -1151,6 +1151,18 @@ final class AppModel {
         }
     }
 
+    func setWorkflowHotkey(_ id: UUID, keyCode: UInt16, modifiers: UInt) {
+        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
+        workflows[index].hotkey = Hotkey(keyCode: keyCode, modifiers: modifiers)
+        workflowsChanged()
+    }
+
+    func clearWorkflowHotkey(_ id: UUID) {
+        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
+        workflows[index].hotkey = nil
+        workflowsChanged()
+    }
+
     func duplicateWorkflowAction(_ index: Int) {
         guard let id = editingWorkflowID ?? selectedWorkflow,
               let wf = workflows.firstIndex(where: { $0.id == id }),

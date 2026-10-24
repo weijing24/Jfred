@@ -460,6 +460,36 @@ struct WorkflowEditor: View {
                 field("SF Symbol", model.bindWorkflow(workflowID, \.symbol, default: "bolt.fill"))
                 field("Tint (hex)", model.bindWorkflow(workflowID, \.tint, default: "561D7E"))
                 Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled, default: false))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Hotkey")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        ZStack {
+                            if let hotkey = workflow?.hotkey {
+                                HotkeyGlyphs(hotkey: hotkey, prominent: false)
+                            } else {
+                                Text("Click to record")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                            }
+                            HotkeyCapture(
+                                onSet: { code, flags in model.setWorkflowHotkey(workflowID, keyCode: code, modifiers: flags) },
+                                onFocus: { focused in
+                                    if focused { HotkeyCenter.shared.suspend() } else { model.applyHotkeys() }
+                                }
+                            )
+                        }
+                        .frame(width: 150, height: 24)
+                        .padding(.horizontal, 6)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.black.opacity(0.12)))
+                        if workflow?.hotkey != nil {
+                            Button("Clear") { model.clearWorkflowHotkey(workflowID) }
+                                .controlSize(.small)
+                        }
+                    }
+                }
             }
             Spacer()
         }
