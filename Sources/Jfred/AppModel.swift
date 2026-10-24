@@ -1646,6 +1646,7 @@ final class AppModel {
                 self.musicNowPlaying = info.playing
                 self.musicArtPath = MusicService.artworkURL()
                 self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
+                if self.preferences.musicHideMiniPlayerAfterSong { self.launcher?.hideMusicPlayer() }
             }
         }
     }

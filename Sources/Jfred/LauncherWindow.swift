@@ -94,6 +94,11 @@ final class LauncherController {
         pinnedTop = panel.frame.maxY
     }
 
+    func hideMusicPlayer() {
+        musicPanel?.orderOut(nil)
+        musicPanel = nil
+    }
+
     func showMusicPlayer() {
         if let musicPanel {
             model.refreshMusicPanel()
