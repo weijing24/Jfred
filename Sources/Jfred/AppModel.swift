@@ -146,6 +146,7 @@ final class AppModel {
     private var fromHistory = false
     private var clipChange = 0
     private var fileBufferLastUsed: Date?
+    private var workflowHotkeyIDs: [UInt32] = []
     private var previousApp: NSRunningApplication?
     private var saveWork: DispatchWorkItem?
     var launcher: LauncherController?
@@ -1513,6 +1514,8 @@ final class AppModel {
             Task { @MainActor in self?.showSelectionActions() }
         }
         selectionHotkeyWarning = selectionHotkeyOK ? "" : "⌥⌘\\ is already used by another app. Pick a different Universal Actions shortcut or free it up."
+        for id in workflowHotkeyIDs { HotkeyCenter.shared.unregister(id: id) }
+        workflowHotkeyIDs.removeAll()
         if ok {
             hotkeyWarning = ""
         } else {
@@ -1529,11 +1532,13 @@ final class AppModel {
                 continue
             }
             let keyword = workflow.keyword
-            _ = HotkeyCenter.shared.register(id: id, keyCode: UInt32(hotkey.keyCode), modifiers: hotkey.carbonModifiers) { [weak self] in
+            if HotkeyCenter.shared.register(id: id, keyCode: UInt32(hotkey.keyCode), modifiers: hotkey.carbonModifiers) { [weak self] in
                 Task { @MainActor in
                     self?.query = keyword + " "
                     self?.showLauncher()
                 }
+            } {
+                workflowHotkeyIDs.append(id)
             }
         }
     }

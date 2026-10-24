@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 12,504 |
+| Swift 行数（含测试） | 9,083 | 12,509 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 18 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,421 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,426 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -65,6 +65,7 @@
 - Workflow Inspector 增加 Duplicate Object，可快速复制当前动作并选中副本。
 - 联系人 Action Panel 补 Show in Maps，使用 Contacts 页的 Maps URL 模板。
 - Workflow Inspector 增加 Hotkey 录制/清除；录制的全局热键会打开对应工作流 keyword，Inspector 改为可滚动。
+- 修复工作流增删后旧全局热键仍残留的问题：每次 applyHotkeys 先注销上一批 workflow hotkey，再按当前列表注册。
 - Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `jfredlocal://music` 可打开。
 - Remote 补 “Add iOS Remote” QR 配对面板（本地 URL + token，可复制）与一键 Regenerate Token，仍不实现 Alfred 的私有 iOS 配对协议。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。
