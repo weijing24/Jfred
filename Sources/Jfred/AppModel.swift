@@ -583,6 +583,12 @@ final class AppModel {
                     if exists, isDirectory.boolValue, preferences.fileTouchFolders {
                         try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
                     }
+                    if exists, !isDirectory.boolValue, preferences.fileTouchAliases {
+                        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath()
+                        if resolved.path != path {
+                            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: resolved.path)
+                        }
+                    }
                 }
             }
             if preferences.fileClearBufferAfterAction {
