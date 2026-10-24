@@ -239,6 +239,7 @@ public enum Search {
         }
         for command in SystemCommand.all {
             if context.preferences.systemDisabled.contains(command.id) { continue }
+            if command.id == "ejectall", !context.preferences.ejectAllEnabled { continue }
             if command.category == "music", !context.preferences.musicEnabled { continue }
             let customKeyword = context.preferences.systemKeywords[command.id]
             let commandFields = customKeyword.map { [$0, command.title] } ?? ([command.title] + command.keywords)

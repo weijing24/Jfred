@@ -227,6 +227,14 @@ struct CoreTests {
         #expect(row?.subtitle.contains("Mathematician") == true)
     }
 
+    @Test func ejectAllRespectsEnableSwitch() {
+        var context = SearchContext()
+        context.preferences.ejectAllEnabled = false
+        #expect(!Search.results(for: "ejectall", context: context).contains { $0.id == "sys:ejectall" })
+        context.preferences.ejectAllEnabled = true
+        #expect(Search.results(for: "ejectall", context: context).contains { $0.id == "sys:ejectall" })
+    }
+
     @Test func clipboardViewerIncludesSnippets() {
         var context = SearchContext()
         context.preferences.clipboardEnabled = true

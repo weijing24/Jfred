@@ -133,6 +133,7 @@ public struct SystemCommand: Sendable, Equatable {
         SystemCommand(id: "emptetrash", title: "Empty Trash", subtitle: "Empty the Finder trash", symbol: "trash", keywords: ["empty trash"]),
         SystemCommand(id: "trash", title: "Show Trash", subtitle: "Open the Finder trash", symbol: "trash", keywords: ["show trash", "trash"]),
         SystemCommand(id: "eject", title: "Eject Disks", subtitle: "Eject removable disks", symbol: "eject", keywords: ["eject"]),
+        SystemCommand(id: "ejectall", title: "Eject All", subtitle: "Eject all ejectable volumes", symbol: "eject.fill", keywords: ["ejectall"]),
         SystemCommand(id: "quitall", title: "Quit All Apps", subtitle: "Quit every regular app", symbol: "xmark.circle", keywords: ["quit all", "quitall"]),
         SystemCommand(id: "darkmode", title: "Toggle Dark Mode", subtitle: "Switch appearance", symbol: "circle.lefthalf.filled", keywords: ["dark mode", "appearance"]),
         SystemCommand(id: "hidden", title: "Toggle Hidden Files", subtitle: "Show or hide invisible files in Finder", symbol: "eye", keywords: ["hidden files", "dotfiles"]),

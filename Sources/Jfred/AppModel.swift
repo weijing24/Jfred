@@ -1457,7 +1457,8 @@ final class AppModel {
         case "screensaver": _ = Shell.run("/usr/bin/open", ["-a", "ScreenSaverEngine"])
         case "emptetrash": _ = Shell.osascript("tell application \"Finder\" to empty trash")
         case "trash": _ = Shell.run("/usr/bin/open", [NSHomeDirectory() + "/.Trash"])
-        case "eject": _ = Shell.osascript("tell application \"Finder\" to eject (every disk whose ejectable is true)")
+        case "eject", "ejectall":
+            ejectDisks(all: id == "ejectall" || preferences.ejectScope == "all")
         case "quitall":
             for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
                 app.terminate()
@@ -1488,6 +1489,19 @@ final class AppModel {
             debugLine = track.isEmpty ? "Music is not playing" : track
         default:
             debugLine = "Unknown command \(id)"
+        }
+    }
+
+    private func ejectDisks(all: Bool) {
+        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsEjectableKey, .volumeIsLocalKey]
+        let urls = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
+        for url in urls {
+            guard let values = try? url.resourceValues(forKeys: Set(keys)),
+                  values.volumeIsEjectable == true else { continue }
+            if !all, values.volumeIsLocal == false { continue }
+            let name = values.volumeName ?? url.lastPathComponent
+            if preferences.ejectExclusions.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { continue }
+            try? NSWorkspace.shared.unmountAndEjectDevice(at: url)
         }
     }
 
