@@ -235,6 +235,21 @@ struct CoreTests {
         #expect(Search.results(for: "ejectall", context: context).contains { $0.id == "sys:ejectall" })
     }
 
+    @Test func fileBrowserListsDirectoriesFirst() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("jfred-browser-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Folder"), withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: root.appendingPathComponent("beta.txt"))
+        try Data("x".utf8).write(to: root.appendingPathComponent("alpha.txt"))
+        let entries = FileBrowser.entries(for: root.path + "/")
+        #expect(entries?.first?.isDirectory == true)
+        #expect(entries?.first?.name == "Folder")
+        #expect(entries?.contains { $0.name == "alpha.txt" } == true)
+        #expect(FileBrowser.entries(for: root.path + "/al")?.map(\.name) == ["alpha.txt"])
+        #expect(FileBrowser.entries(for: "not/a/path") == nil)
+    }
+
     @Test func clipboardViewerIncludesSnippets() {
         var context = SearchContext()
         context.preferences.clipboardEnabled = true

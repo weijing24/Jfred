@@ -189,6 +189,10 @@ final class AppModel {
     }
 
     func scheduleSearch() {
+        if let browser = fileBrowserResults(query) {
+            publishResults(browser)
+            return
+        }
         if transientItem != nil {
             if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
             transientItem = nil
@@ -240,6 +244,22 @@ final class AppModel {
                 guard token == self.generation else { return }
                 self.publishResults(rows)
             }
+        }
+    }
+
+    private func fileBrowserResults(_ raw: String) -> [SearchResult]? {
+        guard let entries = FileBrowser.entries(for: raw) else { return nil }
+        return entries.map { entry in
+            SearchResult(
+                id: "browse:\(entry.path)",
+                title: entry.name,
+                subtitle: entry.path,
+                icon: entry.isDirectory ? "symbol:folder" : "file:\(entry.path)",
+                kind: entry.isDirectory ? "folder" : "file",
+                payload: entry.path,
+                category: "navigation",
+                score: 2
+            )
         }
     }
 
@@ -563,6 +583,9 @@ final class AppModel {
         case "app":
             NSWorkspace.shared.open(URL(fileURLWithPath: item.payload))
             hideLauncher(reactivate: false)
+        case "folder":
+            query = item.payload.hasSuffix("/") ? item.payload : item.payload + "/"
+            scheduleSearch()
         case "file":
             let paths = fileBuffer.isEmpty ? [item.payload] : fileBuffer.map(\.payload)
             if preferences.fileOpenWithFinder {
