@@ -120,26 +120,26 @@ struct ThemeEditorSheet: View {
             if let index {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        field("Name", binding(index, \.name))
-                        numberField("Window width", binding(index, \.width))
-                        numberField("Corner radius", binding(index, \.radius))
-                        numberField("Horizontal padding", binding(index, \.paddingH))
-                        numberField("Vertical padding", binding(index, \.paddingV))
-                        numberField("Search size", binding(index, \.querySize))
-                        numberField("Result title size", binding(index, \.resultTextSize))
-                        numberField("Result subtitle size", binding(index, \.resultSubtextSize))
-                        numberField("Shortcut size", binding(index, \.shortcutSize))
-                        numberField("Icon size", binding(index, \.iconSize))
+                        field("Name", binding(index, \.name, default: ""))
+                        numberField("Window width", binding(index, \.width, default: 0))
+                        numberField("Corner radius", binding(index, \.radius, default: 0))
+                        numberField("Horizontal padding", binding(index, \.paddingH, default: 0))
+                        numberField("Vertical padding", binding(index, \.paddingV, default: 0))
+                        numberField("Search size", binding(index, \.querySize, default: 0))
+                        numberField("Result title size", binding(index, \.resultTextSize, default: 0))
+                        numberField("Result subtitle size", binding(index, \.resultSubtextSize, default: 0))
+                        numberField("Shortcut size", binding(index, \.shortcutSize, default: 0))
+                        numberField("Icon size", binding(index, \.iconSize, default: 0))
                         Divider()
-                        field("Background", binding(index, \.background))
-                        field("Search background", binding(index, \.searchBackground))
-                        field("Selected background", binding(index, \.selected))
-                        field("Border", binding(index, \.border))
-                        field("Query text", binding(index, \.query))
-                        field("Result text", binding(index, \.title))
-                        field("Result subtitle", binding(index, \.subtitle))
-                        field("Selected text", binding(index, \.selectedTitle))
-                        field("Selected subtitle", binding(index, \.selectedSubtitle))
+                        field("Background", binding(index, \.background, default: ""))
+                        field("Search background", binding(index, \.searchBackground, default: ""))
+                        field("Selected background", binding(index, \.selected, default: ""))
+                        field("Border", binding(index, \.border, default: ""))
+                        field("Query text", binding(index, \.query, default: ""))
+                        field("Result text", binding(index, \.title, default: ""))
+                        field("Result subtitle", binding(index, \.subtitle, default: ""))
+                        field("Selected text", binding(index, \.selectedTitle, default: ""))
+                        field("Selected subtitle", binding(index, \.selectedSubtitle, default: ""))
                         Text("Colours use #RRGGBBAA. Changes apply to the live launcher immediately.")
                             .font(.system(size: 11))
                             .foregroundStyle(JfredColor.sub)
@@ -199,10 +199,16 @@ struct ThemeEditorSheet: View {
         }
     }
 
-    private func binding<T>(_ index: Int, _ keyPath: WritableKeyPath<CustomTheme, T>) -> Binding<T> {
+    private func binding<T>(_ index: Int, _ keyPath: WritableKeyPath<CustomTheme, T>, default defaultValue: T) -> Binding<T> {
         Binding(
-            get: { model.preferences.customThemes[index][keyPath: keyPath] },
-            set: { model.preferences.customThemes[index][keyPath: keyPath] = $0 }
+            get: {
+                guard model.preferences.customThemes.indices.contains(index) else { return defaultValue }
+                return model.preferences.customThemes[index][keyPath: keyPath]
+            },
+            set: { newValue in
+                guard model.preferences.customThemes.indices.contains(index) else { return }
+                model.preferences.customThemes[index][keyPath: keyPath] = newValue
+            }
         )
     }
 }

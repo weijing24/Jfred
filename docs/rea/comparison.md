@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 12,707 |
+| Swift 行数（含测试） | 9,083 | 12,713 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 20 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,624 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,630 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -79,6 +79,7 @@
 - Universal Actions 的 Sort actions by last used per type 真正按本地 action 使用次数排序。
 - File Search 的 Touch aliases after opening 真正更新 alias 目标的 modification date。
 - File Search 的 Use file type icons for files on external drives 对 `/Volumes/` 下的结果使用通用类型图标。
+- 加固 Theme Options 的绑定：自定义主题被删除时 getter/setter 不再越界，避免编辑期间崩溃。
 - Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `jfredlocal://music` 可打开。
 - Remote 补 “Add iOS Remote” QR 配对面板（本地 URL + token，可复制）与一键 Regenerate Token，仍不实现 Alfred 的私有 iOS 配对协议。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。
