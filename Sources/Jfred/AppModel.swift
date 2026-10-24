@@ -374,10 +374,16 @@ final class AppModel {
         case .pasteValue:
             pasteToPrevious(value)
         case .email:
-            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }),
-               !contact.email.isEmpty,
-               let url = URL(string: "mailto:\(contact.email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact.email)") {
-                NSWorkspace.shared.open(url)
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }), !contact.email.isEmpty {
+                let encoded = contact.email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact.email
+                let target: String
+                switch preferences.contactsEmailMode {
+                case "gmail", "custom":
+                    target = preferences.contactsEmailURL.replacingOccurrences(of: "{query}", with: encoded)
+                default:
+                    target = "mailto:\(encoded)"
+                }
+                if let url = URL(string: target) { NSWorkspace.shared.open(url) }
             }
             hideLauncher(reactivate: false)
         case .call:

@@ -231,6 +231,8 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var contactsShowNotes: Bool
     public var contactsInvertName: Bool
     public var contactsMapURL: String
+    public var contactsEmailMode: String
+    public var contactsEmailURL: String
     public var contactsURLHandler: String
     public var contactsURLHandlerEnabled: Bool
 
@@ -432,6 +434,8 @@ public struct Preferences: Codable, Equatable, Sendable {
         contactsShowNotes = true
         contactsInvertName = false
         contactsMapURL = "https://maps.apple.com/?q={query}"
+        contactsEmailMode = "mail"
+        contactsEmailURL = "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to={query}"
         contactsURLHandler = "addressbook://{uid}"
         contactsURLHandlerEnabled = false
         musicEnabled = true
@@ -526,6 +530,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case uaShowRightArrow, uaShowFunction, uaShowControl, uaShowCommand, uaSelectionHotkey, uaSortByUsage
         case contactsEnabled, contactsOpenInAlfred, contactsShowTitle, contactsShowJobTitle
         case contactsShowNotes, contactsInvertName, contactsMapURL, contactsURLHandler, contactsURLHandlerEnabled
+        case contactsEmailMode, contactsEmailURL
         case musicEnabled, musicKeyword, musicHideMiniPlayerAfterSong, musicRandomLargerAlbums, musicIncludePlaylists
         case clipboardAutoPaste, clipboardFastAppend, clipboardFastAppendSeparator
         case clipboardFastAppendBackToClipboard, clipboardFastAppendPlaySound, clipboardMaxSize
@@ -652,6 +657,8 @@ public struct Preferences: Codable, Equatable, Sendable {
         contactsShowNotes = value(.contactsShowNotes, d.contactsShowNotes)
         contactsInvertName = value(.contactsInvertName, d.contactsInvertName)
         contactsMapURL = value(.contactsMapURL, d.contactsMapURL)
+        contactsEmailMode = value(.contactsEmailMode, d.contactsEmailMode)
+        contactsEmailURL = value(.contactsEmailURL, d.contactsEmailURL)
         contactsURLHandler = value(.contactsURLHandler, d.contactsURLHandler)
         contactsURLHandlerEnabled = value(.contactsURLHandlerEnabled, d.contactsURLHandlerEnabled)
         musicEnabled = value(.musicEnabled, d.musicEnabled)

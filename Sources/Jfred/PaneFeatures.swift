@@ -1115,19 +1115,30 @@ struct FeaturesPane: View {
 
     private var contactsEmailTab: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SettingsLabeled(title: "Email:") {
-                Text("Email actions open the macOS default mail application. Use the action panel on a contact result to start a new message.")
+            SettingsLabeled(title: "Email Action:") {
+                Picker("", selection: model.bindPref(\.contactsEmailMode)) {
+                    Text("Open the default mail app").tag("mail")
+                    Text("Compose in Gmail").tag("gmail")
+                    Text("Use a custom URL").tag("custom")
+                }
+                .labelsHidden()
+                .frame(width: 260)
+            }
+            SettingsNote("Choose how the Email action on a contact result works.")
+            if model.preferences.contactsEmailMode != "mail" {
+                SettingsLabeled(title: "URL:") {
+                    TextField("https://mail.google.com/mail/?view=cm&fs=1&tf=1&to={query}", text: model.bindPref(\.contactsEmailURL))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 420)
+                }
+                SettingsNote("The {query} placeholder is replaced with the contact's email address.")
+            }
+            SettingsLabeled(title: "Address:") {
+                Text("Email actions use the contact's first email address. Jfred never sends mail itself; it opens the selected mail client or URL.")
                     .font(.system(size: 12))
                     .foregroundStyle(JfredColor.sub)
                     .frame(maxWidth: 520, alignment: .leading)
             }
-            SettingsLabeled(title: "Gmail:") {
-                Text("https://mail.google.com/mail/?view=cm&fs=1&to={query}")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(JfredColor.sub)
-                    .textSelection(.enabled)
-            }
-            SettingsNote("A {query} placeholder is replaced with the contact's email address when a custom email URL is used.")
         }
     }
 

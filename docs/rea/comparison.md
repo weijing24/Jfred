@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 12,554 |
+| Swift 行数（含测试） | 9,083 | 12,580 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 18 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,471 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,497 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -69,6 +69,7 @@
 - Music Mini Player 读取 Music.app 当前曲目的 artwork 并显示真实专辑封面；无封面时回退到内置占位图。
 - Clipboard 三类保留项（Text / Images / File Lists）改为独立保留时长，prune 按 clip 类型分别计算。
 - 偏好窗口细节对齐：搜索框 420pt、标题栏 80pt、Remote 左栏 240pt、内容区 13pt 边距。
+- Contacts Email tab 真正可配置：默认邮件 App / Gmail / 自定义 URL，Email action 按模式打开。
 - Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `jfredlocal://music` 可打开。
 - Remote 补 “Add iOS Remote” QR 配对面板（本地 URL + token，可复制）与一键 Regenerate Token，仍不实现 Alfred 的私有 iOS 配对协议。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。
