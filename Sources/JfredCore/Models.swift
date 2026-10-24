@@ -279,7 +279,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         fallbackMode = "none"
         webSearches = WebSearch.defaults
         urlHistory = []
-        themeID = "modern"
+        themeID = "alfred"
         storeTypedQuery = true
         showLatestQuery = false
         topResultLatching = true

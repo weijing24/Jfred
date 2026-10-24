@@ -1,3 +1,4 @@
+import AppKit
 import JfredCore
 import SwiftUI
 
@@ -40,6 +41,21 @@ struct LauncherTheme: Identifiable {
     var radius: CGFloat
     var querySize: CGFloat
     var fontName: String?
+    var width: CGFloat = 559
+    var paddingH: CGFloat = 9
+    var paddingV: CGFloat = 8
+    var iconSize: CGFloat = 40
+    var iconPadding: CGFloat = 4
+    var rowPaddingV: CGFloat = 3
+    var textSpacing: CGFloat = 5
+    var resultTextSize: CGFloat = 18
+    var resultSubtextSize: CGFloat = 12
+    var shortcutSize: CGFloat = 16
+    var searchBackground: Color = Color.black.opacity(0.10)
+    var searchSelected: Color = Color(hex: 0x480069)
+    var border: Color = Color.black.opacity(0.50)
+    var blur: Double = 15
+    var searchWeight: Font.Weight = .regular
 
     func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         if let fontName {
@@ -48,22 +64,153 @@ struct LauncherTheme: Identifiable {
         return .system(size: size, weight: weight)
     }
 
+    var queryFont: Font { font(size: querySize, weight: searchWeight) }
+
+    var queryNSFont: NSFont {
+        if let fontName, let custom = NSFont(name: fontName, size: querySize) { return custom }
+        return NSFont.systemFont(ofSize: querySize, weight: searchWeight == .light ? .light : .regular)
+    }
+
+    /// Alfred lays a row out as max(icon, text block) + vertical padding.
+    var rowHeight: CGFloat {
+        max(iconSize, resultTextSize + textSpacing + resultSubtextSize) + rowPaddingV * 2 + 4
+    }
+
+    var queryBoxHeight: CGFloat { querySize + 16 }
+
     static let all: [LauncherTheme] = [
-        LauncherTheme(id: "jfred", name: "Jfred", detail: "Jfred Default Theme", query: Color(hex: 0x222222), title: .black, subtitle: Color(hex: 0x6A6A6A), selected: Color(hex: 0x561D7E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82), background: Color(hex: 0xF7F7F7), material: nil, radius: 10, querySize: 42, fontName: nil),
-        LauncherTheme(id: "jfred-dark", name: "Jfred Dark", detail: "Jfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.62), selected: Color(hex: 0x6D28A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.8), background: Color(hex: 0x1C1C1E), material: nil, radius: 10, querySize: 42, fontName: nil),
-        LauncherTheme(id: "modern", name: "Jfred Modern", detail: "Jfred Default Theme", query: Color(hex: 0x1C1C1E), title: Color(hex: 0x1C1C1E), subtitle: Color(hex: 0x6E6E73), selected: Color(hex: 0x581672), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.white.opacity(0.72), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
-        LauncherTheme(id: "modern-dark", name: "Jfred Modern Dark", detail: "Jfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.66), selected: Color(hex: 0x6B21A8), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.84), background: Color.black.opacity(0.45), material: .ultraThin, radius: 16, querySize: 48, fontName: nil),
-        LauncherTheme(id: "classic", name: "Jfred Classic", detail: "Jfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.7), selected: Color(hex: 0xE6E6E6), selectedTitle: .black, selectedSubtitle: Color.black.opacity(0.6), background: Color(hex: 0x2A2A2A), material: nil, radius: 8, querySize: 34, fontName: nil),
-        LauncherTheme(id: "macos", name: "Jfred macOS", detail: "Jfred Default Theme", query: .primary, title: .primary, subtitle: .secondary, selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.white.opacity(0.55), material: .regular, radius: 12, querySize: 36, fontName: nil),
-        LauncherTheme(id: "macos-dark", name: "Jfred macOS Dark", detail: "Jfred Default Theme", query: .white, title: .white, subtitle: Color.white.opacity(0.65), selected: Color.accentColor, selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color.black.opacity(0.45), material: .regular, radius: 12, querySize: 36, fontName: nil),
-        LauncherTheme(id: "frosty", name: "Frosty Teal", detail: "Jfred Default Theme", query: Color(hex: 0x12343A), title: Color(hex: 0x12343A), subtitle: Color(hex: 0x4C7076), selected: Color(hex: 0x128E8E), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.85), background: Color(hex: 0xF3FBFA), material: nil, radius: 14, querySize: 42, fontName: nil),
-        LauncherTheme(id: "avenir", name: "Large Avenir", detail: "Jfred Default Theme", query: Color(hex: 0x222222), title: Color(hex: 0x222222), subtitle: Color(hex: 0x666666), selected: Color(hex: 0x333333), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.75), background: .white, material: nil, radius: 6, querySize: 54, fontName: "Avenir Next"),
-        LauncherTheme(id: "contrast", name: "High Contrast Light", detail: "Jfred Default Theme", query: .black, title: .black, subtitle: .black, selected: Color(hex: 0xFFE14A), selectedTitle: .black, selectedSubtitle: .black, background: .white, material: nil, radius: 4, querySize: 46, fontName: nil),
+        LauncherTheme(
+            id: "alfred", name: "Alfred", detail: "Alfred Default Theme",
+            query: Color(rgba: 0x000000FF), title: Color(rgba: 0x000000E5), subtitle: Color(rgba: 0x00000065),
+            selected: Color(rgba: 0x480069E4), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFC4),
+            background: Color(rgba: 0xFFFFFFDB), material: .regular, radius: 3, querySize: 34,
+            fontName: nil, width: 559, paddingH: 9, paddingV: 8, iconSize: 40,
+            iconPadding: 4, rowPaddingV: 3, textSpacing: 5, resultTextSize: 18,
+            resultSubtextSize: 12, shortcutSize: 16, searchBackground: Color(rgba: 0x0000001A),
+            searchSelected: Color(rgba: 0x480069E4), border: Color(rgba: 0x0000007F), blur: 15,
+            searchWeight: .light
+        ),
+        LauncherTheme(
+            id: "alfred-dark", name: "Alfred Dark", detail: "Alfred Default Theme",
+            query: .white, title: Color(rgba: 0xFFFFFFCB), subtitle: Color(rgba: 0xFFFFFF7E),
+            selected: Color(rgba: 0x358188FF), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFCB),
+            background: Color(rgba: 0x000000C6), material: .regular, radius: 3, querySize: 34,
+            fontName: nil, width: 559, paddingH: 9, paddingV: 8, iconSize: 40,
+            iconPadding: 4, rowPaddingV: 3, textSpacing: 5, resultTextSize: 18,
+            resultSubtextSize: 12, shortcutSize: 16, searchBackground: Color(rgba: 0x0000003E),
+            searchSelected: Color(rgba: 0x358188FF), border: Color(rgba: 0x0000007F), blur: 15,
+            searchWeight: .light
+        ),
+        LauncherTheme(
+            id: "alfred-modern", name: "Alfred Modern", detail: "Alfred Default Theme",
+            query: Color(rgba: 0x000000FF), title: Color(rgba: 0x000000E4), subtitle: Color(rgba: 0x00000098),
+            selected: Color(rgba: 0x480069E4), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFCB),
+            background: Color(rgba: 0xF8F8F86B), material: nil, radius: 15, querySize: 36,
+            fontName: nil, width: 700, paddingH: 9, paddingV: 9, iconSize: 40,
+            iconPadding: 7, rowPaddingV: 3, textSpacing: 5, resultTextSize: 18,
+            resultSubtextSize: 12, shortcutSize: 16, searchBackground: Color(rgba: 0x00000019),
+            searchSelected: Color(rgba: 0x480069E4), border: Color(rgba: 0x0000007F), blur: 0,
+            searchWeight: .light
+        ),
+        LauncherTheme(
+            id: "alfred-modern-dark", name: "Alfred Modern Dark", detail: "Alfred Default Theme",
+            query: .white, title: Color(rgba: 0xFFFFFFCB), subtitle: Color(rgba: 0xFFFFFF7E),
+            selected: Color(rgba: 0x358188FF), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFCB),
+            background: Color(rgba: 0x00000066), material: nil, radius: 15, querySize: 36,
+            fontName: nil, width: 700, paddingH: 9, paddingV: 9, iconSize: 40,
+            iconPadding: 7, rowPaddingV: 3, textSpacing: 5, resultTextSize: 18,
+            resultSubtextSize: 12, shortcutSize: 16, searchBackground: Color(rgba: 0x0000003E),
+            searchSelected: Color(rgba: 0x358188FF), border: Color(rgba: 0x0000007F), blur: 0,
+            searchWeight: .light
+        ),
+        LauncherTheme(
+            id: "alfred-classic", name: "Alfred Classic", detail: "Alfred Default Theme",
+            query: Color(rgba: 0x000000FF), title: Color(rgba: 0x000000E5), subtitle: Color(rgba: 0x00000065),
+            selected: Color(rgba: 0x480069E4), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFC4),
+            background: Color(rgba: 0xFFFFFFF2), material: nil, radius: 3, querySize: 30,
+            fontName: nil, width: 559, paddingH: 9, paddingV: 8, iconSize: 38,
+            iconPadding: 4, rowPaddingV: 3, textSpacing: 5, resultTextSize: 17,
+            resultSubtextSize: 12, shortcutSize: 15, searchBackground: Color(rgba: 0x0000001A),
+            searchSelected: Color(rgba: 0x480069E4), border: Color(rgba: 0x0000007F), blur: 15,
+            searchWeight: .regular
+        ),
+        LauncherTheme(
+            id: "alfred-macos", name: "Alfred macOS", detail: "Alfred Default Theme",
+            query: Color(rgba: 0x000000FF), title: Color(rgba: 0x000000E5), subtitle: Color(rgba: 0x00000065),
+            selected: Color(rgba: 0x016BDEFF), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFC4),
+            background: Color(rgba: 0xFFFFFFE5), material: .regular, radius: 3, querySize: 34,
+            fontName: nil, width: 559, paddingH: 0, paddingV: 4, iconSize: 40,
+            iconPadding: 4, rowPaddingV: 3, textSpacing: 5, resultTextSize: 18,
+            resultSubtextSize: 12, shortcutSize: 16, searchBackground: Color.clear,
+            searchSelected: Color(rgba: 0x016BDEFF), border: Color(rgba: 0x0000007F), blur: 10,
+            searchWeight: .light
+        ),
+        LauncherTheme(
+            id: "alfred-macos-dark", name: "Alfred macOS Dark", detail: "Alfred Default Theme",
+            query: .white, title: Color(rgba: 0xFFFFFFD8), subtitle: Color(rgba: 0xFFFFFF66),
+            selected: Color(rgba: 0x016BDEFF), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFCC),
+            background: Color(rgba: 0x000000D8), material: .regular, radius: 3, querySize: 34,
+            fontName: nil, width: 559, paddingH: 0, paddingV: 4, iconSize: 40,
+            iconPadding: 4, rowPaddingV: 3, textSpacing: 5, resultTextSize: 18,
+            resultSubtextSize: 12, shortcutSize: 16, searchBackground: Color.clear,
+            searchSelected: Color(rgba: 0x016BDEFF), border: Color(rgba: 0x0000007F), blur: 15,
+            searchWeight: .light
+        ),
+        LauncherTheme(
+            id: "frosty-teal", name: "Frosty Teal", detail: "Alfred Default Theme",
+            query: .white, title: Color(rgba: 0xFFFFFFAD), subtitle: Color(rgba: 0xFFFFFF6F),
+            selected: Color(rgba: 0x0000001F), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFA7),
+            background: Color(rgba: 0x106480B4), material: .regular, radius: 3, querySize: 40,
+            fontName: nil, width: 573, paddingH: 0, paddingV: 5, iconSize: 44,
+            iconPadding: 6, rowPaddingV: 4, textSpacing: 7, resultTextSize: 21,
+            resultSubtextSize: 12, shortcutSize: 15, searchBackground: Color.clear,
+            searchSelected: Color(rgba: 0x00000055), border: .black, blur: 20,
+            searchWeight: .light
+        ),
+        LauncherTheme(
+            id: "large-avenir", name: "Large Avenir", detail: "Alfred Default Theme",
+            query: .white, title: Color(rgba: 0xFFFFFFDB), subtitle: Color(rgba: 0xFFFFFF7F),
+            selected: Color(rgba: 0x1D6488FF), selectedTitle: Color(rgba: 0xFFFFFFE8), selectedSubtitle: Color(rgba: 0xFFFFFFCB),
+            background: Color(rgba: 0x272727F1), material: .regular, radius: 5, querySize: 46,
+            fontName: "Avenir", width: 683, paddingH: 0, paddingV: 5, iconSize: 47,
+            iconPadding: 11, rowPaddingV: 7, textSpacing: 6, resultTextSize: 26,
+            resultSubtextSize: 14, shortcutSize: 20, searchBackground: Color.clear,
+            searchSelected: Color(rgba: 0x144863FF), border: Color(rgba: 0x0000003F), blur: 15,
+            searchWeight: .regular
+        ),
+        LauncherTheme(
+            id: "high-contrast", name: "High Contrast Light", detail: "Alfred Default Theme",
+            query: .black, title: Color(rgba: 0x000000E5), subtitle: Color(rgba: 0x000000B6),
+            selected: Color(rgba: 0x000000DA), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFD9),
+            background: Color(rgba: 0xFFFFFFFF), material: nil, radius: 2, querySize: 38,
+            fontName: "Avenir", width: 559, paddingH: 12, paddingV: 10, iconSize: 45,
+            iconPadding: 4, rowPaddingV: 5, textSpacing: 7, resultTextSize: 24,
+            resultSubtextSize: 14, shortcutSize: 17, searchBackground: Color(rgba: 0xCBCBCBF3),
+            searchSelected: Color(rgba: 0xFFFFFF93), border: Color(rgba: 0x0000007F), blur: 15,
+            searchWeight: .regular
+        ),
     ]
 
     static func by(id: String) -> LauncherTheme {
-        let resolved = id.replacingOccurrences(of: "jlfred", with: "jfred")
-        return all.first { $0.id == resolved } ?? all[2]
+        let legacy = [
+            "jfred": "alfred", "jfred-dark": "alfred-dark", "modern": "alfred-modern",
+            "modern-dark": "alfred-modern-dark", "classic": "alfred-classic",
+            "macos": "alfred-macos", "macos-dark": "alfred-macos-dark",
+            "frosty": "frosty-teal", "avenir": "large-avenir", "contrast": "high-contrast",
+        ]
+        let resolved = legacy[id] ?? id
+        return all.first { $0.id == resolved } ?? all[0]
+    }
+}
+
+extension Color {
+    init(rgba: UInt32) {
+        self.init(
+            red: Double((rgba >> 24) & 0xFF) / 255,
+            green: Double((rgba >> 16) & 0xFF) / 255,
+            blue: Double((rgba >> 8) & 0xFF) / 255,
+            opacity: Double(rgba & 0xFF) / 255
+        )
     }
 }
 
@@ -338,21 +485,22 @@ final class RecorderView: NSView {
 struct ResultIcon: View {
     var icon: String
     var tint: Color = .primary
+    var size: CGFloat = 40
     var body: some View {
         Group {
             if icon.hasPrefix("file:") {
                 AppIcon(path: String(icon.dropFirst("file:".count)))
             } else if icon.hasPrefix("symbol:") {
                 Image(systemName: String(icon.dropFirst("symbol:".count)))
-                    .font(.system(size: 26))
+                    .font(.system(size: size * 0.62))
                     .foregroundStyle(tint)
             } else {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 26))
+                    .font(.system(size: size * 0.62))
                     .foregroundStyle(tint)
             }
         }
-        .frame(width: 40, height: 40)
+        .frame(width: size, height: size)
     }
 }
 

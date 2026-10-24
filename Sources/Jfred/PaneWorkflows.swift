@@ -29,6 +29,7 @@ struct WorkflowsPane: View {
             }
         }
         .sheet(isPresented: model.bind(\.showTemplates)) { templateSheet }
+        .background(Color(hex: 0x1B1B1B))
     }
 
     private var list: some View {
@@ -71,8 +72,8 @@ struct WorkflowsPane: View {
                 }
             }
         }
-        .frame(width: 280)
-        .jfredSidebar(tint: JfredColor.sidebarDeep)
+        .frame(width: 240)
+        .background(Color(hex: 0x2F104B))
     }
 
     @ViewBuilder
@@ -150,11 +151,15 @@ struct WorkflowsPane: View {
     private var cards: some View {
         ScrollView {
             VStack(spacing: 12) {
-                card("square.and.arrow.down", "Import an Alfred Workflow", "Add a .alfredworkflow file from Finder.") { chooseWorkflowToImport() }
-                card("tray.and.arrow.down", "Import from Alfred Library", "Copy every enabled Alfred workflow into Jfred.") { model.importAlfredLibrary() }
+                card("sparkles", "Alfred Gallery", "Browse the Alfred Gallery and install community workflows.") {
+                    if let url = URL(string: "https://alfred.app/") { NSWorkspace.shared.open(url) }
+                }
+                card("book", "Getting Started Guide", "Check out the guide to learn the basics.") { model.section = .help }
                 card("point.3.connected.trianglepath.dotted", "Create a new Workflow", "Jump in and create a blank Workflow.") { model.beginWorkflowEdit(blank()) }
                 card("square.on.square", "Create a Workflow from a Template", "New to workflows? Try one of our Getting Started templates.") { model.showTemplates = true }
+                card("doc.text", "View Documentation", "Find out more about how to configure and use workflow objects.") { model.section = .help }
             }
+            .frame(maxWidth: 760)
             .padding(28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -164,46 +169,53 @@ struct WorkflowsPane: View {
         Button(action: action) {
             HStack(spacing: 16) {
                 Image(systemName: symbol)
-                    .font(.system(size: 26))
-                    .frame(width: 54)
-                    .foregroundStyle(JfredColor.hotkey)
+                    .font(.system(size: 30, weight: .light))
+                    .frame(width: 62)
+                    .foregroundStyle(.white.opacity(0.9))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(JfredColor.ink)
+                        .foregroundStyle(.white)
                     Text(text)
                         .font(.system(size: 12))
-                        .foregroundStyle(JfredColor.sub)
+                        .foregroundStyle(.white.opacity(0.52))
                 }
                 Spacer()
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 18)
             .frame(height: 78)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(JfredColor.line))
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0x2B2B2B)))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.06)))
         }
         .buttonStyle(.plain)
     }
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Button("Import…") { chooseWorkflowToImport() }
+            Button("Alfred Gallery") {
+                if let url = URL(string: "https://alfred.app/") { NSWorkspace.shared.open(url) }
+            }
+            Button("Help") { model.section = .help }
             Button("+") { model.beginWorkflowEdit(blank()) }
             Button("−") {
                 guard let id = model.selectedWorkflow else { return }
                 model.workflows.removeAll { $0.id == id }
                 model.selectedWorkflow = model.workflows.first?.id
             }
+            Button("Import…") { chooseWorkflowToImport() }
             Spacer()
-            Text(model.debugLine).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+            Text(model.debugLine.isEmpty ? "Debugger Stopped" : model.debugLine)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(1)
         }
         .padding(.horizontal, 10)
         .frame(height: 28)
-        .background(Color(white: 0.95))
+        .background(Color(hex: 0x2A2A2A))
         .overlay(alignment: .top) {
-            Rectangle().fill(JfredColor.line).frame(height: 1)
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
         }
-        .foregroundStyle(.black)
+        .foregroundStyle(.white)
     }
 
     private func blank() -> Workflow {

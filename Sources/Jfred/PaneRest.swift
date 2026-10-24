@@ -11,11 +11,9 @@ struct AppearancePane: View {
                         Button {
                             model.preferences.themeID = theme.id
                         } label: {
-                            HStack(spacing: 8) {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(theme.selected)
-                                    .frame(width: 18, height: 28)
-                                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.white.opacity(0.4)))
+                            HStack(spacing: 10) {
+                                ThemeThumbnail(theme: theme)
+                                    .frame(width: 80, height: 50)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(theme.name).font(.system(size: 13, weight: .semibold))
                                     Text(theme.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.75))
@@ -23,7 +21,8 @@ struct AppearancePane: View {
                                 Spacer()
                             }
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
+                            .padding(.vertical, 2)
+                            .frame(height: 54)
                             .foregroundStyle(.white)
                             .background(model.preferences.themeID == theme.id ? Color.white.opacity(0.22) : Color.clear)
                             .contentShape(Rectangle())
@@ -32,14 +31,50 @@ struct AppearancePane: View {
                     }
                 }
             }
-            .frame(width: 250)
+            .frame(width: 290)
             .jfredSidebar(tint: JfredColor.sidebarDeep)
-            ZStack {
+            ZStack(alignment: .bottom) {
                 WallpaperArt()
                 PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID))
                     .padding(.top, 30)
+                HStack(spacing: 10) {
+                    Button("Help") { model.section = .help }
+                    Spacer()
+                    Text("Themes are independent presets derived from Alfred's published metrics.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 24)
+                .background(.black.opacity(0.35))
             }
         }
+    }
+}
+
+private struct ThemeThumbnail: View {
+    var theme: LauncherTheme
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(theme.background)
+            VStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(theme.searchBackground)
+                    .frame(height: 9)
+                ForEach(0..<3, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(index == 0 ? theme.selected : theme.title.opacity(0.22))
+                        .frame(height: 8)
+                }
+            }
+            .padding(4)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .stroke(Color.white.opacity(0.25), lineWidth: 0.7)
+        )
     }
 }
 

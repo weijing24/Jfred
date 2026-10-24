@@ -19,14 +19,15 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 10,337 |
+| Swift 行数（含测试） | 9,083 | 10,528 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 16 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +1,254 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +1,445 行 |
 
 ## 界面差异（rea 已对齐）
 
 - 外壳从“Liquid Glass + 极光渐变”改为 Alfred 的平色：`#4F217A` rail、`#2F104B` 列表、`#ECECEC` 内容、`#D9D9D9` 标题栏。
+- 启动器按 Alfred `.alfredappearance` 的实测指标重建：默认 559pt 宽、3pt 圆角、9/8pt 内边距、34pt System Light 搜索、18/12/16pt 结果字号、40pt 图标、约 50pt 行高；10 套主题与 Alfred 同名同指标（颜色/尺寸，不复用主题文件或壁纸）。
 - 新增统一的 `PageHeaderBand` 与 `FormPanel`：46pt 图标、20pt 标题、12.5pt 副标题、白色圆角表单。
 - Features 列表行高 42pt、图标 34pt、宽 240pt，16 项与 Alfred 顺序一致。
 - 底部 rail 新增 Powerpack、Help，顺序为 Powerpack / Usage / Help / Update。
@@ -38,6 +39,7 @@
 - Terminal 补 Application、Prefix、Custom AppleScript。
 - File Search 补 Navigation / Buffer / Advanced 三页的文件夹导航、缓冲区清理、Home Folder、Copy Path、AppleScript、外置盘图标与 Touch 选项。
 - System 每个命令补 enable 开关；禁用后搜索结果和 Remote `/run` 都会拒绝执行。
+- Appearance 改为 290pt 主题列表 + 80×50 主题缩略图 + 实时启动器预览；Workflows 改为 Alfred 的深色空态画布、五张引导卡片和底部工具栏。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。
 
 ## 行为差异（rea 已接）
@@ -52,7 +54,9 @@
 ## 仍未对齐（诚实清单）
 
 - Music Mini Player 还没有独立窗口/封面/播放列表浏览，只有命令与状态。
-- Appearance 的实时主题预览、Workflows 画布/调试器、Remote iOS 配对协议、Powerpack/Help 的完整内容仍是结构级。
+- Appearance 的主题应用/预览已对齐，但主题编辑器（自定义颜色、导入/导出 `.alfredappearance`）未实现。
+- Workflows 的画布节点拖拽、对象配置面板、调试器仍是结构级；空态、列表、导入和模板已对齐。
+- Remote 的 iOS 配对协议、Powerpack/Help 的完整内容仍是结构级。
 - Alfred 的手绘图标/主题壁纸没有复制（版权与独立性考虑），Jfred 用 SF Symbols + 同色块。
 - 少数 Alfred 选项只落了 UI 与偏好字段，未逐一接行为（例如 File Buffer 的 Shift+Option 变体、Snippets 的完整 Auto Expansion 子选项、Calculator 的高级函数全集）。
 - 像素级字体/间距仍有 1–3pt 级差异；REA 证据给出的是 frame 与颜色，不是渲染后的字形度量。

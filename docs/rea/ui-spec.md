@@ -16,6 +16,25 @@
 | 搜索框 | 标题栏右侧，约 220 × 26pt，圆角 6pt |
 | Tab 条 | 圆角 7pt 的 `#E2E1E0` 底，选中段白色，段高 23pt |
 
+## 启动器窗口
+
+数值来自 Alfred 自带 `.alfredappearance` 主题文件的 `window` / `search` / `result` 节点（只取数值与语义，不复制主题文件）。
+
+| 元素 | Alfred 默认主题 |
+| --- | --- |
+| 窗口宽度 | 559pt（Alfred Modern 700、Frosty Teal 573、Large Avenir 683） |
+| 圆角 | 3pt（Modern 15、Large Avenir 5） |
+| 窗口内边距 | 横向 9pt、纵向 8pt |
+| 搜索字号 | 34pt System Light；Modern 36、Frosty 40、Large Avenir 46、High Contrast 38 |
+| 搜索背景 | `#0000001A`；macOS 主题透明 |
+| 结果标题 | 18pt；副标题 12pt；快捷键 16pt |
+| 选中背景 | `#480069E4`（macOS 主题 `#016BDEFF`，Dark `#358188FF`） |
+| 行高 | max(图标 40, 18+5+12) + 上下 3 + 4 ≈ 50pt |
+| 图标 | 40×40，图标与文字间距约 8pt |
+| 模糊 | 15（Modern 为 0） |
+
+Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern、Alfred Modern Dark、Alfred Classic、Alfred macOS、Alfred macOS Dark、Frosty Teal、Large Avenir、High Contrast Light。旧主题 ID（modern/macos/frosty 等）会映射到新 ID，旧配置不会失效。
+
 ## Features 列表
 
 | # | 标题 | 副标题 |

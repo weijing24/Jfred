@@ -41,7 +41,7 @@ Hopper demo 的伪代码是接近汇编的形态，不能当作可编译的源�
 - Features 共 16 项：Default Results、File Search、Universal Actions、Web Search、Web Bookmarks、Clipboard History、Snippets、Calculator、Dictionary、Contacts、Music、1Password、System、Terminal、Large Type、Previews。
 - 页面标题栏高约 78pt，底色 `#D9D9D9`；内容底色 `#ECECEC`，白色圆角表单面板；输入框/表格为白底细边框。
 - Clipboard 的页面分为 History / Merging / Advanced 三页；保留项按 Plain Text / Images / File Lists 分别设置；默认忽略 Concealed 与 Auto Generated，默认屏蔽 1Password、Keychain Access、Passwords、Wallet、SecurityAgent。
-- 偏好默认键可从 `Alfred Preferences Defaults.plist` 读取；本实现只采纳键名与语义，没有复制 Alfred 的资源或代码。
+- 偏好默认键可从 `Alfred Preferences Defaults.plist` 读取；10 个 `.alfredappearance` 主题文件用于提取窗口宽度、圆角、内边距、字号、颜色与行高。本实现只采纳数值与语义，没有复制主题文件、壁纸或代码。
 
 ## 边界与合规
 
