@@ -465,7 +465,7 @@ public enum Search {
                 id: "file:\(file.path)",
                 title: file.name,
                 subtitle: file.path,
-                icon: "file:\(file.path)",
+                icon: context.preferences.fileUseTypeIconsForExternal && file.path.hasPrefix("/Volumes/") ? "symbol:doc" : "file:\(file.path)",
                 kind: "file",
                 payload: file.path,
                 category: "navigation",
