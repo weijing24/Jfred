@@ -26,14 +26,7 @@ struct SettingsTabBar: View {
         }
         .padding(3)
         .fixedSize()
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(hex: 0xE0E0E0))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.black.opacity(0.10), lineWidth: 1)
-        )
+        .modifier(GlassTabBarBackground())
     }
 }
 
@@ -42,13 +35,18 @@ struct SettingsCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        content()
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(Color.black.opacity(0.10), lineWidth: 1)
-            )
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        if #available(macOS 26.0, *) {
+            content()
+                .background(Color.white.opacity(0.22), in: shape)
+                .glassEffect(.regular, in: shape)
+                .overlay(shape.stroke(Color.white.opacity(0.55), lineWidth: 0.8))
+        } else {
+            content()
+                .background(Color.white)
+                .clipShape(shape)
+                .overlay(shape.stroke(Color.black.opacity(0.10), lineWidth: 1))
+        }
     }
 }
 
@@ -57,16 +55,18 @@ struct SettingsPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        content()
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(hex: 0xE5E5E5))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
-            )
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        if #available(macOS 26.0, *) {
+            content()
+                .padding(12)
+                .glassEffect(.regular.tint(Color(hex: 0xEDEDEC).opacity(0.55)), in: shape)
+                .overlay(shape.stroke(Color.white.opacity(0.45), lineWidth: 0.8))
+        } else {
+            content()
+                .padding(12)
+                .background(shape.fill(Color(hex: 0xE5E5E5)))
+                .overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
+        }
     }
 }
 
@@ -85,13 +85,38 @@ struct SettingsFilterField: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
         }
-        .padding(.horizontal, 7)
-        .frame(width: width, height: 24)
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(Color.black.opacity(0.12), lineWidth: 1)
-        )
+        .padding(.horizontal, 9)
+        .frame(width: width, height: 26)
+        .modifier(GlassCapsuleBackground())
+    }
+}
+
+/// Glass background for the segmented tab strip.
+private struct GlassTabBarBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(.regular, in: Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 0.8))
+        } else {
+            content
+                .background(Capsule().fill(Color(hex: 0xE0E0E0)))
+                .overlay(Capsule().stroke(Color.black.opacity(0.10), lineWidth: 1))
+        }
+    }
+}
+
+/// Glass background for capsule-shaped fields.
+private struct GlassCapsuleBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            content
+                .background(Capsule().fill(Color.white))
+                .overlay(Capsule().stroke(Color.black.opacity(0.12), lineWidth: 1))
+        }
     }
 }
 

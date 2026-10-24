@@ -54,14 +54,14 @@ struct FeaturesPane: View {
                                 )
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(feature.title).font(.system(size: 13, weight: .semibold))
-                                Text(feature.subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.68))
+                                Text(feature.subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.82))
                             }
                             Spacer()
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .foregroundStyle(.white)
-                        .background(model.feature == feature ? JfredColor.sidebarRowSelected : Color.clear)
+                        .background(model.feature == feature ? Color.white.opacity(0.22) : Color.clear)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -70,7 +70,7 @@ struct FeaturesPane: View {
             .padding(.bottom, 8)
         }
         .frame(width: 250)
-        .background(JfredColor.sidebarDeep)
+        .jfredSidebar(tint: JfredColor.sidebarDeep)
         .layoutPriority(1)
     }
 

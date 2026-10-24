@@ -8,13 +8,14 @@ struct PreferencesShell: View {
         HStack(spacing: 0) {
             IconRail(model: model)
             ZStack(alignment: .topLeading) {
-                JfredColor.canvas
+                AuroraBackdrop()
                 DamaskBackground()
                 detail
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(JfredColor.canvas)
+        .modifier(GlassButtons())
         .preferredColorScheme(.light)
         .background(WindowReader { window in
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
@@ -89,10 +90,10 @@ struct IconRail: View {
                 railButton(section)
             }
         }
-        .padding(.vertical, 10)
+        .padding(.bottom, 10)
         .frame(width: 82)
         .frame(maxHeight: .infinity)
-        .background(JfredColor.sidebar)
+        .jfredSidebar(tint: JfredColor.sidebar)
         .layoutPriority(2)
     }
 
@@ -115,7 +116,7 @@ struct IconRail: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .background(model.section == section ? JfredColor.sidebarSelected : Color.clear)
+            .background(model.section == section ? Color.white.opacity(0.20) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -238,5 +239,19 @@ struct GeneralPane: View {
         .frame(maxWidth: 760, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, 46)
+    }
+}
+
+
+/// Glass capsule for the preferences search field.
+private struct ToolbarSearchBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            content
+                .background(Capsule().fill(Color(hex: 0xE3E3E3)))
+                .overlay(Capsule().stroke(Color.black.opacity(0.10), lineWidth: 1))
+        }
     }
 }

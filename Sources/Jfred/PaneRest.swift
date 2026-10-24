@@ -25,7 +25,7 @@ struct AppearancePane: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .foregroundStyle(.white)
-                            .background(model.preferences.themeID == theme.id ? JfredColor.sidebarRowSelected : Color.clear)
+                            .background(model.preferences.themeID == theme.id ? Color.white.opacity(0.22) : Color.clear)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -33,7 +33,7 @@ struct AppearancePane: View {
                 }
             }
             .frame(width: 250)
-            .background(JfredColor.sidebarDeep)
+            .jfredSidebar(tint: JfredColor.sidebarDeep)
             ZStack {
                 WallpaperArt()
                 PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID))
@@ -54,13 +54,13 @@ struct RemotePane: View {
                             Image(systemName: category.symbol).frame(width: 22)
                             VStack(alignment: .leading) {
                                 Text(category.title).font(.system(size: 13, weight: .semibold))
-                                Text(category.subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.72))
+                                Text(category.subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.82))
                             }
                             Spacer()
                         }
                         .padding(8)
                         .foregroundStyle(.white)
-                        .background(model.remoteCategory == category ? JfredColor.sidebarRowSelected : Color.clear)
+                        .background(model.remoteCategory == category ? Color.white.opacity(0.22) : Color.clear)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -68,7 +68,7 @@ struct RemotePane: View {
                 Spacer()
             }
             .frame(width: 250)
-            .background(JfredColor.sidebarDeep)
+            .jfredSidebar(tint: JfredColor.sidebarDeep)
             ZStack {
                 Color(hex: 0x161616)
                 VStack(spacing: 18) {
@@ -85,7 +85,7 @@ struct RemotePane: View {
                     if model.preferences.remoteEnabled {
                         Text(model.remoteWarning.isEmpty ? "http://127.0.0.1:\(model.preferences.remotePort)/?token=\(model.preferences.remoteToken)" : model.remoteWarning)
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.white.opacity(0.82))
                             .textSelection(.enabled)
                     }
                 }

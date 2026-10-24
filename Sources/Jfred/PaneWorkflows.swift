@@ -52,14 +52,14 @@ struct WorkflowsPane: View {
                                     .foregroundStyle(.white)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(workflow.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                                    Text("by \(workflow.author)").font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
+                                    Text("by \(workflow.author)").font(.system(size: 11)).foregroundStyle(.white.opacity(0.82))
                                 }
                                 Spacer()
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                             .foregroundStyle(.white)
-                            .background(model.selectedWorkflow == workflow.id ? JfredColor.sidebarRowSelected : Color.clear)
+                            .background(model.selectedWorkflow == workflow.id ? Color.white.opacity(0.22) : Color.clear)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -68,7 +68,7 @@ struct WorkflowsPane: View {
             }
         }
         .frame(width: 280)
-        .background(JfredColor.sidebarDeep)
+        .jfredSidebar(tint: JfredColor.sidebarDeep)
     }
 
     private var cards: some View {
