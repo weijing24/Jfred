@@ -356,7 +356,15 @@ struct QueryField: NSViewRepresentable {
 
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.onChange = onChange
-        if field.currentEditor() == nil, field.stringValue != text {
+        if let editor = field.currentEditor() as? NSTextView {
+            // Reflect programmatic changes (workflow completion, history, URL
+            // queries) in the active field editor, but never while an IME is
+            // composing text.
+            if !editor.hasMarkedText(), editor.string != text {
+                editor.string = text
+                editor.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+            }
+        } else if field.stringValue != text {
             field.stringValue = text
         }
         field.font = font

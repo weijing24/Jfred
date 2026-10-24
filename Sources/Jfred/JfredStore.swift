@@ -431,7 +431,21 @@ enum ScriptRunner {
         let scriptArgument = node.filterLocally ? "" : (node.keyword == "uuid" && argument.isEmpty ? "1" : argument)
         guard let output = execute(node, argument: scriptArgument),
               let items = ScriptJSON.items(in: output) else { return nil }
-        let visible = node.filterLocally && !argument.isEmpty ? items.filter { matches($0, query: argument) } : items
+        let visible: [ScriptJSON.Item]
+        if node.filterLocally && !argument.isEmpty {
+            visible = items
+                .filter { matches($0, query: argument) }
+                .enumerated()
+                .sorted { lhs, rhs in
+                    let left = matchScore(lhs.element, query: argument)
+                    let right = matchScore(rhs.element, query: argument)
+                    if left == right { return lhs.offset < rhs.offset }
+                    return left > right
+                }
+                .map(\.element)
+        } else {
+            visible = items
+        }
         return visible.enumerated().map { index, item in
             row(catalog: catalog, node: node, item: item, index: index)
         }
@@ -491,9 +505,35 @@ enum ScriptRunner {
         return .copy(arg)
     }
 
+    /// fzf-style matching: a contiguous substring wins, otherwise the query
+    /// characters may appear in order anywhere in the item.
     private static func matches(_ item: ScriptJSON.Item, query: String) -> Bool {
         let haystack = fold(item.title + " " + item.subtitle + " " + item.arg)
-        return haystack.contains(fold(query))
+        let needle = fold(query)
+        guard !needle.isEmpty else { return true }
+        if haystack.contains(needle) { return true }
+        var index = haystack.startIndex
+        for character in needle {
+            guard let found = haystack[index...].firstIndex(of: character) else { return false }
+            index = haystack.index(after: found)
+        }
+        return true
+    }
+
+    private static func matchScore(_ item: ScriptJSON.Item, query: String) -> Double {
+        let haystack = fold(item.title + " " + item.subtitle + " " + item.arg)
+        let needle = fold(query)
+        if let range = haystack.range(of: needle) {
+            return 1000 - Double(haystack.distance(from: haystack.startIndex, to: range.lowerBound))
+        }
+        var index = haystack.startIndex
+        var gaps = 0
+        for character in needle {
+            guard let found = haystack[index...].firstIndex(of: character) else { return 0 }
+            gaps += haystack.distance(from: index, to: found)
+            index = haystack.index(after: found)
+        }
+        return 500 - Double(gaps)
     }
 
     private static func execute(_ node: ScriptNode, argument: String) -> String? {
