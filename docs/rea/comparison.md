@@ -113,3 +113,25 @@ open build/Jfred.app
 ```
 
 证据与命令见 `docs/rea/README.md`，UI 规格见 `docs/rea/ui-spec.md`，安全审计见 `docs/rea/security-audit.md`。
+
+## 最终状态（本轮）
+
+| 检查项 | 状态 |
+| --- | --- |
+| 偏好设置 10 个 section | 已完成：General / Features / Workflows / Appearance / Remote / Advanced / Powerpack / Usage / Help / Update |
+| Features 16 页 | 已完成：Default Results、File Search、Universal Actions、Web Search、Web Bookmarks、Clipboard、Snippets、Calculator、Dictionary、Contacts、Music、1Password、System、Terminal、Large Type、Previews |
+| 启动器 | 已完成：Alfred 主题指标、10 套主题、Action Panel、Universal Actions、Alfred 结果行/搜索框尺寸 |
+| Workflows | 已完成：深色空态、内嵌画布、Objects 调色板、拖拽重排、Inspector、Add/Duplicate/Remove、Hotkey、Run/Step/Debugger、断点 |
+| Clipboard / Snippets | 已完成：三类独立保留、Ignore Apps、Clear Keyword、Snippets 整合、Auto Expansion |
+| Contacts / Music | 已完成：搜索、Open/Email/Call/Maps、显示选项、Mini Player、播放列表、封面 |
+| Themes | 已完成：导入/导出 `.alfredappearance`、自定义主题编辑、删除、实时预览 |
+| Remote | 已完成：本地 HTTP 页面、分类动作、QR 配对、token 轮换、CSP/Host 校验；私有 iOS 协议不做 |
+| 安全审计 | 9 项修复，文档见 `security-audit.md` |
+| 自动化测试 | 20 个，`./scripts/test.sh` 全部通过 |
+
+### 已知限制
+
+- Workflows 尚不支持节点自由连线/分支合并（当前为线性 action 链 + 断点/单步）。
+- 少量高级选项仍只有 UI/偏好字段，未逐一接行为（Clipboard Fast Append、Music random larger albums、File Search arrow navigation）。
+- Alfred 的手绘图标、壁纸、nib/字符串表未复制；Jfred 使用 SF Symbols 与独立生成资源。
+- 像素级仍有少量 1–3pt 差异。
