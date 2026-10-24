@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 11,387 |
+| Swift 行数（含测试） | 9,083 | 11,410 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 16 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,304 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,327 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -31,6 +31,7 @@
 - 启动器补 Action Panel：→ 或 ⌘K 打开，↑↓ 选择、↩ 执行、Esc/← 返回；App/文件/URL/联系人/剪贴板/计算器各有对应动作（Open、Reveal、Copy Path、Quick Look、Large Type 等）。
 - Universal Actions 改为 General / Actions 两 tab，补 Show Actions 的 →/fn/ctrl/⌘ 开关、Selection Hotkey、Action Ordering，Actions 页列出可用动作。
 - Snippets 补 Viewer Hotkey、右侧 Auto Expansion 卡片与 Options 面板（展开声音、剪贴板恢复），集合列表加 Get Collections 入口。
+- 1Password 页改为 Alfred 的绿色 Integration 卡片 + 1Password 7/8 说明 + 集成开关，并保留基于 `op` CLI 的实际加载与状态。
 - 新增统一的 `PageHeaderBand` 与 `FormPanel`：46pt 图标、20pt 标题、12.5pt 副标题、白色圆角表单。
 - Features 列表行高 42pt、图标 34pt、宽 240pt，16 项与 Alfred 顺序一致。
 - 底部 rail 新增 Powerpack、Help，顺序为 Powerpack / Usage / Help / Update。
