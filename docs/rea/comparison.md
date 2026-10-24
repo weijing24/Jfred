@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 12,374 |
+| Swift 行数（含测试） | 9,083 | 12,381 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 17 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,291 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,298 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -58,6 +58,7 @@
 - Workflow Debugger 增加 Step：一次执行一个 action 并记录输出，光标/Finished 状态可见，方便逐步排查。
 - Workflow 动作支持断点（Inspector 的 Pause at this action，节点右上红点），Run 会在断点前暂停，再 Run 从暂停处继续。
 - 修复删除动作后面板 Picker 仍持有旧 index 导致 `Index out of range` 崩溃：workflow/action Binding 改为带 fallback 的安全读取。
+- 偏好搜索索引补齐新入口：主题导入导出、Clipboard Ignore Apps、Snippet Auto Expansion、Workflow Debugger、Universal Actions、Help、Powerpack。
 - Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `jfredlocal://music` 可打开。
 - Remote 补 “Add iOS Remote” QR 配对面板（本地 URL + token，可复制）与一键 Regenerate Token，仍不实现 Alfred 的私有 iOS 配对协议。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。

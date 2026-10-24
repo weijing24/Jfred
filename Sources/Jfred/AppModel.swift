@@ -2040,8 +2040,15 @@ enum PreferenceIndex {
             PreferenceHit(id: "learning", title: "Top Result Keyword Latching", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "sync", title: "Syncing folder", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "usage", title: "Usage", detail: "Stats", section: .usage, feature: nil),
-            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Jfred Modern and others", section: .appearance, feature: nil),
-            PreferenceHit(id: "remote", title: "Remote server", detail: "Local command page", section: .remote, feature: nil),
+            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Alfred themes, custom themes and live preview", section: .appearance, feature: nil),
+            PreferenceHit(id: "remote", title: "Remote server", detail: "Local command page, QR pairing and token rotation", section: .remote, feature: nil),
+            PreferenceHit(id: "theme-files", title: "Import or export themes", detail: "Appearance .alfredappearance files", section: .appearance, feature: nil),
+            PreferenceHit(id: "clipboard-ignore", title: "Clipboard Ignore Apps", detail: "Privacy and excluded applications", section: .features, feature: .clipboard),
+            PreferenceHit(id: "snippet-expansion", title: "Auto Expansion Options", detail: "Snippets, sound and clipboard restore", section: .features, feature: .snippets),
+            PreferenceHit(id: "workflow-debugger", title: "Workflow Debugger", detail: "Test query, Run, Step and breakpoints", section: .workflows, feature: nil),
+            PreferenceHit(id: "universal-actions", title: "Universal Actions", detail: "Selection hotkey and action ordering", section: .features, feature: .universalActions),
+            PreferenceHit(id: "help", title: "Help and diagnostics", detail: "Troubleshooting, permissions, Copy Diagnostics", section: .help, feature: nil),
+            PreferenceHit(id: "powerpack", title: "Powerpack features", detail: "Locally included feature set", section: .powerpack, feature: nil),
         ]
         for feature in FeatureID.allCases {
             rows.append(PreferenceHit(id: feature.id, title: feature.title, detail: feature.subtitle, section: .features, feature: feature))
