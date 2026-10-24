@@ -80,6 +80,7 @@ final class AppModel {
     var musicTab = "General"
     var actionsTab = "General"
     var showRemoteQR = false
+    var showSnippetExpansionOptions = false
     var workflowSelection: Int? = nil
     var actionPanelVisible = false
     var actionIndex = 0
@@ -1336,7 +1337,13 @@ final class AppModel {
     }
 
     func applyExpander() {
-        SnippetExpander.shared.update(enabled: preferences.snippetsEnabled, snippets: snippets, wordBased: preferences.snippetWordBased)
+        SnippetExpander.shared.update(
+            enabled: preferences.snippetsEnabled,
+            snippets: snippets,
+            wordBased: preferences.snippetWordBased,
+            playSound: preferences.snippetExpandPlaySound,
+            restoreClipboard: preferences.snippetExpandRestoreClipboard
+        )
     }
 
     func refreshMusicTrack() {

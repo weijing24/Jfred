@@ -151,6 +151,8 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var snippetShowKeywordInResult: Bool
     public var snippetMatching: String
     public var snippetWordBased: Bool
+    public var snippetExpandPlaySound: Bool
+    public var snippetExpandRestoreClipboard: Bool
 
     // Large type.
     public var largeTypeBackgroundMode: String
@@ -350,6 +352,8 @@ public struct Preferences: Codable, Equatable, Sendable {
         snippetShowKeywordInResult = true
         snippetMatching = "nameandkeyword"
         snippetWordBased = true
+        snippetExpandPlaySound = true
+        snippetExpandRestoreClipboard = true
         largeTypeBackgroundMode = "fit"
         largeTypeAutoHide = true
         largeTypeShowOnMouseScreen = false
@@ -445,6 +449,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case clipboardKeepText, clipboardKeepImages, clipboardKeepFiles, clipboardRetention
         case clipboardViewerKeyword, clipboardClearKeyword
         case snippetKeyword, snippetShowKeywordInResult, snippetMatching, snippetWordBased
+        case snippetExpandPlaySound, snippetExpandRestoreClipboard
         case largeTypeBackgroundMode, largeTypeAutoHide, largeTypeShowOnMouseScreen
         case richPreviewsEnabled, noPreviewTypes, noPreviewPaths
         case systemKeywords, systemConfirm, systemDisabled, ejectScope, ejectAllEnabled, ejectExclusions
@@ -559,6 +564,8 @@ public struct Preferences: Codable, Equatable, Sendable {
         snippetShowKeywordInResult = value(.snippetShowKeywordInResult, d.snippetShowKeywordInResult)
         snippetMatching = value(.snippetMatching, d.snippetMatching)
         snippetWordBased = value(.snippetWordBased, d.snippetWordBased)
+        snippetExpandPlaySound = value(.snippetExpandPlaySound, d.snippetExpandPlaySound)
+        snippetExpandRestoreClipboard = value(.snippetExpandRestoreClipboard, d.snippetExpandRestoreClipboard)
         largeTypeBackgroundMode = value(.largeTypeBackgroundMode, d.largeTypeBackgroundMode)
         largeTypeAutoHide = value(.largeTypeAutoHide, d.largeTypeAutoHide)
         largeTypeShowOnMouseScreen = value(.largeTypeShowOnMouseScreen, d.largeTypeShowOnMouseScreen)

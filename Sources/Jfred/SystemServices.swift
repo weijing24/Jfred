@@ -531,11 +531,15 @@ final class SnippetExpander: @unchecked Sendable {
     private var ignore = 0
 
     private var wordBased = true
+    private var playSound = true
+    private var restoreClipboard = true
 
-    func update(enabled: Bool, snippets: [Snippet], wordBased: Bool = true) {
+    func update(enabled: Bool, snippets: [Snippet], wordBased: Bool = true, playSound: Bool = true, restoreClipboard: Bool = true) {
         lock.lock()
         self.enabled = enabled
         self.wordBased = wordBased
+        self.playSound = playSound
+        self.restoreClipboard = restoreClipboard
         self.snippets = Dictionary(snippets.filter(\.autoExpand).map { ($0.keyword, $0.text) }, uniquingKeysWith: { first, _ in first })
         lock.unlock()
         if enabled { install() }
@@ -613,6 +617,10 @@ final class SnippetExpander: @unchecked Sendable {
             self.lock.unlock()
             for _ in 0..<deletes { postKey(51) }
             self.paste(expanded)
+            self.lock.lock()
+            let sound = self.playSound
+            self.lock.unlock()
+            if sound { NSSound(named: "Purr")?.play() }
             Task { @MainActor in
                 AppRuntime.model?.record(category: "expansion")
             }
@@ -641,6 +649,10 @@ final class SnippetExpander: @unchecked Sendable {
         ignore += 1
         lock.unlock()
         postKey(9, flags: .maskCommand)
+        lock.lock()
+        let restore = restoreClipboard
+        lock.unlock()
+        guard restore else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             board.clearContents()
             if let previous { board.setString(previous, forType: .string) }

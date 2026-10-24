@@ -221,6 +221,7 @@ struct CoreTests {
         prefs.terminalPrefix = "!"
         prefs.uaShowRightArrow = false
         prefs.uaSelectionHotkey = "⌥⌘K"
+        prefs.snippetExpandPlaySound = false
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(Preferences.self, from: data)
         #expect(decoded.contactsEnabled == false)
@@ -232,4 +233,5 @@ struct CoreTests {
         #expect(decoded.terminalPrefix == "!")
         #expect(decoded.uaShowRightArrow == false)
         #expect(decoded.uaSelectionHotkey == "⌥⌘K")
+        #expect(decoded.snippetExpandPlaySound == false)
     }
