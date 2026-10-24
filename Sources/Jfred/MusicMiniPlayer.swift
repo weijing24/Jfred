@@ -50,13 +50,20 @@ struct MusicMiniPlayer: View {
     private var nowPlaying: some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: 0x6A2C91), Color(hex: 0x241033)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: "music.note")
-                    .font(.system(size: 34, weight: .light))
-                    .foregroundStyle(.white.opacity(0.85))
+                if let path = model.musicArtPath, let image = NSImage(contentsOfFile: path) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LinearGradient(colors: [Color(hex: 0x6A2C91), Color(hex: 0x241033)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Image(systemName: "music.note")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
             }
             .frame(width: 92, height: 92)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.musicNowTitle.isEmpty ? "Nothing playing" : model.musicNowTitle)
                     .font(.system(size: 16, weight: .semibold))

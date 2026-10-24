@@ -76,6 +76,7 @@ final class AppModel {
     var musicNowTitle = ""
     var musicNowArtist = ""
     var musicNowPlaying = false
+    var musicArtPath: String?
     var contactsTab = "Contacts"
     var musicTab = "General"
     var actionsTab = "General"
@@ -1579,6 +1580,7 @@ final class AppModel {
                 self.musicNowTitle = info.title
                 self.musicNowArtist = info.artist
                 self.musicNowPlaying = info.playing
+                self.musicArtPath = MusicService.artworkURL()
                 self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
             }
         }
@@ -1601,6 +1603,7 @@ final class AppModel {
                 self.musicNowTitle = info.title
                 self.musicNowArtist = info.artist
                 self.musicNowPlaying = info.playing
+                self.musicArtPath = MusicService.artworkURL()
                 self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
             }
         }

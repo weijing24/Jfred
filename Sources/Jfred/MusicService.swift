@@ -136,6 +136,29 @@ extension MusicService {
         }
     }
 
+    static func artworkURL() -> String? {
+        let path = NSTemporaryDirectory() + "jfred-music-art.png"
+        try? FileManager.default.removeItem(atPath: path)
+        let escaped = appleScriptEscaped(path)
+        _ = Shell.osascript("""
+        tell application "Music"
+          if it is running then
+            try
+              set art to data of artwork 1 of current track
+              set f to open for access POSIX file "\(escaped)" with write permission
+              set eof f to 0
+              write art to f
+              close access f
+            end try
+          end if
+        end tell
+        """, timeout: 5)
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+              let size = attributes[.size] as? Int,
+              size > 0 else { return nil }
+        return path
+    }
+
     static func appleScriptEscaped(_ value: String) -> String {
         value
             .replacingOccurrences(of: "\\", with: "\\\\")
