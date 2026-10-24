@@ -31,18 +31,10 @@ public enum WorkflowMatching {
         "dev",
     ]
 
-    public static let uiKeywords = [
-        "gh issue new comments @me",
-        "gh issue new comments",
-        "uicli login",
-    ]
-
     public static func summary(for builtin: String?) -> String? {
         switch builtin {
         case "dev":
             return "Keywords: encode, decode, uuid, hash, json format, cc snake, nb decimal, time, li, qrcode."
-        case "ui":
-            return "Keywords: uicli login, gh issue new comments, gh issue new comments @me."
         case "profiles":
             return "Keyword cp. Extra letters filter the profile name."
         case "epoch":
@@ -69,8 +61,6 @@ public enum WorkflowMatching {
         switch workflow.builtin {
         case "dev":
             for keyword in devKeywords { add(keyword, false) }
-        case "ui":
-            for keyword in uiKeywords { add(keyword, false) }
         case "epoch":
             add("ts", false)
             add("epoch", false)

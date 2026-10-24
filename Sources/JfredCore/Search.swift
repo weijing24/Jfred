@@ -416,9 +416,6 @@ public enum Search {
             return rows.map { profile in
                 make(id: "profile:\(profile.directory)", title: profile.name, subtitle: profile.directory, icon: "symbol:person.crop.circle", kind: "profile", payload: profile.directory, category: "action", score: score)
             }
-        case "ui":
-            let subtitle = argument.isEmpty ? "Workflow" : argument
-            return [make(id: "ui:\(keyword)", title: keyword, subtitle: subtitle, icon: "symbol:cursorarrow.click.2", kind: "text", payload: "", category: "action", score: score)]
         default:
             return []
         }

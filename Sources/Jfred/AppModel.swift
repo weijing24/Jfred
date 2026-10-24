@@ -52,7 +52,6 @@ enum Seed {
             Workflow(name: "Kill Process", keyword: "kill", author: "Built in", symbol: "xmark.octagon.fill", tint: "2D3436", builtin: "kill"),
             Workflow(name: "Search Browser Tabs and History", keyword: "tabnhistory", author: "Built in", symbol: "globe", tint: "00B894", builtin: "tabs"),
             Workflow(name: "Switch Chrome Profiles", keyword: "cp", author: "Built in", symbol: "person.2.fill", tint: "6C5CE7", builtin: "profiles"),
-            Workflow(name: "uicli", keyword: "uicli login", author: "Built in", symbol: "cursorarrow.click.2", tint: "0984E3", builtin: "ui"),
             Workflow(name: "Unit Converter", keyword: "conv", author: "Built in", symbol: "ruler.fill", tint: "FDCB6E", builtin: "unit"),
         ]
     }
@@ -1296,7 +1295,7 @@ final class AppModel {
             return
         }
         preferences = state.preferences
-        workflows = state.workflows
+        workflows = state.workflows.filter { $0.builtin != "ui" }
         snippets = state.snippets
         clips = state.clips
         usage = state.usage

@@ -39,7 +39,6 @@ struct ScriptCatalog: Sendable {
 enum JfredStore {
     private static let groups = [
         "com.kaichu.devtoys": "dev",
-        "com.tru2dagame.uicli": "ui",
     ]
 
     static func catalog() -> ScriptCatalog {
