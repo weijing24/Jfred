@@ -254,7 +254,11 @@ enum FileSearch {
             roots.append("/System/Applications")
         }
         if preferences.scopeHome {
-            let home = URL(fileURLWithPath: NSHomeDirectory())
+            let configured = preferences.fileCustomHomeFolder.trimmingCharacters(in: .whitespaces)
+            let homePath = (configured.isEmpty || configured == "~")
+                ? NSHomeDirectory()
+                : (configured as NSString).expandingTildeInPath
+            let home = URL(fileURLWithPath: homePath)
             if let items = try? FileManager.default.contentsOfDirectory(at: home, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
                 for url in items where shouldIndex(url.path) {
                     roots.append(url.path)
