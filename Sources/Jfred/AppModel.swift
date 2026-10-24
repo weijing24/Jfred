@@ -840,6 +840,31 @@ final class AppModel {
         query = items[index]
     }
 
+    func workflowDirectory(_ workflow: Workflow) -> URL? {
+        guard let group = workflow.builtin else { return nil }
+        return scriptCatalog.nodes.values
+            .first { $0.group == group }
+            .map { URL(fileURLWithPath: $0.cwd, isDirectory: true) }
+    }
+
+    func reloadWorkflowsFromAlfred() {
+        guard let catalog = JfredStore.reloadCatalog() else { return }
+        scriptCatalog = catalog
+        JfredStore.syncWorkflows(self, catalog.workflows)
+    }
+
+    func duplicateWorkflow(_ id: UUID) {
+        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
+        var copy = workflows[index]
+        copy.id = UUID()
+        copy.name += " Copy"
+        copy.builtin = nil
+        copy.hotkey = nil
+        copy.actions = copy.actions.map { WorkflowAction(kind: $0.kind, value: $0.value) }
+        workflows.insert(copy, at: index + 1)
+        selectedWorkflow = copy.id
+    }
+
     private func makeContext(files: [AppRecord], windows: [WindowInfo], processes: [ProcInfo], tabs: [LinkRecord], profiles: [ProfileInfo], definition: String?, forced: [SearchResult]? = nil) -> SearchContext {
         SearchContext(
             preferences: preferences,

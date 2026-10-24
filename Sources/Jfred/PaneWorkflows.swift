@@ -1,5 +1,7 @@
+import AppKit
 import SwiftUI
 import JfredCore
+import UniformTypeIdentifiers
 
 struct WorkflowsPane: View {
     var model: AppModel
@@ -62,12 +64,72 @@ struct WorkflowsPane: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .contextMenu { workflowMenu(workflow) }
                     }
                 }
             }
         }
         .frame(width: 280)
         .jfredSidebar(tint: JfredColor.sidebarDeep)
+    }
+
+    @ViewBuilder
+    private func workflowMenu(_ workflow: Workflow) -> some View {
+        Toggle("Enabled", isOn: model.bindWorkflow(workflow.id, \.enabled))
+        Divider()
+        Button("Configure…") { model.beginWorkflowEdit(workflow) }
+        Button("Edit Details…") { model.beginWorkflowEdit(workflow) }
+        Divider()
+        Button("Show in Finder") {
+            guard let directory = model.workflowDirectory(workflow) else { return }
+            NSWorkspace.shared.activateFileViewerSelecting([directory])
+        }
+        .disabled(model.workflowDirectory(workflow) == nil)
+        Button("Open in Terminal") {
+            guard let directory = model.workflowDirectory(workflow) else { return }
+            if let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") {
+                NSWorkspace.shared.open([directory], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration())
+            }
+        }
+        .disabled(model.workflowDirectory(workflow) == nil)
+        Divider()
+        Button("Duplicate") { model.duplicateWorkflow(workflow.id) }
+        Button("Export…") { export(workflow, metadataOnly: false) }
+        Button("Export Metadata…") { export(workflow, metadataOnly: true) }
+        Button("Reload Workflows") { model.reloadWorkflowsFromAlfred() }
+        Divider()
+        Button("Delete", role: .destructive) {
+            model.workflows.removeAll { $0.id == workflow.id }
+            if model.selectedWorkflow == workflow.id {
+                model.selectedWorkflow = model.workflows.first?.id
+            }
+        }
+    }
+
+    private func export(_ workflow: Workflow, metadataOnly: Bool) {
+        let panel = NSSavePanel()
+        let base = workflow.name.replacingOccurrences(of: "/", with: "-")
+        panel.nameFieldStringValue = base + (metadataOnly ? " Metadata.json" : ".json")
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data: Data?
+        if metadataOnly {
+            let metadata: [String: Any] = [
+                "name": workflow.name,
+                "keyword": workflow.keyword,
+                "author": workflow.author,
+                "symbol": workflow.symbol,
+                "tint": workflow.tint,
+                "enabled": workflow.enabled,
+            ]
+            data = try? JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys])
+        } else {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            data = try? encoder.encode(workflow)
+        }
+        guard let data else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     private var cards: some View {

@@ -46,6 +46,12 @@ struct ScriptCatalog: Sendable {
 }
 
 enum JfredStore {
+    @MainActor
+    static func reloadCatalog() -> ScriptCatalog? {
+        guard let root = refreshSnapshot() else { return nil }
+        return loadCatalog(root: root)
+    }
+
     static func catalog() -> ScriptCatalog {
         let root = preferencesRoot() ?? refreshSnapshot()
         guard let root else { return ScriptCatalog() }
