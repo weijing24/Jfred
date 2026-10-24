@@ -419,6 +419,7 @@ struct WorkflowEditor: View {
     }
 
     @ViewBuilder private var inspector: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 12) {
             Text(model.workflowSelection == nil ? "Workflow" : "Object")
                 .font(.system(size: 14, weight: .semibold))
@@ -491,10 +492,11 @@ struct WorkflowEditor: View {
                     }
                 }
             }
-            Spacer()
         }
         .textFieldStyle(.roundedBorder)
         .padding(16)
+        .frame(width: 264)
+        }
         .frame(width: 280)
         .background(Color(hex: 0xF2F2F2))
     }
