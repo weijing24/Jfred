@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             guard url.scheme == "jfredlocal" else { continue }
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            let query = items.first { $0.name == "q" }?.value ?? ""
+            let query = String((items.first { $0.name == "q" }?.value ?? "").prefix(512))
             if url.host == "search" || url.host == nil {
                 model.query = query
                 model.showLauncher()

@@ -6,7 +6,7 @@ struct SettingsTabBar: View {
     var tabs: [String]
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 1) {
             ForEach(tabs, id: \.self) { tab in
                 Button {
                     selection = tab
@@ -14,59 +14,57 @@ struct SettingsTabBar: View {
                     Text(tab)
                         .font(.system(size: 13))
                         .foregroundStyle(selection == tab ? JfredColor.ink : JfredColor.sub)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 15)
+                        .frame(height: 23)
                         .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
                                 .fill(selection == tab ? Color.white : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(3)
+        .padding(2)
         .fixedSize()
-        .modifier(GlassTabBarBackground())
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color(hex: 0xE2E1E0))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(Color.black.opacity(0.09), lineWidth: 1)
+        )
     }
 }
 
-/// White rounded table / list card, matching Alfred's content panels.
+/// Flat white rounded table / list card, matching Alfred's content panels.
 struct SettingsCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
-        if #available(macOS 26.0, *) {
-            content()
-                .background(Color.white.opacity(0.22), in: shape)
-                .glassEffect(.regular, in: shape)
-                .overlay(shape.stroke(Color.white.opacity(0.55), lineWidth: 0.8))
-        } else {
-            content()
-                .background(Color.white)
-                .clipShape(shape)
-                .overlay(shape.stroke(Color.black.opacity(0.10), lineWidth: 1))
-        }
+        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        content()
+            .background(Color.white)
+            .clipShape(shape)
+            .overlay(shape.stroke(Color.black.opacity(0.10), lineWidth: 1))
     }
 }
 
-/// Grey inset panel that groups a table and its toolbar, as on Alfred's pages.
+/// Light inset panel that groups a table and its toolbar, as on Alfred's pages.
 struct SettingsPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-        if #available(macOS 26.0, *) {
-            content()
-                .padding(12)
-                .glassEffect(.regular.tint(Color(hex: 0xEDEDEC).opacity(0.55)), in: shape)
-                .overlay(shape.stroke(Color.white.opacity(0.45), lineWidth: 0.8))
-        } else {
-            content()
-                .padding(12)
-                .background(shape.fill(Color(hex: 0xE5E5E5)))
-                .overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
-        }
+        content()
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color(hex: 0xF2F2F2))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(Color.black.opacity(0.07), lineWidth: 1)
+            )
     }
 }
 
@@ -87,36 +85,13 @@ struct SettingsFilterField: View {
         }
         .padding(.horizontal, 9)
         .frame(width: width, height: 26)
-        .modifier(GlassCapsuleBackground())
-    }
-}
-
-/// Glass background for the segmented tab strip.
-private struct GlassTabBarBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(.regular, in: Capsule())
-                .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 0.8))
-        } else {
-            content
-                .background(Capsule().fill(Color(hex: 0xE0E0E0)))
-                .overlay(Capsule().stroke(Color.black.opacity(0.10), lineWidth: 1))
-        }
-    }
-}
-
-/// Glass background for capsule-shaped fields.
-private struct GlassCapsuleBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(.regular.interactive(), in: Capsule())
-        } else {
-            content
-                .background(Capsule().fill(Color.white))
-                .overlay(Capsule().stroke(Color.black.opacity(0.12), lineWidth: 1))
-        }
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color.black.opacity(0.12), lineWidth: 1)
+        )
     }
 }
 
@@ -149,5 +124,84 @@ struct SettingsNote: View {
             .foregroundStyle(JfredColor.sub)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, 130)
+    }
+}
+
+/// Grey page header used by every feature page (title, subtitle, help).
+struct PageHeaderBand: View {
+    var icon: String
+    var tint: Color
+    var title: String
+    var subtitle: String
+    var help: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(tint)
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: .regular))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 46, height: 46)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(JfredColor.ink)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(JfredColor.sub)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if let help {
+                Button(action: help) {
+                    Image(systemName: "questionmark.circle.fill")
+                        .font(.system(size: 21))
+                        .foregroundStyle(Color(hex: 0x8A8A8A))
+                }
+                .buttonStyle(.plain)
+                .help("Open Alfred's help for this page")
+            }
+        }
+        .padding(.horizontal, 24)
+        .frame(height: 78)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: 0xD9D9D9))
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.black.opacity(0.10)).frame(height: 1)
+        }
+    }
+}
+
+/// Flat preferences canvas. Alfred does not use translucency here.
+struct PageSurface<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            content()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Color(hex: 0xECECEC))
+    }
+}
+
+/// Big white rounded content panel used under the page header.
+struct FormPanel<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        content()
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(shape.fill(Color.white))
+            .overlay(shape.stroke(Color.black.opacity(0.07), lineWidth: 1))
     }
 }

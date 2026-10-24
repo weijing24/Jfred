@@ -13,8 +13,8 @@ public enum Search {
             return Array(forced.prefix(12))
         }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix(">") {
-            let command = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+        if !context.preferences.terminalPrefix.isEmpty, trimmed.hasPrefix(context.preferences.terminalPrefix) {
+            let command = String(trimmed.dropFirst(context.preferences.terminalPrefix.count)).trimmingCharacters(in: .whitespaces)
             return [make(
                 id: "term:\(command)",
                 title: command.isEmpty ? "Run in Terminal" : command,
@@ -90,7 +90,7 @@ public enum Search {
                 score: 1.75
             ))
         }
-        if context.preferences.dictionaryEnabled, let word = argument(of: "define", in: trimmed) {
+        if context.preferences.dictionaryEnabled, context.preferences.dictionaryDefineEnabled, let word = argument(of: context.preferences.dictionaryDefineKeyword, in: trimmed) {
             let subtitle = context.definition?.replacingOccurrences(of: "\n", with: " ") ?? "Open Dictionary"
             found.append(make(
                 id: "dict:\(word)",
@@ -137,6 +137,40 @@ public enum Search {
                 context: context
             ))
         }
+        if context.preferences.contactsEnabled {
+            for contact in context.contacts {
+                var subtitle = contact.email
+                if subtitle.isEmpty { subtitle = contact.phone }
+                if subtitle.isEmpty { subtitle = contact.organization ?? "Contact" }
+                let fields = [contact.name, contact.email, contact.phone, contact.organization ?? "", contact.jobTitle ?? ""]
+                push(scored(
+                    query: needle,
+                    fields: fields,
+                    id: "contact:\(contact.id)",
+                    title: contact.name,
+                    subtitle: subtitle,
+                    icon: "symbol:person.crop.circle",
+                    kind: "contact",
+                    payload: contact.uid ?? contact.id,
+                    category: "contacts",
+                    context: context
+                ))
+            }
+        }
+        if context.preferences.musicEnabled {
+            if let song = argument(of: context.preferences.musicKeyword, in: trimmed) ?? argument(of: "play", in: trimmed), !song.isEmpty {
+                found.append(make(
+                    id: "music:play:\(song)",
+                    title: "Play \(song)",
+                    subtitle: "Music.app",
+                    icon: "symbol:music.note",
+                    kind: "musicplay",
+                    payload: song,
+                    category: "music",
+                    score: 1.9
+                ))
+            }
+        }
         if context.preferences.systemSettingsEnabled {
             let foldedQuery = fold(needle)
             for setting in context.settings where !foldedQuery.isEmpty && fold(setting.name).contains(foldedQuery) {
@@ -179,7 +213,7 @@ public enum Search {
             ))
         }
         for command in SystemCommand.all {
-            if command.category == "music" { continue }
+            if command.category == "music", !context.preferences.musicEnabled { continue }
             let customKeyword = context.preferences.systemKeywords[command.id]
             let commandFields = customKeyword.map { [$0, command.title] } ?? ([command.title] + command.keywords)
             push(scored(

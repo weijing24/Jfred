@@ -70,6 +70,7 @@ final class AppModel {
     var apps: [AppRecord] = []
     var links: [LinkRecord] = []
     var contacts: [ContactRecord] = []
+    var musicTrack = ""
     var opItems: [AppRecord] = []
 
     var query = ""
@@ -143,6 +144,7 @@ final class AppModel {
         applyRemote()
         reindex()
         reloadLinks()
+        reloadContacts()
         if preferences.onePasswordEnabled { reloadOnePassword() }
         syncActivationPolicy()
         IndexWatch.shared.start(preferences: preferences) { [weak self] in
@@ -391,6 +393,17 @@ final class AppModel {
                 text = item.payload.isEmpty ? item.title : item.payload
             }
             pasteToPrevious(text)
+        case "contact":
+            let uid = item.payload
+            if let url = URL(string: "addressbook://\(uid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? uid)") {
+                NSWorkspace.shared.open(url)
+            } else if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.AddressBook") {
+                NSWorkspace.shared.open(app)
+            }
+            hideLauncher(reactivate: false)
+        case "musicplay":
+            hideLauncher(reactivate: false)
+            Task.detached { _ = MusicService.playSearch(item.payload) }
         case "dictionary":
             let body = item.subtitle == "Open Dictionary" ? item.title : item.subtitle
             if let url = URL(string: "dict://\(item.payload.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.payload)") {
@@ -484,6 +497,7 @@ final class AppModel {
             IndexWatch.shared.restartFiles(preferences)
         }
         if old.onePasswordEnabled != preferences.onePasswordEnabled && preferences.onePasswordEnabled { reloadOnePassword() }
+        if old.contactsEnabled != preferences.contactsEnabled { reloadContacts() }
         if old.safariBookmarks != preferences.safariBookmarks || old.chromeBookmarks != preferences.chromeBookmarks { reloadLinks() }
     }
 
@@ -722,17 +736,18 @@ final class AppModel {
         let path = String(parts.first ?? "/")
         let query = parts.count > 1 ? String(parts[1]) : ""
         let params = queryItems(query)
-        guard params["token"] == preferences.remoteToken else {
+        let supplied = params["token"] ?? ""
+        guard secureTokenEquals(supplied, preferences.remoteToken) else {
             return "<p>Token required. Add ?token= from Jfred Preferences → Remote.</p>"
         }
         if path == "/run" {
             let id = params["id"] ?? ""
             performSystem(id)
-            return "<p>Ran \(id). <a href=\"/?token=\(preferences.remoteToken)\">Back</a></p>"
+            return "<p>Ran \(escapeHTML(id)). <a href=\"/?token=\(preferences.remoteToken)\">Back</a></p>"
         }
         if path == "/open" {
             let value = params["path"] ?? ""
-            if value.hasPrefix("http"), let url = URL(string: value) {
+            if let url = URL(string: value), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
                 NSWorkspace.shared.open(url)
             } else if value.hasPrefix("/") {
                 NSWorkspace.shared.open(URL(fileURLWithPath: value))
@@ -741,7 +756,7 @@ final class AppModel {
         }
         let q = params["q"] ?? ""
         var body = """
-        <!doctype html><meta charset="utf-8"><title>Jfred Remote</title>
+        <!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Jfred Remote</title>
         <style>body{font:15px -apple-system,sans-serif;background:#1b1b1b;color:#f2f2f2;margin:28px}a{color:#d7b4ff;text-decoration:none}input,button{font:inherit;padding:6px 8px}li{margin:6px 0}</style>
         <h1>Jfred Remote</h1>
         <form><input type="hidden" name="token" value="\(preferences.remoteToken)"><input name="q" value="\(escapeHTML(q))" placeholder="Search" autofocus><button>Search</button></form>
@@ -763,11 +778,11 @@ final class AppModel {
             }
             body += "</ul>"
         } else {
-            body += "<h2>\(remoteCategory.title)</h2><ul>"
+            body += "<h2>\(escapeHTML(remoteCategory.title))</h2><ul>"
             switch remoteCategory {
             case .system:
                 for command in SystemCommand.all {
-                    body += "<li><a href=\"/run?token=\(preferences.remoteToken)&id=\(command.id)\">\(command.title)</a></li>"
+                    body += "<li><a href=\"/run?token=\(preferences.remoteToken)&id=\(escapeHTML(command.id))\">\(escapeHTML(command.title))</a></li>"
                 }
             case .applications:
                 for app in apps.prefix(40) {
@@ -777,7 +792,7 @@ final class AppModel {
             case .preferences:
                 for setting in SettingsCatalog.all {
                     let value = setting.url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(value)\">\(setting.name)</a></li>"
+                    body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(value)\">\(escapeHTML(setting.name))</a></li>"
                 }
             case .folders:
                 body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(NSHomeDirectory())\">Home</a></li>"
@@ -804,7 +819,20 @@ final class AppModel {
     }
 
     private func escapeHTML(_ text: String) -> String {
-        text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+        text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
+    }
+
+    private func secureTokenEquals(_ a: String, _ b: String) -> Bool {
+        let x = Array(a.utf8), y = Array(b.utf8)
+        guard x.count == y.count else { return false }
+        var diff: UInt8 = 0
+        for i in x.indices { diff |= x[i] ^ y[i] }
+        return diff == 0
     }
 
     private func modifierAction(_ flags: NSEvent.ModifierFlags) -> String {
@@ -986,6 +1014,11 @@ final class AppModel {
     }
 
     private func pasteClipboardItem(_ clip: ClipItem) {
+        if preferences.clipboardMoveToTopOnUse, let index = clips.firstIndex(where: { $0.id == clip.id }), index > 0 {
+            let item = clips.remove(at: index)
+            clips.insert(item, at: 0)
+            scheduleSave()
+        }
         let board = NSPasteboard.general
         board.clearContents()
         switch clip.kind {
@@ -1001,6 +1034,7 @@ final class AppModel {
             board.setString(clip.text, forType: .string)
         }
         hideLauncher(reactivate: true)
+        guard preferences.clipboardAutoPaste else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
             postKey(9, flags: .maskCommand)
         }
@@ -1036,7 +1070,7 @@ final class AppModel {
 
     private func performSystem(_ id: String) {
         if id.hasPrefix("volume:") {
-            let value = id.dropFirst("volume:".count)
+            guard let value = Int(id.dropFirst("volume:".count)), (0...100).contains(value) else { return }
             _ = Shell.osascript("set volume output volume \(value)")
             return
         }
@@ -1056,6 +1090,7 @@ final class AppModel {
         case "lock": _ = Shell.osascript("tell application \"System Events\" to keystroke \"q\" using {command down, control down}")
         case "screensaver": _ = Shell.run("/usr/bin/open", ["-a", "ScreenSaverEngine"])
         case "emptetrash": _ = Shell.osascript("tell application \"Finder\" to empty trash")
+        case "trash": _ = Shell.run("/usr/bin/open", [NSHomeDirectory() + "/.Trash"])
         case "eject": _ = Shell.osascript("tell application \"Finder\" to eject (every disk whose ejectable is true)")
         case "quitall":
             for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
@@ -1079,6 +1114,12 @@ final class AppModel {
         case "mute": _ = Shell.osascript("set volume with output muted")
         case "volumeup": changeVolume(10)
         case "volumedown": changeVolume(-10)
+        case "musicplaypause": _ = MusicService.playPause()
+        case "musicnext": _ = MusicService.next()
+        case "musicprevious": _ = MusicService.previous()
+        case "musiccurrent":
+            let track = MusicService.currentTrack()
+            debugLine = track.isEmpty ? "Music is not playing" : track
         default:
             debugLine = "Unknown command \(id)"
         }
@@ -1100,7 +1141,10 @@ final class AppModel {
     }
 
     private func runInTerminal(_ command: String) {
-        let escaped = command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let escaped = command
+            .replacingOccurrences(of: "\0", with: "")
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
         switch preferences.terminalApp {
         case "iTerm":
             _ = Shell.osascript("""
@@ -1169,7 +1213,43 @@ final class AppModel {
         SnippetExpander.shared.update(enabled: preferences.snippetsEnabled, snippets: snippets, wordBased: preferences.snippetWordBased)
     }
 
+    func refreshMusicTrack() {
+        Task.detached {
+            let track = MusicService.currentTrack()
+            await MainActor.run { self.musicTrack = track }
+        }
+    }
+
+    func reloadContacts() {
+        guard preferences.contactsEnabled else {
+            if !contacts.isEmpty { contacts = [] }
+            return
+        }
+        Task.detached {
+            let list = await ContactsIndex.load()
+            await MainActor.run {
+                guard self.preferences.contactsEnabled else { return }
+                self.contacts = list
+                self.scheduleSave()
+            }
+        }
+    }
+
+    func requestContactsAccess() {
+        Task.detached {
+            let list = await ContactsIndex.load(requestAccess: true)
+            await MainActor.run {
+                self.contacts = list
+                self.scheduleSave()
+            }
+        }
+    }
+
     func applyRemote() {
+        if preferences.remoteToken.count < 24 {
+            preferences.remoteToken = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+            scheduleSave()
+        }
         remote.handle = { [weak self] target in
             self?.handleRemote(target) ?? "Unavailable"
         }
@@ -1183,6 +1263,14 @@ final class AppModel {
 
     private var clipboardStableChange = -1
 
+    /// Password managers and system credential UIs intentionally copy secrets;
+    /// never add those to the history even when an app forgets to mark the
+    /// pasteboard as concealed.
+    private let privateClipboardApps: Set<String> = [
+        "1Password", "1Password 7", "Keychain Access", "Passwords", "Wallet",
+        "SecurityAgent", "System Settings", "System Preferences",
+    ]
+
     private func pollClipboard() {
         let board = NSPasteboard.general
         guard preferences.clipboardEnabled, board.changeCount != clipChange else { return }
@@ -1194,12 +1282,14 @@ final class AppModel {
         }
         clipChange = board.changeCount
         pruneClipboard()
+        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+        if privateClipboardApps.contains(sourceApp) { return }
         let types = Set(board.types ?? [])
-        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
-            || types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
-            || types.contains(NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")) {
-            return
-        }
+        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType")) { return }
+        if preferences.clipboardIgnoreConcealed,
+           types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) { return }
+        if preferences.clipboardIgnoreAutoGenerated,
+           types.contains(NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")) { return }
         let remote = types.contains(NSPasteboard.PasteboardType("com.apple.is-remote-clipboard"))
         if preferences.clipboardKeepFiles,
            !(remote && preferences.clipboardIgnoreUniversalFiles),
@@ -1223,8 +1313,9 @@ final class AppModel {
         guard preferences.clipboardKeepText,
               !(remote && preferences.clipboardIgnoreUniversalText) else { return }
         guard let text = board.string(forType: .string), !text.isEmpty else { return }
+        guard text.count <= max(4_096, preferences.clipboardMaxSize) else { return }
         if clips.first?.text == text { return }
-        clips.insert(ClipItem(text: String(text.prefix(20_000)), date: Date()), at: 0)
+        clips.insert(ClipItem(text: text, date: Date()), at: 0)
         if clips.count > preferences.clipboardLimit { clips = Array(clips.prefix(preferences.clipboardLimit)) }
         scheduleSave()
     }
@@ -1237,7 +1328,7 @@ final class AppModel {
     private func saveClipboardImage(_ board: NSPasteboard) -> String? {
         guard let data = board.data(forType: .png) ?? board.data(forType: .tiff) else { return nil }
         let dir = supportDirectory().appendingPathComponent("ClipImages", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let url = dir.appendingPathComponent("\(UUID().uuidString).png")
         if let rep = NSBitmapImageRep(data: data), let png = rep.representation(using: .png, properties: [:]) {
             try? png.write(to: url)
@@ -1246,6 +1337,7 @@ final class AppModel {
         } else {
             return nil
         }
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         return url.path
     }
 
@@ -1273,11 +1365,13 @@ final class AppModel {
 
     private func supportDirectory() -> URL {
         let url = SupportPaths.directory(syncFolder: preferences.syncFolder)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
         return url
     }
 
     private func load() {
+        hardenSupportFolder()
         let url = supportDirectory().appendingPathComponent("state.json")
         guard let data = try? Data(contentsOf: url), let state = try? JSONDecoder().decode(DiskState.self, from: data) else {
             preferences = Preferences()
@@ -1328,6 +1422,26 @@ final class AppModel {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
+    private func hardenSupportFolder() {
+        let dir = supportDirectory()
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        let state = dir.appendingPathComponent("state.json")
+        if FileManager.default.fileExists(atPath: state.path) {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: state.path)
+        }
+        let images = dir.appendingPathComponent("ClipImages", isDirectory: true)
+        if let files = try? FileManager.default.contentsOfDirectory(at: images, includingPropertiesForKeys: nil) {
+            for file in files {
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            }
+        }
+    }
+
+    func saveNewsletterEmail() {
+        preferences.newsletterEmail = preferences.newsletterEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        scheduleSave()
+    }
+
     private func save() {
         let state = DiskState(preferences: preferences, workflows: workflows, snippets: snippets, clips: clips, usage: usage, knowledge: knowledge, selections: selections)
         let encoder = JSONEncoder()
@@ -1368,7 +1482,7 @@ final class AppModel {
 }
 
 enum PrefSection: String, CaseIterable, Identifiable {
-    case general, features, workflows, appearance, remote, advanced, usage, update
+    case general, features, workflows, appearance, remote, advanced, powerpack, usage, help, update
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -1378,7 +1492,9 @@ enum PrefSection: String, CaseIterable, Identifiable {
         case .appearance: "Appearance"
         case .remote: "Remote"
         case .advanced: "Advanced"
+        case .powerpack: "Powerpack"
         case .usage: "Usage"
+        case .help: "Help"
         case .update: "Update"
         }
     }
@@ -1390,7 +1506,9 @@ enum PrefSection: String, CaseIterable, Identifiable {
         case .appearance: "paintbrush.fill"
         case .remote: "antenna.radiowaves.left.and.right"
         case .advanced: "slider.horizontal.3"
+        case .powerpack: "bolt.fill"
         case .usage: "chart.xyaxis.line"
+        case .help: "lifepreserver"
         case .update: "square.and.arrow.down"
         }
     }
@@ -1405,7 +1523,7 @@ enum AppRelease {
 }
 
 enum FeatureID: String, CaseIterable, Identifiable {
-    case defaultResults, fileSearch, universalActions, webSearch, bookmarks, clipboard, snippets, calculator, dictionary, onePassword, system, terminal, largeType, previews
+    case defaultResults, fileSearch, universalActions, webSearch, bookmarks, clipboard, snippets, calculator, dictionary, contacts, music, onePassword, system, terminal, largeType, previews
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -1418,6 +1536,8 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "Snippets"
         case .calculator: "Calculator"
         case .dictionary: "Dictionary"
+        case .contacts: "Contacts"
+        case .music: "Music"
         case .onePassword: "1Password"
         case .system: "System"
         case .terminal: "Terminal"
@@ -1436,6 +1556,8 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "Snippets, Clippings"
         case .calculator: "Standard, Advanced"
         case .dictionary: "Spelling, Definitions"
+        case .contacts: "Viewer, Emailing"
+        case .music: "Mini Player"
         case .onePassword: "1Click Bookmarks"
         case .system: "Commands, Quitting, Ejecting"
         case .terminal: "Prefix, Custom Integration"
@@ -1454,6 +1576,8 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "note.text"
         case .calculator: "plus.slash.minus"
         case .dictionary: "character.book.closed.fill"
+        case .contacts: "person.crop.circle"
+        case .music: "music.note"
         case .onePassword: "key.fill"
         case .system: "power"
         case .terminal: "terminal.fill"

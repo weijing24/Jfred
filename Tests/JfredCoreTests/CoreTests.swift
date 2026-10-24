@@ -66,7 +66,7 @@ struct CoreTests {
 
     @Test func matchTierOutranksUsageAndShorterNames() {
         #expect(fieldMatch(query: "cal", target: "Calendar")?.tier == 1)
-        #expect(fieldMatch(query: "cal", target: "Local")?.tier == 4)
+        #expect(fieldMatch(query: "cal", target: "Local")?.tier == 3) // contiguous substring, not fuzzy
         var context = SearchContext()
         context.apps = [
             AppRecord(id: "local", name: "Local", path: "/Applications/Local.app"),
@@ -175,3 +175,49 @@ struct CoreTests {
         #expect(stats.series["hotkeys"]?.reduce(0, +) == 1)
     }
 }
+
+    @Test func contactsAndMusicResults() {
+        var context = SearchContext()
+        context.preferences.contactsEnabled = true
+        context.contacts = [
+            ContactRecord(id: "ada", name: "Ada Lovelace", email: "ada@example.com", phone: "", uid: "ada"),
+        ]
+        let people = Search.results(for: "lovelace", context: context)
+        #expect(people.contains { $0.kind == "contact" && $0.title == "Ada Lovelace" })
+
+        context.preferences.contactsEnabled = false
+        #expect(!Search.results(for: "lovelace", context: context).contains { $0.kind == "contact" })
+
+        context.preferences.musicEnabled = true
+        let playback = Search.results(for: "play daft punk", context: context)
+        #expect(playback.contains { $0.kind == "musicplay" && $0.payload == "daft punk" })
+        #expect(Search.results(for: "music", context: context).contains { $0.id == "sys:musicplaypause" })
+    }
+
+    @Test func customTerminalPrefix() {
+        var context = SearchContext()
+        context.preferences.terminalPrefix = "!"
+        let rows = Search.results(for: "!echo hi", context: context)
+        #expect(rows.first?.kind == "terminal")
+        #expect(rows.first?.payload == "echo hi")
+    }
+
+    @Test func newPreferencesRoundTrip() throws {
+        var prefs = Preferences()
+        prefs.contactsEnabled = false
+        prefs.musicKeyword = "tunes"
+        prefs.clipboardAutoPaste = false
+        prefs.fileBufferTimeoutMinutes = 9
+        prefs.calculatorOutputThousands = false
+        prefs.dictionaryDefineKeyword = "lookup"
+        prefs.terminalPrefix = "!"
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(Preferences.self, from: data)
+        #expect(decoded.contactsEnabled == false)
+        #expect(decoded.musicKeyword == "tunes")
+        #expect(decoded.clipboardAutoPaste == false)
+        #expect(decoded.fileBufferTimeoutMinutes == 9)
+        #expect(decoded.calculatorOutputThousands == false)
+        #expect(decoded.dictionaryDefineKeyword == "lookup")
+        #expect(decoded.terminalPrefix == "!")
+    }

@@ -39,6 +39,8 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Jfred controls Finder, browsers, and system commands you run from the launcher.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Jfred searches your contacts so you can find, email, and call people from the launcher.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPrincipalClass</key>

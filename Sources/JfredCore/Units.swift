@@ -130,7 +130,8 @@ public struct SystemCommand: Sendable, Equatable {
         SystemCommand(id: "restart", title: "Restart", subtitle: "Restart this Mac", symbol: "arrow.clockwise", keywords: ["restart", "reboot"]),
         SystemCommand(id: "shutdown", title: "Shut Down", subtitle: "Shut down this Mac", symbol: "power", keywords: ["shutdown", "shut down", "poweroff"]),
         SystemCommand(id: "logout", title: "Log Out", subtitle: "Log out of this account", symbol: "rectangle.portrait.and.arrow.right", keywords: ["logout", "log out"]),
-        SystemCommand(id: "emptetrash", title: "Empty Trash", subtitle: "Empty the Finder trash", symbol: "trash", keywords: ["empty trash", "trash"]),
+        SystemCommand(id: "emptetrash", title: "Empty Trash", subtitle: "Empty the Finder trash", symbol: "trash", keywords: ["empty trash"]),
+        SystemCommand(id: "trash", title: "Show Trash", subtitle: "Open the Finder trash", symbol: "trash", keywords: ["show trash", "trash"]),
         SystemCommand(id: "eject", title: "Eject Disks", subtitle: "Eject removable disks", symbol: "eject", keywords: ["eject"]),
         SystemCommand(id: "quitall", title: "Quit All Apps", subtitle: "Quit every regular app", symbol: "xmark.circle", keywords: ["quit all", "quitall"]),
         SystemCommand(id: "darkmode", title: "Toggle Dark Mode", subtitle: "Switch appearance", symbol: "circle.lefthalf.filled", keywords: ["dark mode", "appearance"]),
@@ -142,6 +143,10 @@ public struct SystemCommand: Sendable, Equatable {
         SystemCommand(id: "mute", title: "Mute Volume", subtitle: "Toggle mute", symbol: "speaker.slash", keywords: ["mute", "volume"]),
         SystemCommand(id: "volumeup", title: "Volume Up", subtitle: "Raise the output volume", symbol: "speaker.plus", keywords: ["volume up", "louder"]),
         SystemCommand(id: "volumedown", title: "Volume Down", subtitle: "Lower the output volume", symbol: "speaker.minus", keywords: ["volume down", "quieter"]),
+        SystemCommand(id: "musicplaypause", title: "Play/Pause Music", subtitle: "Toggle Music.app playback", symbol: "playpause", keywords: ["play", "pause", "music"], category: "music"),
+        SystemCommand(id: "musicnext", title: "Next Track", subtitle: "Skip to the next song", symbol: "forward.end", keywords: ["next track", "next song"], category: "music"),
+        SystemCommand(id: "musicprevious", title: "Previous Track", subtitle: "Go back to the previous song", symbol: "backward.end", keywords: ["previous track", "previous song"], category: "music"),
+        SystemCommand(id: "musiccurrent", title: "Current Track", subtitle: "Show what Music.app is playing", symbol: "music.note", keywords: ["current track", "now playing"], category: "music"),
     ]
 }
 

@@ -100,6 +100,12 @@ struct RemotePane: View {
                     .frame(maxWidth: .infinity)
                     .foregroundStyle(.secondary)
                 Toggle("This Mac only", isOn: model.bindPref(\.remoteLocalOnly))
+                if !model.preferences.remoteLocalOnly {
+                    Text("Warning: the token is sent over plain HTTP on your network. Use this only on a trusted network.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Stepper("Port \(model.preferences.remotePort)", value: model.bindPref(\.remotePort), in: 1024...65535)
                 Text("Token \(model.preferences.remoteToken)")
                     .font(.system(size: 12, design: .monospaced))
@@ -404,6 +410,122 @@ struct UpdatePane: View {
         HStack(alignment: .top, spacing: 8) {
             Text("•")
             Text(text)
+        }
+    }
+}
+
+struct PowerpackPane: View {
+    var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PageHeaderBand(
+                icon: "bolt.fill",
+                tint: Color(hex: 0x4F217A),
+                title: "Powerpack",
+                subtitle: "The extra features that make Jfred a full launcher."
+            )
+            PageSurface {
+                FormPanel {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("Jfred includes the Powerpack feature set locally")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Clipboard History, Snippets, File Search, Universal Actions, Workflows, Contacts, Music, Themes, Remote and Large Type are available without a separate purchase. Jfred is an independent, local project and is not affiliated with Running with Crayons.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(JfredColor.sub)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Divider()
+                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 10) {
+                            powerItem("Clipboard History", "list.clipboard")
+                            powerItem("Snippets", "note.text")
+                            powerItem("File Search", "doc.text.magnifyingglass")
+                            powerItem("Universal Actions", "arrow.right.square")
+                            powerItem("Workflows", "square.grid.2x2")
+                            powerItem("Contacts", "person.crop.circle")
+                            powerItem("Music", "music.note")
+                            powerItem("Themes", "paintbrush.fill")
+                            powerItem("Remote", "antenna.radiowaves.left.and.right")
+                            powerItem("Large Type", "textformat.size")
+                        }
+                        Divider()
+                        HStack {
+                            Text("Version \(AppRelease.version)")
+                                .font(.system(size: 12))
+                                .foregroundStyle(JfredColor.sub)
+                            Spacer()
+                            Button("Open Help") { model.section = .help }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func powerItem(_ title: String, _ symbol: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 13))
+                .foregroundStyle(Color(hex: 0x4F217A))
+                .frame(width: 20)
+            Text(title).font(.system(size: 12.5))
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+struct HelpPane: View {
+    var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PageHeaderBand(
+                icon: "lifepreserver",
+                tint: Color(hex: 0x4F217A),
+                title: "Help",
+                subtitle: "Troubleshooting, permissions and diagnostics for Jfred."
+            )
+            PageSurface {
+                FormPanel {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("Jfred \(AppRelease.version) [local]")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Jfred is an independent Alfred-compatible launcher. If a feature is not working, check macOS permissions first: Accessibility is needed for snippets and window commands, Automation for browsers and Music, Contacts for the contact viewer, and Full Disk Access for complete file search.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(JfredColor.sub)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 10) {
+                            Button("Request Permissions…") { model.requestPermissions() }
+                            Button("Reveal Support Folder") { model.revealSupportFolder() }
+                            Button("Open Log") { model.section = .advanced }
+                        }
+                        Divider()
+                        VStack(alignment: .leading, spacing: 8) {
+                            helpRow("Support folder", SupportPaths.directory(syncFolder: model.preferences.syncFolder).path)
+                            helpRow("Contacts indexed", "\(model.contacts.count)")
+                            helpRow("Workflows", "\(model.workflows.count)")
+                            helpRow("Snippets", "\(model.snippets.count)")
+                            helpRow("Clipboard items", "\(model.clips.count)")
+                        }
+                        Divider()
+                        Text("Alfred is a trademark of Running with Crayons Ltd. Jfred is not affiliated with or endorsed by Running with Crayons.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(JfredColor.sub)
+                    }
+                }
+            }
+        }
+    }
+
+    private func helpRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 130, alignment: .trailing)
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(JfredColor.sub)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
         }
     }
 }
