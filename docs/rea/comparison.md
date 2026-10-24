@@ -13,16 +13,16 @@
 | 页面清单 | 14 个 Features | 16 个 Features（补 Contacts、Music） |
 | 偏好项 | 只实现“看得见”的开关 | 从 `Alfred Preferences Defaults.plist` 补键名与语义，新增 50+ 选项字段 |
 | 行为证据 | 截图与文档 | `decompile` 关键分支（剪贴板保留、General nib 装载）+ 符号/字符串交叉验证 |
-| 安全 | 未系统审计 | 专项审计并修复 8 项；见 `security-audit.md` |
+| 安全 | 未系统审计 | 专项审计并修复 9 项；见 `security-audit.md` |
 
 ## 代码量
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 12,064 |
+| Swift 行数（含测试） | 9,083 | 12,067 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 16 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,981 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,984 行 |
 
 ## 界面差异（rea 已对齐）
 

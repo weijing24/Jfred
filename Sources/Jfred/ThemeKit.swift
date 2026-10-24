@@ -111,6 +111,9 @@ struct LauncherTheme: Identifiable {
     }
 
     init(custom: CustomTheme) {
+        func clamp(_ value: Double, _ low: Double, _ high: Double) -> CGFloat {
+            CGFloat(min(max(value, low), high))
+        }
         self.init(
             id: custom.id,
             name: custom.name,
@@ -123,19 +126,19 @@ struct LauncherTheme: Identifiable {
             selectedSubtitle: Color(hexString: custom.selectedSubtitle),
             background: Color(hexString: custom.background),
             material: nil,
-            radius: CGFloat(custom.radius),
-            querySize: CGFloat(custom.querySize),
+            radius: clamp(custom.radius, 0, 30),
+            querySize: clamp(custom.querySize, 12, 72),
             fontName: custom.fontName,
-            width: CGFloat(custom.width),
-            paddingH: CGFloat(custom.paddingH),
-            paddingV: CGFloat(custom.paddingV),
-            iconSize: CGFloat(custom.iconSize),
-            iconPadding: CGFloat(custom.iconPadding),
-            rowPaddingV: CGFloat(custom.rowPaddingV),
-            textSpacing: CGFloat(custom.textSpacing),
-            resultTextSize: CGFloat(custom.resultTextSize),
-            resultSubtextSize: CGFloat(custom.resultSubtextSize),
-            shortcutSize: CGFloat(custom.shortcutSize),
+            width: clamp(custom.width, 320, 1200),
+            paddingH: clamp(custom.paddingH, 0, 40),
+            paddingV: clamp(custom.paddingV, 0, 40),
+            iconSize: clamp(custom.iconSize, 16, 96),
+            iconPadding: clamp(custom.iconPadding, 0, 30),
+            rowPaddingV: clamp(custom.rowPaddingV, 0, 20),
+            textSpacing: clamp(custom.textSpacing, 0, 20),
+            resultTextSize: clamp(custom.resultTextSize, 10, 48),
+            resultSubtextSize: clamp(custom.resultSubtextSize, 8, 32),
+            shortcutSize: clamp(custom.shortcutSize, 8, 32),
             searchBackground: Color(hexString: custom.searchBackground),
             searchSelected: Color(hexString: custom.selected),
             border: Color(hexString: custom.border),
