@@ -93,6 +93,7 @@ final class AppModel {
     var debugPaused = false
     var showThemeEditor = false
     var helpQuery = ""
+    var selectionHotkeyWarning = ""
     var actionPanelVisible = false
     var actionIndex = 0
     var launcherActions: [LauncherAction] = []
@@ -1479,9 +1480,10 @@ final class AppModel {
         let ok = HotkeyCenter.shared.register(id: 1, keyCode: UInt32(preferences.hotkey.keyCode), modifiers: preferences.hotkey.carbonModifiers) { [weak self] in
             Task { @MainActor in self?.toggleLauncher() }
         }
-        _ = HotkeyCenter.shared.register(id: 2, keyCode: 42, modifiers: Hotkey(keyCode: 42, modifiers: Hotkey.option | Hotkey.command).carbonModifiers) { [weak self] in
+        let selectionHotkeyOK = HotkeyCenter.shared.register(id: 2, keyCode: 42, modifiers: Hotkey(keyCode: 42, modifiers: Hotkey.option | Hotkey.command).carbonModifiers) { [weak self] in
             Task { @MainActor in self?.showSelectionActions() }
         }
+        selectionHotkeyWarning = selectionHotkeyOK ? "" : "⌥⌘\\ is already used by another app. Pick a different Universal Actions shortcut or free it up."
         if ok {
             hotkeyWarning = ""
         } else {

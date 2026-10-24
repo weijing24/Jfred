@@ -409,6 +409,12 @@ struct FeaturesPane: View {
                         .frame(width: 220)
                 }
                 SettingsNote("Use this hotkey to show the actions panel for the currently selected item in macOS.")
+                if !model.selectionHotkeyWarning.isEmpty {
+                    Text(model.selectionHotkeyWarning)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .padding(.leading, 130)
+                }
                 SettingsLabeled(title: "Action Ordering:") {
                     Toggle("Sort actions by last used per type", isOn: model.bindPref(\.uaSortByUsage))
                         .toggleStyle(.checkbox)
