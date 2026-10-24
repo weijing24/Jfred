@@ -57,6 +57,8 @@ struct WorkflowsPane: View {
                                 }
                                 Spacer()
                             }
+                            .opacity(workflow.enabled ? 1 : 0.45)
+                            .saturation(workflow.enabled ? 1 : 0.2)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                             .foregroundStyle(.white)
