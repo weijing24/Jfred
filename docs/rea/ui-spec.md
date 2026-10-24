@@ -93,6 +93,7 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 - **Contacts**：Contacts / Email / Advanced 三个 tab；Open Contacts / Display / Maps / URL handler / 权限状态。
 - **Music**：General / Keywords / Advanced 三个 tab；Mini Player 开关与 keyword、Playback、Now Playing、Play/Pause/Previous/Next。
 - **System**：每个命令的 enable + confirm + keyword；Eject / Eject All / 排除卷。
+- **Universal Actions**：General / Actions 两 tab；Show Actions 的 →/fn/ctrl/⌘ 开关、Selection Hotkey、Action Ordering。
 - **Terminal**：Application、Prefix、Custom AppleScript。
 - **System**：系统命令关键词、确认、Eject、Eject All、排除卷。
 - **Previews**：Quick Look、rich previews、No Previews For/In。

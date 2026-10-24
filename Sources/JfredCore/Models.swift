@@ -228,6 +228,14 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var terminalPrefix: String
     public var terminalCustomScript: String
 
+    // Universal Actions.
+    public var uaShowRightArrow: Bool
+    public var uaShowFunction: Bool
+    public var uaShowControl: Bool
+    public var uaShowCommand: Bool
+    public var uaSelectionHotkey: String
+    public var uaSortByUsage: Bool
+
     // System commands.
     public var systemKeywords: [String: String]
     public var systemConfirm: [String]
@@ -400,6 +408,12 @@ public struct Preferences: Codable, Equatable, Sendable {
         dictionaryOnlyDictionary = true
         terminalPrefix = ">"
         terminalCustomScript = ""
+        uaShowRightArrow = true
+        uaShowFunction = true
+        uaShowControl = false
+        uaShowCommand = false
+        uaSelectionHotkey = "⌥⌘\\"
+        uaSortByUsage = false
         systemKeywords = [:]
         systemConfirm = []
         systemDisabled = []
@@ -437,6 +451,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case dictionaryDefineEnabled, dictionarySpellEnabled, dictionaryDefineKeyword, dictionarySpellKeyword
         case dictionaryLanguage, dictionaryPasteOnAction, dictionaryOnlyDictionary
         case terminalPrefix, terminalCustomScript
+        case uaShowRightArrow, uaShowFunction, uaShowControl, uaShowCommand, uaSelectionHotkey, uaSortByUsage
         case contactsEnabled, contactsOpenInAlfred, contactsShowTitle, contactsShowJobTitle
         case contactsShowNotes, contactsInvertName, contactsMapURL, contactsURLHandler, contactsURLHandlerEnabled
         case musicEnabled, musicKeyword, musicHideMiniPlayerAfterSong, musicRandomLargerAlbums, musicIncludePlaylists
@@ -602,6 +617,12 @@ public struct Preferences: Codable, Equatable, Sendable {
         dictionaryOnlyDictionary = value(.dictionaryOnlyDictionary, d.dictionaryOnlyDictionary)
         terminalPrefix = value(.terminalPrefix, d.terminalPrefix)
         terminalCustomScript = value(.terminalCustomScript, d.terminalCustomScript)
+        uaShowRightArrow = value(.uaShowRightArrow, d.uaShowRightArrow)
+        uaShowFunction = value(.uaShowFunction, d.uaShowFunction)
+        uaShowControl = value(.uaShowControl, d.uaShowControl)
+        uaShowCommand = value(.uaShowCommand, d.uaShowCommand)
+        uaSelectionHotkey = value(.uaSelectionHotkey, d.uaSelectionHotkey)
+        uaSortByUsage = value(.uaSortByUsage, d.uaSortByUsage)
         systemKeywords = value(.systemKeywords, d.systemKeywords)
         systemConfirm = value(.systemConfirm, d.systemConfirm)
         systemDisabled = value(.systemDisabled, d.systemDisabled)

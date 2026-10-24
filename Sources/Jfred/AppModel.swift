@@ -73,6 +73,7 @@ final class AppModel {
     var musicTrack = ""
     var contactsTab = "Contacts"
     var musicTab = "General"
+    var actionsTab = "General"
     var actionPanelVisible = false
     var actionIndex = 0
     var launcherActions: [LauncherAction] = []

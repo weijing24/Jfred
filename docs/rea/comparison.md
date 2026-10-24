@@ -19,16 +19,17 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 10,722 |
+| Swift 行数（含测试） | 9,083 | 10,777 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 16 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +1,639 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +1,694 行 |
 
 ## 界面差异（rea 已对齐）
 
 - 外壳从“Liquid Glass + 极光渐变”改为 Alfred 的平色：`#4F217A` rail、`#2F104B` 列表、`#ECECEC` 内容、`#D9D9D9` 标题栏。
 - 启动器按 Alfred `.alfredappearance` 的实测指标重建：默认 559pt 宽、3pt 圆角、9/8pt 内边距、34pt System Light 搜索、18/12/16pt 结果字号、40pt 图标、约 50pt 行高；10 套主题与 Alfred 同名同指标（颜色/尺寸，不复用主题文件或壁纸）。
 - 启动器补 Action Panel：→ 或 ⌘K 打开，↑↓ 选择、↩ 执行、Esc/← 返回；App/文件/URL/联系人/剪贴板/计算器各有对应动作（Open、Reveal、Copy Path、Quick Look、Large Type 等）。
+- Universal Actions 改为 General / Actions 两 tab，补 Show Actions 的 →/fn/ctrl/⌘ 开关、Selection Hotkey、Action Ordering，Actions 页列出可用动作。
 - 新增统一的 `PageHeaderBand` 与 `FormPanel`：46pt 图标、20pt 标题、12.5pt 副标题、白色圆角表单。
 - Features 列表行高 42pt、图标 34pt、宽 240pt，16 项与 Alfred 顺序一致。
 - 底部 rail 新增 Powerpack、Help，顺序为 Powerpack / Usage / Help / Update。

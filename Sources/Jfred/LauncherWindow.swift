@@ -224,7 +224,7 @@ final class LauncherController {
             model.completeSelected()
             return nil
         case 124:
-            model.showActions()
+            if model.preferences.uaShowRightArrow { model.showActions() }
             return nil
         default:
             break
