@@ -214,6 +214,18 @@ struct CoreTests {
         #expect(!Search.results(for: "clear", context: context).contains { $0.kind == "clipclear" })
     }
 
+    @Test func clipboardViewerIncludesSnippets() {
+        var context = SearchContext()
+        context.preferences.clipboardEnabled = true
+        context.preferences.clipboardSnippetsAtTop = true
+        context.preferences.clipboardSnippetsWhenSearching = true
+        context.snippets = [Snippet(name: "Address", keyword: ";addr", text: "1 Infinite Loop", autoExpand: true)]
+        let all = Search.results(for: "clipboard", context: context)
+        #expect(all.contains { $0.id == "snippets:all" })
+        let filtered = Search.results(for: "clipboard infinite", context: context)
+        #expect(filtered.contains { $0.kind == "snippet" && $0.title == "Address" })
+    }
+
     @Test func customTerminalPrefix() {
         var context = SearchContext()
         context.preferences.terminalPrefix = "!"

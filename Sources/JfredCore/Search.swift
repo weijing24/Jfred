@@ -298,6 +298,34 @@ public enum Search {
             ))
         }
         if context.preferences.clipboardEnabled, let clipQuery = argument(of: context.preferences.clipboardViewerKeyword, in: trimmed) ?? argument(of: "clip", in: trimmed) {
+            if context.preferences.clipboardSnippetsAtTop, clipQuery.isEmpty {
+                found.append(make(
+                    id: "snippets:all",
+                    title: "All Snippets",
+                    subtitle: "Browse snippets in the launcher",
+                    icon: "symbol:text.quote",
+                    kind: "snippets",
+                    payload: "",
+                    category: "expansion",
+                    score: 2
+                ))
+            }
+            if context.preferences.clipboardSnippetsWhenSearching {
+                for snippet in context.snippets {
+                    let hay = snippet.name + " " + snippet.keyword + " " + snippet.text
+                    guard clipQuery.isEmpty || fold(hay).contains(fold(clipQuery)) else { continue }
+                    found.append(make(
+                        id: "snippet:\(snippet.id.uuidString):clip",
+                        title: snippet.name,
+                        subtitle: snippet.keyword + "  ·  " + snippet.text.replacingOccurrences(of: "\n", with: " "),
+                        icon: "symbol:text.quote",
+                        kind: "snippet",
+                        payload: snippet.id.uuidString,
+                        category: "expansion",
+                        score: context.preferences.clipboardSnippetsAtTop ? 1.8 : 1.38
+                    ))
+                }
+            }
             let filtered = context.clips.filter { clipQuery.isEmpty || fold($0.text).contains(fold(clipQuery)) }
             for clip in filtered.prefix(8) {
                 let preview = clip.text.replacingOccurrences(of: "\n", with: " ")

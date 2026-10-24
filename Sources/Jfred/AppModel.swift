@@ -559,6 +559,9 @@ final class AppModel {
         case "place":
             openPlace(item.payload)
             hideLauncher(reactivate: false)
+        case "snippets":
+            query = preferences.snippetKeyword.trimmingCharacters(in: .whitespaces) + " "
+            scheduleSearch()
         case "clipclear":
             if let minutes = Int(item.payload) { clearClipboardHistory(lastMinutes: minutes) } else { clearClipboardHistory() }
             hideLauncher(reactivate: false)
