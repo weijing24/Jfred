@@ -254,6 +254,9 @@ enum JfredStore {
         for directory in directories {
             guard let info = plist(at: directory.appendingPathComponent("info.plist")) else { continue }
             let enabled = !readBool(info, key: "disabled")
+            // Alfred keeps disabled/archived workflows in the same folder; they
+            // are not part of the active library, so don't import them.
+            guard enabled else { continue }
             let bundle = info["bundleid"] as? String ?? directory.lastPathComponent
             let group = bundle
             let name = info["name"] as? String ?? bundle
