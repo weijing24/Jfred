@@ -87,6 +87,8 @@ final class AppModel {
     var debuggerVisible = false
     var debugLines: [String] = []
     var debugQuery = "test"
+    var debugCursor = 0
+    var debugWorkflowID: UUID?
     var showThemeEditor = false
     var helpQuery = ""
     var actionPanelVisible = false
@@ -1101,35 +1103,69 @@ final class AppModel {
         guard let workflow = workflows.first(where: { $0.id == id }) else { return }
         debuggerVisible = true
         debugLines = ["Running \(workflow.name) with query ‘\(debugQuery)’"]
+        debugCursor = 0
+        debugWorkflowID = id
         let query = debugQuery
         let actions = workflow.actions
         Task {
             for (index, action) in actions.enumerated() {
-                let value = action.value.replacingOccurrences(of: "{query}", with: query)
-                await MainActor.run { self.debugLines.append("\(index + 1). \(action.kind.rawValue): \(value)") }
-                switch action.kind {
-                case .openURL:
-                    if let url = URL(string: value) { await MainActor.run { NSWorkspace.shared.open(url) } }
-                case .openApp:
-                    await MainActor.run {
-                        let url = value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(fileURLWithPath: "/Applications/\(value).app")
-                        NSWorkspace.shared.open(url)
-                    }
-                case .copy:
-                    await MainActor.run { self.writeClipboard(value) }
-                case .largeType:
-                    await MainActor.run { self.showLarge(value) }
-                case .terminal:
-                    await MainActor.run { self.runInTerminal(value) }
-                case .shell:
-                    let output = await Task.detached { Shell.run("/bin/zsh", ["-lc", value], timeout: 12) }.value
-                    await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
-                case .appleScript:
-                    let output = await Task.detached { Shell.osascript(value, timeout: 12) }.value
-                    await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
-                }
+                await MainActor.run { self.debugCursor = index }
+                await executeDebugAction(action, query: query, index: index)
             }
-            await MainActor.run { self.debugLines.append("Finished.") }
+            await MainActor.run {
+                self.debugCursor = actions.count
+                self.debugLines.append("Finished.")
+            }
+        }
+    }
+
+    func stepWorkflowDebug(_ id: UUID) {
+        guard let workflow = workflows.first(where: { $0.id == id }) else { return }
+        if debugWorkflowID != id {
+            debugWorkflowID = id
+            debugCursor = 0
+            debugLines = ["Stepping \(workflow.name) with query ‘\(debugQuery)’"]
+        }
+        debuggerVisible = true
+        guard debugCursor < workflow.actions.count else {
+            debugLines.append("Finished.")
+            return
+        }
+        let index = debugCursor
+        let action = workflow.actions[index]
+        let query = debugQuery
+        Task {
+            await executeDebugAction(action, query: query, index: index)
+            await MainActor.run {
+                self.debugCursor = index + 1
+                if self.debugCursor >= workflow.actions.count { self.debugLines.append("Finished.") }
+            }
+        }
+    }
+
+    private func executeDebugAction(_ action: WorkflowAction, query: String, index: Int) async {
+        let value = action.value.replacingOccurrences(of: "{query}", with: query)
+        await MainActor.run { self.debugLines.append("\(index + 1). \(action.kind.rawValue): \(value)") }
+        switch action.kind {
+        case .openURL:
+            if let url = URL(string: value) { await MainActor.run { NSWorkspace.shared.open(url) } }
+        case .openApp:
+            await MainActor.run {
+                let url = value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(fileURLWithPath: "/Applications/\(value).app")
+                NSWorkspace.shared.open(url)
+            }
+        case .copy:
+            await MainActor.run { self.writeClipboard(value) }
+        case .largeType:
+            await MainActor.run { self.showLarge(value) }
+        case .terminal:
+            await MainActor.run { self.runInTerminal(value) }
+        case .shell:
+            let output = await Task.detached { Shell.run("/bin/zsh", ["-lc", value], timeout: 12) }.value
+            await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
+        case .appleScript:
+            let output = await Task.detached { Shell.osascript(value, timeout: 12) }.value
+            await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
         }
     }
 

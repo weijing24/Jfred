@@ -465,6 +465,7 @@ struct WorkflowEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 150)
             Button("Run") { model.runWorkflowDebug(workflowID) }
+            Button("Step") { model.stepWorkflowDebug(workflowID) }
             Spacer()
             Button("Cancel") { model.cancelWorkflowEdit() }
             Button("Save") { model.saveWorkflowEdit() }.keyboardShortcut(.defaultAction)

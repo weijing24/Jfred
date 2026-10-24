@@ -124,6 +124,10 @@ extension AppModel {
         editingWorkflowID = workflow.id
         selectedWorkflow = workflow.id
         workflowSelection = nil
+        debuggerVisible = false
+        debugLines = []
+        debugCursor = 0
+        debugWorkflowID = nil
     }
 
     func cancelWorkflowEdit() {
