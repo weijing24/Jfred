@@ -354,7 +354,13 @@ final class AppModel {
             reveal(item)
             hideLauncher(reactivate: false)
         case .copyPath:
-            writeClipboard(value)
+            let escaped: String
+            if preferences.fileEscapePathForTerminal {
+                escaped = "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+            } else {
+                escaped = value
+            }
+            writeClipboard(escaped)
             hideLauncher(reactivate: false)
         case .copyName:
             writeClipboard(item.title)
@@ -553,7 +559,22 @@ final class AppModel {
             if preferences.fileOpenWithFinder {
                 NSWorkspace.shared.activateFileViewerSelecting(paths.map { URL(fileURLWithPath: $0) })
             } else {
-                for path in paths { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
+                for path in paths {
+                    var isDirectory: ObjCBool = false
+                    let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+                    if exists, isDirectory.boolValue, preferences.fileOpenFoldersInFinder {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                    } else if exists, !isDirectory.boolValue,
+                              preferences.fileRunAppleScriptsInsteadOfOpening,
+                              (path as NSString).pathExtension.lowercased() == "scpt" {
+                        _ = Shell.run("/usr/bin/osascript", [path], timeout: 30)
+                    } else {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    }
+                    if exists, isDirectory.boolValue, preferences.fileTouchFolders {
+                        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
+                    }
+                }
             }
             if preferences.fileClearBufferAfterAction {
                 fileBuffer = []

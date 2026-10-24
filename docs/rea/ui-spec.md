@@ -89,7 +89,7 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 - **Clipboard**：History / Merging / Advanced 三个 tab；三类保留项（Text/Images/File Lists 各自时长）；Viewer Hotkey/Keyword；Clear Keyword；Snippets；Universal；Merging 的 Fast append、分隔符、声音、回写剪贴板；Advanced 的 Max Clip Size、Concealed/Auto Generated、Unicode 匹配、Used 置顶、PNG、退出清空。
 - **Calculator**：Standard / Advanced（`=` 前缀）/ Input / Output / 千分位。
 - **Dictionary**：Define / Spell / Language / Paste on action / Only show dictionary words。
-- **File Search**：Navigation 的 ←/→、↩ 打开 Finder、Previous Path；Buffer 的启用、清理、⇧⌥；Advanced 的 Home Folder、Copy Path、AppleScript、外置盘图标、Touch folders/aliases。
+- **File Search**：Navigation 的 ←/→、↩ 打开 Finder、Previous Path；Buffer 的启用、清理、⇧⌥；Advanced 的 Home Folder、Copy Path 转义、AppleScript 直接运行、外置盘图标、Touch folders/aliases。
 - **Contacts**：Contacts / Email / Advanced 三个 tab；Open Contacts / Display / Maps / Email 模式（mail/Gmail/custom）/ URL handler / 权限状态。
 - **Music**：General / Keywords / Advanced 三个 tab；Mini Player 开关与 keyword、Playback、Now Playing、Play/Pause/Previous/Next。
 - **System**：每个命令的 enable + confirm + keyword；Eject / Eject All / 排除卷。
