@@ -1,5 +1,6 @@
 import SwiftUI
 import JfredCore
+import CoreImage.CIFilterBuiltins
 
 struct AppearancePane: View {
     var model: AppModel
@@ -153,6 +154,8 @@ struct RemotePane: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                    Button("Add iOS Remote…") { model.showRemoteQR = true }
+                        .disabled(!model.preferences.remoteEnabled)
                     Button("Open Remote Page") {
                         let url = "http://127.0.0.1:\(model.preferences.remotePort)/?token=\(model.preferences.remoteToken)"
                         if let link = URL(string: url) { NSWorkspace.shared.open(link) }
@@ -166,6 +169,66 @@ struct RemotePane: View {
             .frame(width: 280)
             .background(Color.white)
         }
+        .sheet(isPresented: model.bind(\.showRemoteQR)) {
+            RemoteQRCode(url: "http://127.0.0.1:\(model.preferences.remotePort)/?token=\(model.preferences.remoteToken)") {
+                model.showRemoteQR = false
+            }
+        }
+    }
+}
+
+struct RemoteQRCode: View {
+    var url: String
+    var done: () -> Void
+
+    private var image: NSImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(url.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+        let rep = NSCIImageRep(ciImage: scaled)
+        let image = NSImage(size: rep.size)
+        image.addRepresentation(rep)
+        return image
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("Add Jfred Remote")
+                .font(.system(size: 18, weight: .semibold))
+            Text("Scan this code from the Jfred Remote page on your iPhone, or copy the URL below.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 320)
+            if let image {
+                Image(nsImage: image)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 220, height: 220)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
+            } else {
+                Text("Could not generate the QR code.")
+                    .foregroundStyle(.red)
+            }
+            Text(url)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .lineLimit(3)
+                .multilineTextAlignment(.center)
+            HStack {
+                Button("Copy URL") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url, forType: .string)
+                }
+                Button("Done") { done() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
     }
 }
 

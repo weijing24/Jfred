@@ -16,17 +16,14 @@ struct WorkflowsPane: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 list
-                cards
+                if let id = model.selectedWorkflow, model.workflows.contains(where: { $0.id == id }) {
+                    WorkflowEditor(model: model, workflowID: id)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    cards
+                }
             }
             footer
-        }
-        .sheet(isPresented: Binding(
-            get: { model.editingWorkflowID != nil },
-            set: { presented in if !presented { model.cancelWorkflowEdit() } }
-        )) {
-            if let id = model.editingWorkflowID {
-                WorkflowEditor(model: model, workflowID: id)
-            }
         }
         .sheet(isPresented: model.bind(\.showTemplates)) { templateSheet }
         .background(Color(hex: 0x1B1B1B))
@@ -45,7 +42,8 @@ struct WorkflowsPane: View {
                 VStack(spacing: 0) {
                     ForEach(visible) { workflow in
                         Button {
-                            model.selectedWorkflow = workflow.id
+                            if model.editingWorkflowID != nil { model.saveWorkflowEdit() }
+                            model.beginWorkflowEdit(workflow)
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: workflow.symbol)
@@ -259,48 +257,193 @@ struct WorkflowEditor: View {
         model.workflows.first { $0.id == workflowID }
     }
 
+    private var actions: [WorkflowAction] { workflow?.actions ?? [] }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Workflow").font(.title3)
-            TextField("Name", text: model.bindWorkflow(workflowID, \.name))
-            TextField("Keyword", text: model.bindWorkflow(workflowID, \.keyword))
-            TextField("Author", text: model.bindWorkflow(workflowID, \.author))
-            TextField("SF Symbol", text: model.bindWorkflow(workflowID, \.symbol))
-            Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled))
-            ForEach(Array((workflow?.actions ?? []).enumerated()), id: \.element.id) { index, _ in
-                HStack {
-                    Picker("Action", selection: model.bindAction(workflowID, index, \.kind)) {
-                        ForEach(WorkflowAction.Kind.allCases, id: \.self) { kind in
-                            Text(kind.rawValue).tag(kind)
-                        }
-                    }
-                    .frame(width: 150)
-                    TextField("Value, {query} is the text after the keyword", text: model.bindAction(workflowID, index, \.value))
-                }
+        VStack(spacing: 0) {
+            header
+            HStack(spacing: 0) {
+                canvas
+                inspector
             }
-            HStack {
-                Button("Add action") { appendAction() }
-                Button("Remove action") { removeAction() }
-            }
-            HStack {
-                Spacer()
-                Button("Cancel") { model.cancelWorkflowEdit() }
-                Button("Save") { model.saveWorkflowEdit() }.keyboardShortcut(.defaultAction)
-            }
+            footer
         }
-        .padding(20)
-        .frame(width: 560)
+        .frame(minWidth: 680, maxWidth: .infinity, minHeight: 520, maxHeight: .infinity)
+        .background(Color(hex: 0x1B1B1B))
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Image(systemName: workflow?.symbol ?? "bolt.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: UInt32(Int(workflow?.tint ?? "561D7E", radix: 16) ?? 0x561D7E))))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(workflow?.name ?? "Workflow").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                Text("Keyword: \(workflow?.keyword ?? "")").font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
+            }
+            Spacer()
+            Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 52)
+        .background(Color(hex: 0x2A2A2A))
+    }
+
+    private var canvas: some View {
+        ScrollView([.horizontal, .vertical]) {
+            HStack(spacing: 0) {
+                node(
+                    icon: "keyboard",
+                    title: "Keyword",
+                    subtitle: workflow?.keyword ?? "",
+                    selected: model.workflowSelection == nil
+                ) { model.workflowSelection = nil }
+                ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                    connector
+                    node(
+                        icon: symbol(for: action.kind),
+                        title: action.kind.rawValue,
+                        subtitle: action.value,
+                        selected: model.workflowSelection == index
+                    ) { model.workflowSelection = index }
+                }
+                connector
+                Button {
+                    appendAction()
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "plus").font(.system(size: 18))
+                        Text("Add Action").font(.system(size: 11))
+                    }
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 110, height: 104)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.04)))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.16), style: StrokeStyle(lineWidth: 1, dash: [4])))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(hex: 0x1E1E1E))
+    }
+
+    private var connector: some View {
+        Image(systemName: "arrow.right")
+            .font(.system(size: 12))
+            .foregroundStyle(.white.opacity(0.28))
+            .frame(width: 34)
+    }
+
+    private func node(icon: String, title: String, subtitle: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: icon).font(.system(size: 14))
+                    Spacer()
+                }
+                Text(title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                Text(subtitle.isEmpty ? "No value" : subtitle)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(3)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.white)
+            .padding(10)
+            .frame(width: 170, height: 110, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Color(hex: 0x3C2350) : Color(hex: 0x2B2B2B)))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color(hex: 0x8E5AB5) : Color.white.opacity(0.08), lineWidth: selected ? 1.5 : 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private var inspector: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(model.workflowSelection == nil ? "Workflow" : "Object")
+                .font(.system(size: 14, weight: .semibold))
+            if let index = model.workflowSelection, actions.indices.contains(index) {
+                Picker("Type", selection: model.bindAction(workflowID, index, \.kind)) {
+                    ForEach(WorkflowAction.Kind.allCases, id: \.self) { kind in
+                        Text(kind.rawValue).tag(kind)
+                    }
+                }
+                TextEditor(text: model.bindAction(workflowID, index, \.value))
+                    .font(.system(size: 11, design: .monospaced))
+                    .frame(height: 140)
+                    .padding(4)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.black.opacity(0.15)))
+                Text("Use {query} for the text typed after the keyword.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Button("Remove Object", role: .destructive) { removeAction(index) }
+            } else {
+                field("Name", model.bindWorkflow(workflowID, \.name))
+                field("Keyword", model.bindWorkflow(workflowID, \.keyword))
+                field("Author", model.bindWorkflow(workflowID, \.author))
+                field("SF Symbol", model.bindWorkflow(workflowID, \.symbol))
+                field("Tint (hex)", model.bindWorkflow(workflowID, \.tint))
+                Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled))
+            }
+            Spacer()
+        }
+        .textFieldStyle(.roundedBorder)
+        .padding(16)
+        .frame(width: 280)
+        .background(Color(hex: 0xF2F2F2))
+    }
+
+    private var footer: some View {
+        HStack {
+            Button("Add Action") { appendAction() }
+            Spacer()
+            Button("Cancel") { model.cancelWorkflowEdit() }
+            Button("Save") { model.saveWorkflowEdit() }.keyboardShortcut(.defaultAction)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 48)
+        .background(Color(hex: 0x2A2A2A))
+        .foregroundStyle(.white)
+    }
+
+    private func field(_ title: String, _ binding: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField(title, text: binding)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func symbol(for kind: WorkflowAction.Kind) -> String {
+        switch kind {
+        case .openURL: "globe"
+        case .openApp: "app"
+        case .shell: "terminal"
+        case .copy: "doc.on.doc"
+        case .largeType: "textformat.size"
+        case .appleScript: "applescript"
+        case .terminal: "terminal.fill"
+        }
     }
 
     private func appendAction() {
         guard let index = model.workflows.firstIndex(where: { $0.id == workflowID }) else { return }
-        model.workflows[index].actions.append(WorkflowAction(kind: .shell, value: ""))
+        model.workflows[index].actions.append(WorkflowAction(kind: .copy, value: "{query}"))
+        model.workflowSelection = model.workflows[index].actions.count - 1
     }
 
-    private func removeAction() {
-        guard let index = model.workflows.firstIndex(where: { $0.id == workflowID }) else { return }
-        if !model.workflows[index].actions.isEmpty {
-            model.workflows[index].actions.removeLast()
-        }
+    private func removeAction(_ index: Int) {
+        guard let wf = model.workflows.firstIndex(where: { $0.id == workflowID }),
+              model.workflows[wf].actions.indices.contains(index) else { return }
+        model.workflows[wf].actions.remove(at: index)
+        model.workflowSelection = model.workflows[wf].actions.isEmpty ? nil : min(index, model.workflows[wf].actions.count - 1)
     }
 }

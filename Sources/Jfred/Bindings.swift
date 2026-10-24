@@ -123,6 +123,7 @@ extension AppModel {
         }
         editingWorkflowID = workflow.id
         selectedWorkflow = workflow.id
+        workflowSelection = nil
     }
 
     func cancelWorkflowEdit() {
@@ -136,12 +137,14 @@ extension AppModel {
         editingWorkflowID = nil
         workflowSnapshot = nil
         workflowIsNew = false
+        workflowSelection = nil
     }
 
     func saveWorkflowEdit() {
         editingWorkflowID = nil
         workflowSnapshot = nil
         workflowIsNew = false
+        workflowSelection = nil
         workflowsChanged()
     }
 }

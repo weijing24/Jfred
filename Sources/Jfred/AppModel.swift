@@ -74,6 +74,8 @@ final class AppModel {
     var contactsTab = "Contacts"
     var musicTab = "General"
     var actionsTab = "General"
+    var showRemoteQR = false
+    var workflowSelection: Int? = nil
     var actionPanelVisible = false
     var actionIndex = 0
     var launcherActions: [LauncherAction] = []
