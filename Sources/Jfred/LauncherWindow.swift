@@ -193,6 +193,16 @@ final class LauncherController {
     private func handle(_ event: NSEvent) -> NSEvent? {
         guard model.launcherVisible, panel?.isKeyWindow == true else { return event }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if model.actionPanelVisible {
+            switch event.keyCode {
+            case 125: model.moveAction(1); return nil
+            case 126: model.moveAction(-1); return nil
+            case 36, 76: model.commitAction(); return nil
+            case 53: model.closeActions(); return nil
+            case 123: model.closeActions(); return nil
+            default: model.closeActions()
+            }
+        }
         switch event.keyCode {
         case 125:
             model.move(1)
@@ -213,6 +223,9 @@ final class LauncherController {
         case 48:
             model.completeSelected()
             return nil
+        case 124:
+            model.showActions()
+            return nil
         default:
             break
         }
@@ -224,6 +237,7 @@ final class LauncherController {
             if chars == "c" { model.copySelected(); return nil }
             if chars == "l" { model.largeTypeSelected(); return nil }
             if chars == "y" { model.quickLookSelected(); return nil }
+            if chars == "k" { model.showActions(); return nil }
         }
         return event
     }
@@ -265,7 +279,11 @@ struct LauncherRoot: View {
                     .padding(.bottom, 6)
                 }
             }
-            if !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if model.actionPanelVisible {
+                actionList(theme)
+                    .padding(.horizontal, theme.paddingH)
+                    .padding(.bottom, theme.paddingV)
+            } else if !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 resultList(theme)
                     .padding(.horizontal, theme.paddingH)
                     .padding(.bottom, theme.paddingV)
@@ -285,7 +303,27 @@ struct LauncherRoot: View {
             panel.strokeBorder(theme.border, lineWidth: 0.7)
         )
         .shadow(color: .black.opacity(0.26), radius: 24, y: 12)
-        .onChange(of: model.query) { _, _ in model.scheduleSearch() }
+        .onChange(of: model.query) { _, _ in
+            model.closeActions()
+            model.scheduleSearch()
+        }
+    }
+
+    private func actionList(_ theme: LauncherTheme) -> some View {
+        let shown = min(max(model.launcherActions.count, 1), LauncherMetrics.visibleRows)
+        return ScrollView {
+            VStack(spacing: 2) {
+                ForEach(Array(model.launcherActions.enumerated()), id: \.element.id) { index, action in
+                    LauncherActionRow(action: action, selected: index == model.actionIndex, theme: theme)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            model.actionIndex = index
+                            model.commitAction()
+                        }
+                }
+            }
+        }
+        .frame(height: CGFloat(shown) * theme.rowHeight - 2)
     }
 
     private func resultList(_ theme: LauncherTheme) -> some View {
@@ -448,6 +486,41 @@ struct LauncherRow: View {
                 .font(.system(size: theme.shortcutSize, weight: .regular))
                 .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
                 .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.horizontal, theme.paddingH)
+        .frame(maxWidth: .infinity, minHeight: theme.rowHeight, maxHeight: theme.rowHeight, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+                .fill(selected ? theme.selected : Color.clear)
+        )
+    }
+}
+
+struct LauncherActionRow: View {
+    var action: LauncherAction
+    var selected: Bool
+    var theme: LauncherTheme
+
+    var body: some View {
+        HStack(spacing: theme.iconPadding + 4) {
+            Image(systemName: action.symbol)
+                .font(.system(size: theme.iconSize * 0.45))
+                .foregroundStyle(selected ? theme.selectedTitle : theme.title)
+                .frame(width: theme.iconSize)
+            VStack(alignment: .leading, spacing: theme.textSpacing) {
+                Text(action.title)
+                    .font(theme.font(size: theme.resultTextSize, weight: .regular))
+                    .foregroundStyle(selected ? theme.selectedTitle : theme.title)
+                    .lineLimit(1)
+                Text(action.subtitle)
+                    .font(.system(size: theme.resultSubtextSize))
+                    .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(selected ? "↩" : "")
+                .font(.system(size: theme.shortcutSize))
+                .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
         }
         .padding(.horizontal, theme.paddingH)
         .frame(maxWidth: .infinity, minHeight: theme.rowHeight, maxHeight: theme.rowHeight, alignment: .leading)

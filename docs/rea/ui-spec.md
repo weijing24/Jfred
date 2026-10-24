@@ -35,6 +35,18 @@
 
 Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern、Alfred Modern Dark、Alfred Classic、Alfred macOS、Alfred macOS Dark、Frosty Teal、Large Avenir、High Contrast Light。旧主题 ID（modern/macos/frosty 等）会映射到新 ID，旧配置不会失效。
 
+### Action Panel
+
+- 打开：→ 或 ⌘K；关闭：Esc / ←。
+- 导航：↑↓；执行：↩。
+- 动作按结果类型生成：
+  - App / 文件：Open、Reveal in Finder、Copy Path、Copy Name、Quick Look、Large Type。
+  - URL：Open URL、Open in Default Browser、Copy URL、Large Type。
+  - 联系人：Open Contact、Copy Email or Phone、Large Type。
+  - 剪贴板：Paste、Copy、Large Type。
+  - 计算/复制/片段：Paste、Copy、Large Type。
+- 面板复用主题的行高、选中背景与字号，宽度不额外扩展。
+
 ## Features 列表
 
 | # | 标题 | 副标题 |

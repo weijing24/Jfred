@@ -73,6 +73,9 @@ final class AppModel {
     var musicTrack = ""
     var contactsTab = "Contacts"
     var musicTab = "General"
+    var actionPanelVisible = false
+    var actionIndex = 0
+    var launcherActions: [LauncherAction] = []
     var opItems: [AppRecord] = []
 
     var query = ""
@@ -224,6 +227,7 @@ final class AppModel {
             results = []
         }
         launcherVisible = true
+        actionPanelVisible = false
         focusToken += 1
         SnippetExpander.shared.setSuspended(true)
         if previousApp != nil { sinkPreferencesBehindOtherApps() }
@@ -281,6 +285,100 @@ final class AppModel {
         guard results.indices.contains(index) else { return }
         selection = index
         run(results[index], forced: "primary")
+    }
+
+    func showActions() {
+        guard results.indices.contains(selection) else { return }
+        launcherActions = actions(for: results[selection])
+        guard !launcherActions.isEmpty else { return }
+        actionPanelVisible = true
+        actionIndex = 0
+        launcher?.layout()
+    }
+
+    func closeActions() {
+        guard actionPanelVisible else { return }
+        actionPanelVisible = false
+        actionIndex = 0
+        launcher?.layout()
+    }
+
+    func moveAction(_ delta: Int) {
+        guard actionPanelVisible, !launcherActions.isEmpty else { return }
+        actionIndex = (actionIndex + delta + launcherActions.count) % launcherActions.count
+    }
+
+    func commitAction() {
+        guard actionPanelVisible, launcherActions.indices.contains(actionIndex), results.indices.contains(selection) else { return }
+        let item = results[selection]
+        let action = launcherActions[actionIndex]
+        let value = item.payload.isEmpty ? item.title : item.payload
+        closeActions()
+        switch action.kind {
+        case .open:
+            run(item, forced: "primary")
+        case .reveal:
+            reveal(item)
+            hideLauncher(reactivate: false)
+        case .copyPath:
+            writeClipboard(value)
+            hideLauncher(reactivate: false)
+        case .copyName:
+            writeClipboard(item.title)
+            hideLauncher(reactivate: false)
+        case .copyValue:
+            writeClipboard(value)
+            hideLauncher(reactivate: false)
+        case .openBrowser:
+            if let url = URL(string: value) { NSWorkspace.shared.open(url) }
+            hideLauncher(reactivate: false)
+        case .quickLook:
+            quickLookSelected()
+        case .largeType:
+            largeTypeSelected()
+        case .pasteClipboard:
+            if let clip = clips.first(where: { $0.id.uuidString == item.payload }) { pasteClipboardItem(clip) }
+        case .pasteValue:
+            pasteToPrevious(value)
+        }
+    }
+
+    private func actions(for item: SearchResult) -> [LauncherAction] {
+        var actions: [LauncherAction] = []
+        switch item.kind {
+        case "app", "file", "place":
+            actions.append(LauncherAction(kind: .open, title: "Open", subtitle: item.title, symbol: "arrow.up.forward.app"))
+            if item.payload.hasPrefix("/") {
+                actions.append(LauncherAction(kind: .reveal, title: "Reveal in Finder", subtitle: item.payload, symbol: "folder"))
+                actions.append(LauncherAction(kind: .copyPath, title: "Copy Path", subtitle: item.payload, symbol: "doc.on.doc"))
+                actions.append(LauncherAction(kind: .quickLook, title: "Quick Look", subtitle: "Preview the selected item", symbol: "eye"))
+            }
+            actions.append(LauncherAction(kind: .copyName, title: "Copy Name", subtitle: item.title, symbol: "textformat"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        case "url":
+            actions.append(LauncherAction(kind: .open, title: "Open URL", subtitle: item.payload, symbol: "safari"))
+            actions.append(LauncherAction(kind: .openBrowser, title: "Open in Default Browser", subtitle: item.payload, symbol: "globe"))
+            actions.append(LauncherAction(kind: .copyValue, title: "Copy URL", subtitle: item.payload, symbol: "doc.on.doc"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        case "contact":
+            actions.append(LauncherAction(kind: .open, title: "Open Contact", subtitle: item.title, symbol: "person.crop.circle"))
+            actions.append(LauncherAction(kind: .copyValue, title: "Copy Email or Phone", subtitle: item.subtitle, symbol: "doc.on.doc"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        case "clipboard":
+            actions.append(LauncherAction(kind: .pasteClipboard, title: "Paste", subtitle: item.title, symbol: "doc.on.clipboard"))
+            actions.append(LauncherAction(kind: .copyName, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        default:
+            if item.kind == "calculation" || item.kind == "copy" || item.kind == "snippet" {
+                actions.append(LauncherAction(kind: .pasteValue, title: "Paste", subtitle: item.title, symbol: "doc.on.clipboard"))
+                actions.append(LauncherAction(kind: .copyValue, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
+            } else {
+                actions.append(LauncherAction(kind: .open, title: "Run", subtitle: item.title, symbol: "return"))
+                actions.append(LauncherAction(kind: .copyName, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
+            }
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        }
+        return actions
     }
 
     func copySelected() {
