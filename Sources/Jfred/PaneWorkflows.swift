@@ -101,6 +101,7 @@ struct WorkflowsPane: View {
         Button("Reload Workflows") { model.reloadWorkflowsFromAlfred() }
         Divider()
         Button("Import Workflow…") { chooseWorkflowToImport() }
+        Button("Import from Alfred Library…") { model.importAlfredLibrary() }
         Button("Delete", role: .destructive) {
             model.workflows.removeAll { $0.id == workflow.id }
             if model.selectedWorkflow == workflow.id {
@@ -150,6 +151,7 @@ struct WorkflowsPane: View {
         ScrollView {
             VStack(spacing: 12) {
                 card("square.and.arrow.down", "Import an Alfred Workflow", "Add a .alfredworkflow file from Finder.") { chooseWorkflowToImport() }
+                card("tray.and.arrow.down", "Import from Alfred Library", "Copy every enabled Alfred workflow into Jfred.") { model.importAlfredLibrary() }
                 card("point.3.connected.trianglepath.dotted", "Create a new Workflow", "Jump in and create a blank Workflow.") { model.beginWorkflowEdit(blank()) }
                 card("square.on.square", "Create a Workflow from a Template", "New to workflows? Try one of our Getting Started templates.") { model.showTemplates = true }
             }

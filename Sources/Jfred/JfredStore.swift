@@ -48,14 +48,15 @@ struct ScriptCatalog: Sendable {
 enum JfredStore {
     @MainActor
     static func reloadCatalog() -> ScriptCatalog? {
-        guard let root = refreshSnapshot() else { return nil }
-        return loadCatalog(root: root)
+        catalog()
     }
 
+    /// Jfred's workflow library: only workflows explicitly imported into the
+    /// app. Alfred's own library is not loaded until the user asks for it.
     static func catalog() -> ScriptCatalog {
-        let root = preferencesRoot() ?? refreshSnapshot()
-        guard let root else { return ScriptCatalog() }
-        return loadCatalog(root: root)
+        var catalog = ScriptCatalog()
+        loadWorkflows(into: &catalog, from: importedWorkflowsURL())
+        return catalog
     }
 
     @MainActor
@@ -75,8 +76,7 @@ enum JfredStore {
         if !imported.isEmpty { model.snippets = imported }
         let hideMenu = readBool(plist(at: root.appendingPathComponent("preferences/appearance/options/prefs.plist")), key: "hidemenu")
         model.knowledge["statusItem"] = hideMenu ? "hidden" : "shown"
-        let catalog = loadCatalog(root: root)
-        syncWorkflows(model, catalog.workflows)
+        let catalog = catalog()
         let keywords = catalog.nodes.values.filter { $0.type.contains("scriptfilter") && !$0.keyword.isEmpty }.count
         model.importNote = "Copied launcher settings into Jfred (\(imported.count) snippets, \(keywords) workflow keywords). Terminal is \(model.preferences.terminalApp). The original folder was not changed."
         return catalog
@@ -240,11 +240,41 @@ enum JfredStore {
         return bundle
     }
 
-    private static func loadCatalog(root: URL) -> ScriptCatalog {
-        var catalog = ScriptCatalog()
-        loadWorkflows(into: &catalog, from: root.appendingPathComponent("workflows"))
-        loadWorkflows(into: &catalog, from: importedWorkflowsURL())
-        return catalog
+    @MainActor
+    static func importedBundles() -> Set<String> {
+        let root = importedWorkflowsURL()
+        guard let entries = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return [] }
+        return Set(entries.compactMap { entry in
+            plist(at: entry.appendingPathComponent("info.plist"))?["bundleid"] as? String ?? entry.lastPathComponent
+        })
+    }
+
+    /// Copies every enabled workflow from the Alfred library into Jfred's
+    /// imported library. Used by the explicit "Import from Alfred Library" action.
+    @MainActor
+    @discardableResult
+    static func importAllFromAlfred() -> Int {
+        guard let root = preferencesRoot() ?? refreshSnapshot() else { return 0 }
+        let source = root.appendingPathComponent("workflows")
+        guard let directories = try? FileManager.default.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) else { return 0 }
+        let destinationRoot = importedWorkflowsURL()
+        try? FileManager.default.createDirectory(at: destinationRoot, withIntermediateDirectories: true)
+        let existing = importedBundles()
+        var count = 0
+        for directory in directories {
+            guard let info = plist(at: directory.appendingPathComponent("info.plist")),
+                  !readBool(info, key: "disabled") else { continue }
+            let bundle = info["bundleid"] as? String ?? directory.lastPathComponent
+            if existing.contains(bundle) { continue }
+            let destination = destinationRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            do {
+                try FileManager.default.copyItem(at: directory, to: destination)
+                count += 1
+            } catch {
+                continue
+            }
+        }
+        return count
     }
 
     private static func loadWorkflows(into catalog: inout ScriptCatalog, from workflows: URL) {

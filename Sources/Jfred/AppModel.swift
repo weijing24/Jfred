@@ -869,6 +869,16 @@ final class AppModel {
         JfredStore.syncWorkflows(self, catalog.workflows)
     }
 
+    func importAlfredLibrary() {
+        let count = JfredStore.importAllFromAlfred()
+        let catalog = JfredStore.catalog()
+        scriptCatalog = catalog
+        JfredStore.syncWorkflows(self, catalog.workflows)
+        importNote = "Imported \(count) workflows from Alfred."
+        section = .workflows
+        showPreferences()
+    }
+
     func duplicateWorkflow(_ id: UUID) {
         guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
         var copy = workflows[index]
