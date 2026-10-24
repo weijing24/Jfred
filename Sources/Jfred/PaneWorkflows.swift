@@ -263,6 +263,7 @@ struct WorkflowEditor: View {
         VStack(spacing: 0) {
             header
             HStack(spacing: 0) {
+                palette
                 canvas
                 inspector
             }
@@ -293,6 +294,40 @@ struct WorkflowEditor: View {
         .padding(.horizontal, 14)
         .frame(height: 52)
         .background(Color(hex: 0x2A2A2A))
+    }
+
+    private var palette: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Objects")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.horizontal, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+            ForEach(WorkflowAction.Kind.allCases, id: \.self) { kind in
+                Button {
+                    appendAction(kind)
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: symbol(for: kind))
+                            .font(.system(size: 11))
+                            .frame(width: 16)
+                        Text(label(for: kind))
+                            .font(.system(size: 11))
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(.horizontal, 10)
+                    .frame(height: 26)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .frame(width: 150)
+        .background(Color(hex: 0x242424))
     }
 
     private var canvas: some View {

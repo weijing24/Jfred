@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 12,251 |
+| Swift 行数（含测试） | 9,083 | 12,286 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 17 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,168 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +3,203 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -54,6 +54,7 @@
 - Clipboard 的 Clear Keyword 真正生效：支持清空全部或最近 5/15 分钟，并可开关该 keyword。
 - 启动器 Action Panel 已实测：`jfredlocal://actions?q=co` 可打开并按类型显示 Open/Reveal/Copy Path/Quick Look/Copy Name/Large Type。
 - Universal Actions 补全局 ⌥⌘\ 选择动作：读取当前选中文本（Accessibility）或仅在 Finder 为前台时读取选中文件（Automation），弹出 Copy / Large Type / Open as URL / Search the Web 等动作；`jfredlocal://selection` 可手动触发。
+- Workflows 画布左侧新增 Objects 调色板，可直接插入 7 种动作类型；与 Add Action 菜单、拖拽重排、Inspector 并存。
 - Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `jfredlocal://music` 可打开。
 - Remote 补 “Add iOS Remote” QR 配对面板（本地 URL + token，可复制）与一键 Regenerate Token，仍不实现 Alfred 的私有 iOS 配对协议。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。
