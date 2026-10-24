@@ -1757,6 +1757,11 @@ final class AppModel {
         scheduleSave()
     }
 
+    func clearUsageData() {
+        usage = []
+        scheduleSave()
+    }
+
     func clearClipboardHistory(lastMinutes minutes: Int) {
         let cutoff = Date().addingTimeInterval(-TimeInterval(minutes * 60))
         clips.removeAll { $0.date >= cutoff }

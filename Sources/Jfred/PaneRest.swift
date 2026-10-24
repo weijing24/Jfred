@@ -770,6 +770,8 @@ struct HelpPane: View {
                             Button("Request Permissions…") { model.requestPermissions() }
                             Button("Reveal Support Folder") { model.revealSupportFolder() }
                             Button("Copy Diagnostics") { copyDiagnostics() }
+                            Button("Clear Clipboard History") { model.clearClipboardHistory() }
+                            Button("Clear Usage Data") { model.clearUsageData() }
                         }
                         Divider()
                         VStack(alignment: .leading, spacing: 8) {

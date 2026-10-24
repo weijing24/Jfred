@@ -41,7 +41,7 @@
 | 联系人姓名/邮箱/电话/职位 | 内存，运行时从 Contacts 读取 | 不写入 state.json；不读取 note（需要额外 entitlement） |
 | Remote token | `state.json`、Remote QR 面板 | 0600，32 hex，常量时间比较，可一键轮换 |
 | 书签/浏览器标签/Chrome profile | 运行时读取 | 仅用于搜索结果，不写盘 |
-| 搜索历史/使用统计 | `state.json` | 0600，可关闭 `showLatestQuery` |
+| 搜索历史/使用统计 | `state.json` | 0600，可关闭 `showLatestQuery`，Help 可清除 |
 | Newsletter 邮箱 | `state.json` | 仅本地保存，Subscribe 按钮不发送网络请求 |
 | 工作流/脚本 | `ImportedWorkflows/` | 用户主动导入；脚本按原样执行 |
 
