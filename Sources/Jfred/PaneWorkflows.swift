@@ -27,7 +27,6 @@ struct WorkflowsPane: View {
             }
         }
         .sheet(isPresented: model.bind(\.showTemplates)) { templateSheet }
-        .sheet(isPresented: model.bind(\.showGallery)) { gallerySheet }
     }
 
     private var list: some View {
@@ -74,7 +73,6 @@ struct WorkflowsPane: View {
     private var cards: some View {
         ScrollView {
             VStack(spacing: 12) {
-                card("star.fill", "Jfred Gallery", "Browse the built-in workflows and turn them back on.") { model.showGallery = true }
                 card("point.3.connected.trianglepath.dotted", "Create a new Workflow", "Jump in and create a blank Workflow.") { model.beginWorkflowEdit(blank()) }
                 card("square.on.square", "Create a Workflow from a Template", "New to workflows? Try one of our Getting Started templates.") { model.showTemplates = true }
             }
@@ -110,7 +108,6 @@ struct WorkflowsPane: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Button("Jfred Gallery") { model.showGallery = true }
             Button("+") { model.beginWorkflowEdit(blank()) }
             Button("−") {
                 guard let id = model.selectedWorkflow else { return }
@@ -160,30 +157,6 @@ struct WorkflowsPane: View {
         }
     }
 
-    private var gallerySheet: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Built-in gallery").font(.title3)
-            ForEach(Seed.workflows()) { workflow in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(workflow.name)
-                        Text(workflow.keyword).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if model.workflows.contains(where: { $0.builtin == workflow.builtin && workflow.builtin != nil }) {
-                        Text("Installed").foregroundStyle(.secondary)
-                    } else {
-                        Button("Install") {
-                            model.workflows.append(workflow)
-                        }
-                    }
-                }
-            }
-            Button("Close") { model.showGallery = false }
-        }
-        .padding(20)
-        .frame(width: 460)
-    }
 }
 
 struct WorkflowEditor: View {
@@ -202,13 +175,6 @@ struct WorkflowEditor: View {
             TextField("Author", text: model.bindWorkflow(workflowID, \.author))
             TextField("SF Symbol", text: model.bindWorkflow(workflowID, \.symbol))
             Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled))
-            if workflow?.builtin != nil {
-                Text("This is a built-in workflow. Its keyword still works, and the actions below are not used.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if let summary = WorkflowMatching.summary(for: workflow?.builtin) {
-                    Text(summary).font(.caption).foregroundStyle(.secondary)
-                }
-            }
             ForEach(Array((workflow?.actions ?? []).enumerated()), id: \.element.id) { index, _ in
                 HStack {
                     Picker("Action", selection: model.bindAction(workflowID, index, \.kind)) {

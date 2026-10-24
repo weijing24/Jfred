@@ -195,7 +195,7 @@ public enum Search {
                 context: context
             ))
         }
-        for workflow in context.workflows where workflow.enabled && workflow.builtin == nil {
+        for workflow in context.workflows where workflow.enabled {
             push(scored(
                 query: needle,
                 fields: [workflow.name, workflow.keyword],
@@ -207,21 +207,6 @@ public enum Search {
                 payload: workflow.keyword + " ",
                 category: "action",
                 context: context
-            ))
-        }
-        for workflow in context.workflows where workflow.enabled && workflow.builtin != nil {
-            push(scored(
-                query: needle,
-                fields: [workflow.name, workflow.keyword],
-                id: "complete:\(workflow.id.uuidString)",
-                title: workflow.name,
-                subtitle: workflow.keyword,
-                icon: "symbol:\(workflow.symbol)",
-                kind: "complete",
-                payload: workflow.keyword + " ",
-                category: "action",
-                context: context,
-                dampen: 0.9
             ))
         }
         let bookmarkMode = context.preferences.bookmarkResultMode
@@ -338,17 +323,14 @@ public enum Search {
         let workflow = match.workflow
         let argument = match.argument
         let score = 2.0
-        if let builtin = workflow.builtin {
-            return builtinResults(workflow, builtin: builtin, keyword: match.keyword, argument: argument, score: score, context: context)
-        }
         if workflow.actions.isEmpty {
             return [make(
                 id: "wf:\(workflow.id.uuidString)",
                 title: workflow.name,
-                subtitle: "No actions yet",
+                subtitle: workflow.keyword,
                 icon: "symbol:\(workflow.symbol)",
-                kind: "text",
-                payload: workflow.name,
+                kind: "complete",
+                payload: workflow.keyword + " ",
                 category: "action",
                 score: score
             )]
@@ -365,59 +347,6 @@ public enum Search {
                 category: "action",
                 score: score
             )
-        }
-    }
-
-    private static func builtinResults(_ workflow: Workflow, builtin: String, keyword: String, argument: String, score: Double, context: SearchContext) -> [SearchResult] {
-        switch builtin {
-        case "dev":
-            return DevToys.rows(keyword: keyword, argument: argument).map { row in
-                make(id: "dev:\(keyword):\(row.subtitle):\(row.payload)", title: row.title, subtitle: row.subtitle, icon: "symbol:hammer", kind: "copy", payload: row.payload, category: "action", score: score)
-            }
-        case "epoch":
-            return Epoch.rows(argument: argument, now: context.now).map { row in
-                make(id: "epoch:\(row.title)", title: row.title, subtitle: row.subtitle, icon: "symbol:clock", kind: "copy", payload: row.payload, category: "action", score: score)
-            }
-        case "unit":
-            if let conversion = Units.convert(argument) ?? Units.convert("conv \(argument)") ?? Units.convert(argument.isEmpty ? "" : "unit \(argument)") {
-                return [make(id: "unit:\(conversion.text)", title: conversion.text, subtitle: argument, icon: "symbol:ruler", kind: "calculation", payload: conversion.text, category: "general", score: score)]
-            }
-            return [make(id: "unit:help", title: "Unit Converter", subtitle: "Try 10 km in m", icon: "symbol:ruler", kind: "text", payload: "10 km in m, 32 f in c, 1 gb in mb", category: "general", score: score)]
-        case "kill":
-            let rows = context.processes.filter { argument.isEmpty || fold($0.name).contains(fold(argument)) || argument == "\($0.pid)" }
-            if rows.isEmpty {
-                return [make(id: "kill:none", title: "No matching processes", subtitle: "Type a name", icon: "symbol:xmark.octagon", kind: "text", payload: "", category: "action", score: score)]
-            }
-            return rows.prefix(12).map { proc in
-                make(id: "proc:\(proc.pid)", title: proc.name, subtitle: "PID \(proc.pid)  ·  Kill", icon: "symbol:xmark.octagon", kind: "process", payload: "\(proc.pid)", category: "action", score: score)
-            }
-        case "windows":
-            let rows = context.windows.filter { argument.isEmpty || fold($0.title + " " + $0.owner).contains(fold(argument)) }
-            if rows.isEmpty {
-                return [make(id: "win:none", title: "No windows", subtitle: "Open apps to switch windows", icon: "symbol:macwindow", kind: "text", payload: "", category: "navigation", score: score)]
-            }
-            return rows.prefix(12).map { window in
-                make(id: "win:\(window.id)", title: window.title.isEmpty ? window.owner : window.title, subtitle: window.owner, icon: "symbol:macwindow", kind: "window", payload: "\(window.owner)\n\(window.title)", category: "navigation", score: score)
-            }
-        case "tabs":
-            let pool = context.tabs + context.links.filter { $0.source.contains("History") }
-            let rows = pool.filter { argument.isEmpty || fold($0.title + " " + $0.url).contains(fold(argument)) }
-            if rows.isEmpty {
-                return [make(id: "tabs:none", title: "No tabs or history", subtitle: "Open Chrome or Safari", icon: "symbol:globe", kind: "text", payload: "", category: "navigation", score: score)]
-            }
-            return rows.prefix(12).map { tab in
-                make(id: "tab:\(tab.id)", title: tab.title.isEmpty ? tab.url : tab.title, subtitle: tab.source + "  ·  " + tab.url, icon: "symbol:globe", kind: "url", payload: tab.url, category: "navigation", score: score)
-            }
-        case "profiles":
-            if context.profiles.isEmpty {
-                return [make(id: "profile:none", title: "No Chrome profiles", subtitle: "Google Chrome profiles appear here", icon: "symbol:person.2", kind: "text", payload: "", category: "action", score: score)]
-            }
-            let rows = context.profiles.filter { argument.isEmpty || fold($0.name).contains(fold(argument)) }
-            return rows.map { profile in
-                make(id: "profile:\(profile.directory)", title: profile.name, subtitle: profile.directory, icon: "symbol:person.crop.circle", kind: "profile", payload: profile.directory, category: "action", score: score)
-            }
-        default:
-            return []
         }
     }
 

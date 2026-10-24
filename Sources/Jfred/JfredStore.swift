@@ -21,9 +21,18 @@ struct ScriptNode: Sendable {
     var icon: String
 }
 
+struct ImportedWorkflow: Sendable {
+    var bundle: String
+    var name: String
+    var author: String
+    var keyword: String
+    var enabled: Bool
+}
+
 struct ScriptCatalog: Sendable {
     var nodes: [String: ScriptNode] = [:]
     var next: [String: String] = [:]
+    var workflows: [ImportedWorkflow] = []
 
     func hit(in query: String, disabledGroups: Set<String>) -> (node: ScriptNode, argument: String)? {
         let filters = nodes.values.filter { node in
@@ -37,10 +46,6 @@ struct ScriptCatalog: Sendable {
 }
 
 enum JfredStore {
-    private static let groups = [
-        "com.kaichu.devtoys": "dev",
-    ]
-
     static func catalog() -> ScriptCatalog {
         let root = preferencesRoot() ?? refreshSnapshot()
         guard let root else { return ScriptCatalog() }
@@ -64,28 +69,47 @@ enum JfredStore {
         if !imported.isEmpty { model.snippets = imported }
         let hideMenu = readBool(plist(at: root.appendingPathComponent("preferences/appearance/options/prefs.plist")), key: "hidemenu")
         model.knowledge["statusItem"] = hideMenu ? "hidden" : "shown"
-        alignWorkflows(model)
         let catalog = loadCatalog(root: root)
+        syncWorkflows(model, catalog.workflows)
         let keywords = catalog.nodes.values.filter { $0.type.contains("scriptfilter") && !$0.keyword.isEmpty }.count
         model.importNote = "Copied launcher settings into Jfred (\(imported.count) snippets, \(keywords) workflow keywords). Terminal is \(model.preferences.terminalApp). The original folder was not changed."
         return catalog
     }
 
     @MainActor
-    private static func alignWorkflows(_ model: AppModel) {
-        for seed in Seed.workflows() {
-            guard let builtin = seed.builtin else { continue }
-            if let index = model.workflows.firstIndex(where: { $0.builtin == builtin }) {
-                model.workflows[index].name = seed.name
-                model.workflows[index].keyword = seed.keyword
-                model.workflows[index].enabled = seed.enabled
-                model.workflows[index].hotkey = seed.hotkey
-                model.workflows[index].symbol = seed.symbol
-                model.workflows[index].author = seed.author
+    static func syncWorkflows(_ model: AppModel, _ imported: [ImportedWorkflow]) {
+        let bundles = Set(imported.map(\.bundle))
+        let legacy: Set<String> = ["dev", "epoch", "unit", "kill", "tabs", "profiles", "windows", "ui"]
+        model.workflows.removeAll { workflow in
+            guard let key = workflow.builtin else { return false }
+            if legacy.contains(key) { return true }
+            return !bundles.contains(key)
+        }
+        for item in imported {
+            if let index = model.workflows.firstIndex(where: { $0.builtin == item.bundle }) {
+                model.workflows[index].name = item.name
+                model.workflows[index].author = item.author
+                if !item.keyword.isEmpty { model.workflows[index].keyword = item.keyword }
+                model.workflows[index].enabled = model.workflows[index].enabled && item.enabled
             } else {
-                model.workflows.append(seed)
+                model.workflows.append(Workflow(
+                    id: uuid(in: item.bundle) ?? UUID(),
+                    name: item.name,
+                    keyword: item.keyword,
+                    author: item.author,
+                    symbol: "puzzlepiece.extension",
+                    tint: tint(for: item.bundle),
+                    enabled: item.enabled,
+                    builtin: item.bundle
+                ))
             }
         }
+    }
+
+    private static func tint(for bundle: String) -> String {
+        let palette = ["6C5CE7", "0984E3", "00B894", "E17055", "FDCB6E", "8E44AD", "2D3436", "C0392B", "16A085"]
+        let sum = bundle.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return palette[sum % palette.count]
     }
 
     static func preferencesRoot() -> URL? {
@@ -185,19 +209,23 @@ enum JfredStore {
         }
         for directory in directories {
             guard let info = plist(at: directory.appendingPathComponent("info.plist")) else { continue }
-            if readBool(info, key: "disabled") { continue }
-            let bundle = info["bundleid"] as? String ?? ""
-            guard let group = groups[bundle] else { continue }
-            let name = info["name"] as? String ?? group
+            let enabled = !readBool(info, key: "disabled")
+            let bundle = info["bundleid"] as? String ?? directory.lastPathComponent
+            let group = bundle
+            let name = info["name"] as? String ?? bundle
+            let author = info["createdby"] as? String ?? "Imported"
             let objects = info["objects"] as? [[String: Any]] ?? []
+            var firstKeyword = ""
             for object in objects {
                 guard let uid = object["uid"] as? String else { continue }
                 let type = object["type"] as? String ?? ""
                 let config = object["config"] as? [String: Any] ?? [:]
+                let keyword = config["keyword"] as? String ?? ""
+                if firstKeyword.isEmpty, type.contains("scriptfilter"), !keyword.isEmpty { firstKeyword = keyword }
                 catalog.nodes[uid] = ScriptNode(
                     uid: uid,
                     type: type,
-                    keyword: config["keyword"] as? String ?? "",
+                    keyword: keyword,
                     withSpace: (config["withspace"] as? Bool) ?? true,
                     filterLocally: (config[ExternalKeys.named("filtersresults")] as? Bool) ?? false,
                     group: group,
@@ -206,7 +234,7 @@ enum JfredStore {
                     name: name,
                     script: config["script"] as? String ?? "",
                     scriptType: int(config["type"]) ?? 0,
-                    icon: group == "dev" ? "symbol:hammer" : "symbol:cursorarrow.click.2"
+                    icon: "symbol:puzzlepiece.extension"
                 )
             }
             let connections = info["connections"] as? [String: Any] ?? [:]
@@ -220,6 +248,7 @@ enum JfredStore {
                     catalog.next[source] = destination
                 }
             }
+            catalog.workflows.append(ImportedWorkflow(bundle: bundle, name: name, author: author, keyword: firstKeyword, enabled: enabled))
         }
         return catalog
     }

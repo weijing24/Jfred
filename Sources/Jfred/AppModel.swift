@@ -45,15 +45,7 @@ struct DiskState: Codable {
 
 enum Seed {
     static func workflows() -> [Workflow] {
-        [
-            Workflow(name: "DevToys", keyword: "encode", author: "Built in", symbol: "hammer.fill", tint: "6C5CE7", builtin: "dev"),
-            Workflow(name: "Epoch Converter", keyword: "ts", author: "Built in", symbol: "clock.fill", tint: "0984E3", builtin: "epoch"),
-            Workflow(name: "Window Switcher", keyword: "win", author: "Built in", symbol: "macwindow", tint: "E17055", enabled: false, builtin: "windows", hotkey: Hotkey(keyCode: 48, modifiers: Hotkey.option)),
-            Workflow(name: "Kill Process", keyword: "kill", author: "Built in", symbol: "xmark.octagon.fill", tint: "2D3436", builtin: "kill"),
-            Workflow(name: "Search Browser Tabs and History", keyword: "tabnhistory", author: "Built in", symbol: "globe", tint: "00B894", builtin: "tabs"),
-            Workflow(name: "Switch Chrome Profiles", keyword: "cp", author: "Built in", symbol: "person.2.fill", tint: "6C5CE7", builtin: "profiles"),
-            Workflow(name: "Unit Converter", keyword: "conv", author: "Built in", symbol: "ruler.fill", tint: "FDCB6E", builtin: "unit"),
-        ]
+        []
     }
 
     static func snippets() -> [Snippet] {
@@ -111,7 +103,6 @@ final class AppModel {
     var workflowSnapshot: Workflow?
     var workflowIsNew = false
     var showTemplates = false
-    var showGallery = false
     var scriptCatalog = ScriptCatalog()
     var importNote = ""
     var showStatusItem: Bool {
@@ -196,22 +187,6 @@ final class AppModel {
                 }
             }
             var context = base
-            if self.workflowHit("kill", trimmed) {
-                let processes = await Task.detached { ProcessList.fetch() }.value
-                context.processes = processes
-            }
-            if self.workflowHit("windows", trimmed) {
-                context.windows = WindowList.fetch()
-            }
-            if self.workflowHit("tabs", trimmed) {
-                async let tabs = Task.detached { BrowserTabs.fetch() }.value
-                async let history = Task.detached { BookmarkIndex.history() }.value
-                context.tabs = await tabs
-                context.links += await history
-            }
-            if self.workflowHit("profiles", trimmed) {
-                context.profiles = ChromeProfiles.load()
-            }
             if Search.wantsFiles(raw: raw, preferences: context.preferences) {
                 let fileQuery = raw.trimmingCharacters(in: .whitespaces)
                 let filePreferences = context.preferences
@@ -425,35 +400,6 @@ final class AppModel {
             showLarge(body)
         case "system":
             performSystem(item.payload)
-            hideLauncher(reactivate: false)
-        case "process":
-            if let pid = Int32(item.payload), pid > 100 {
-                if pid == ProcessInfo.processInfo.processIdentifier {
-                    quit()
-                } else {
-                    kill(pid, SIGTERM)
-                    debugLine = "Killed \(item.title) (\(pid))"
-                }
-            }
-            hideLauncher(reactivate: false)
-        case "window":
-            let parts = item.payload.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
-            let owner = String(parts.first ?? "")
-            let title = parts.count > 1 ? String(parts[1]) : ""
-            let script = """
-            tell application "System Events"
-              tell process "\(owner.replacingOccurrences(of: "\"", with: ""))"
-                set frontmost to true
-                try
-                  perform action "AXRaise" of window "\(title.replacingOccurrences(of: "\"", with: ""))"
-                end try
-              end tell
-            end tell
-            """
-            _ = Shell.osascript(script)
-            hideLauncher(reactivate: false)
-        case "profile":
-            openChromeProfile(item.payload)
             hideLauncher(reactivate: false)
         case "terminal":
             runInTerminal(item.payload)
@@ -894,11 +840,6 @@ final class AppModel {
         query = items[index]
     }
 
-    private func workflowHit(_ builtin: String, _ trimmed: String) -> Bool {
-        guard let workflow = workflows.first(where: { $0.enabled && $0.builtin == builtin }) else { return false }
-        return WorkflowMatching.best(in: [workflow], query: trimmed) != nil
-    }
-
     private func makeContext(files: [AppRecord], windows: [WindowInfo], processes: [ProcInfo], tabs: [LinkRecord], profiles: [ProfileInfo], definition: String?, forced: [SearchResult]? = nil) -> SearchContext {
         SearchContext(
             preferences: preferences,
@@ -1295,7 +1236,10 @@ final class AppModel {
             return
         }
         preferences = state.preferences
-        workflows = state.workflows.filter { $0.builtin != "ui" }
+        let legacyBuiltins: Set<String> = ["dev", "epoch", "unit", "kill", "tabs", "profiles", "windows", "ui"]
+        workflows = state.workflows.filter { workflow in
+            workflow.builtin.map { !legacyBuiltins.contains($0) } ?? true
+        }
         snippets = state.snippets
         clips = state.clips
         usage = state.usage
@@ -1310,7 +1254,9 @@ final class AppModel {
             scriptCatalog = catalog
             scheduleSave()
         } else {
-            scriptCatalog = JfredStore.catalog()
+            let catalog = JfredStore.catalog()
+            scriptCatalog = catalog
+            JfredStore.syncWorkflows(self, catalog.workflows)
         }
     }
 

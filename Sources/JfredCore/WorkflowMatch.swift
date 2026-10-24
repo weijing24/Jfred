@@ -22,67 +22,9 @@ public func bestKeywordMatch(_ keywords: [(keyword: String, attached: Bool)], in
 }
 
 public enum WorkflowMatching {
-    public static let devKeywords = [
-        "json format", "encode", "decode", "uuid", "hash", "li", "qrcode", "time",
-        "cc command", "cc lcfirst", "cc path", "cc camel", "cc title", "cc upper", "cc no",
-        "cc constant", "cc sentence", "cc param", "cc dot", "cc snake", "cc ucfirst",
-        "cc pascal", "cc lower", "cc hashtag", "cc swap",
-        "nb decimal", "nb hexadecimal", "nb octal", "nb binary", "nb command",
-        "dev",
-    ]
-
-    public static func summary(for builtin: String?) -> String? {
-        switch builtin {
-        case "dev":
-            return "Keywords: encode, decode, uuid, hash, json format, cc snake, nb decimal, time, li, qrcode."
-        case "profiles":
-            return "Keyword cp. Extra letters filter the profile name."
-        case "epoch":
-            return "Keyword ts. epoch still works."
-        case "unit":
-            return "Keyword conv. unit still works."
-        case "tabs":
-            return "Keyword tabnhistory. tabs still works."
-        case "windows":
-            return "This workflow stays off. The hotkey is ⌥Tab."
-        default:
-            return nil
-        }
-    }
-
     public static func keywords(for workflow: Workflow) -> [(keyword: String, attached: Bool)] {
-        var rows: [(String, Bool)] = []
-        func add(_ keyword: String, _ attached: Bool) {
-            let key = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !key.isEmpty else { return }
-            if rows.contains(where: { fold($0.0) == fold(key) }) { return }
-            rows.append((key, attached))
-        }
-        switch workflow.builtin {
-        case "dev":
-            for keyword in devKeywords { add(keyword, false) }
-        case "epoch":
-            add("ts", false)
-            add("epoch", false)
-        case "unit":
-            add("conv", false)
-            add("unit", false)
-        case "tabs":
-            add("tabnhistory", false)
-            add("tabs", false)
-        case "profiles":
-            add("cp", true)
-            add("profile", false)
-        case "windows":
-            add("win", false)
-        case "kill":
-            add("kill", false)
-        default:
-            break
-        }
-        let attached = workflow.builtin == "profiles" && fold(workflow.keyword) == "cp"
-        add(workflow.keyword, attached)
-        return rows
+        let key = workflow.keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        return key.isEmpty ? [] : [(key, false)]
     }
 
     public static func best(in workflows: [Workflow], query: String) -> (workflow: Workflow, keyword: String, argument: String)? {
