@@ -82,6 +82,7 @@ final class AppModel {
     var showRemoteQR = false
     var showSnippetExpansionOptions = false
     var workflowSelection: Int? = nil
+    var workflowDragIndex: Int? = nil
     var debuggerVisible = false
     var debugLines: [String] = []
     var debugQuery = "test"
@@ -1062,6 +1063,17 @@ final class AppModel {
         section = .workflows
         showPreferences()
         importNote = "Imported \(url.lastPathComponent)."
+    }
+
+    func moveWorkflowAction(from source: Int, to target: Int) {
+        guard let id = editingWorkflowID ?? selectedWorkflow,
+              let wf = workflows.firstIndex(where: { $0.id == id }),
+              workflows[wf].actions.indices.contains(source),
+              workflows[wf].actions.indices.contains(target),
+              source != target else { return }
+        let item = workflows[wf].actions.remove(at: source)
+        workflows[wf].actions.insert(item, at: target)
+        workflowSelection = target
     }
 
     func runWorkflowDebug(_ id: UUID) {

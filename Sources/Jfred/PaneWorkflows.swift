@@ -308,10 +308,16 @@ struct WorkflowEditor: View {
                     connector
                     node(
                         icon: symbol(for: action.kind),
-                        title: action.kind.rawValue,
+                        title: label(for: action.kind),
                         subtitle: action.value,
                         selected: model.workflowSelection == index
                     ) { model.workflowSelection = index }
+                    .onDrag {
+                        model.workflowSelection = index
+                        model.workflowDragIndex = index
+                        return NSItemProvider(object: "\(index)" as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: WorkflowDropDelegate(model: model, target: index))
                 }
                 connector
                 Menu {
@@ -517,5 +523,26 @@ struct WorkflowEditor: View {
               model.workflows[wf].actions.indices.contains(index) else { return }
         model.workflows[wf].actions.remove(at: index)
         model.workflowSelection = model.workflows[wf].actions.isEmpty ? nil : min(index, model.workflows[wf].actions.count - 1)
+    }
+}
+
+
+private struct WorkflowDropDelegate: DropDelegate {
+    var model: AppModel
+    var target: Int
+
+    func dropEntered(info: DropInfo) {
+        guard let source = model.workflowDragIndex, source != target else { return }
+        model.moveWorkflowAction(from: source, to: target)
+        model.workflowDragIndex = target
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        model.workflowDragIndex = nil
+        return true
     }
 }
