@@ -39,10 +39,10 @@ struct PreferencesShell: View {
                     TextField("Search Preferences", text: model.bind(\.prefsQuery))
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
-                        .frame(width: 220)
+                        .frame(width: 420)
                 }
                 .padding(.horizontal, 8)
-                .frame(height: 26)
+                .frame(height: 24)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xE3E3E3)))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black.opacity(0.10), lineWidth: 1))
             }

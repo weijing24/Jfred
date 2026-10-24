@@ -257,7 +257,7 @@ struct RemotePane: View {
                 }
                 Spacer()
             }
-            .frame(width: 250)
+            .frame(width: 240)
             .jfredSidebar(tint: JfredColor.sidebarDeep)
             ZStack {
                 Color(hex: 0x161616)

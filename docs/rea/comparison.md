@@ -68,6 +68,7 @@
 - 修复工作流增删后旧全局热键仍残留的问题：每次 applyHotkeys 先注销上一批 workflow hotkey，再按当前列表注册。
 - Music Mini Player 读取 Music.app 当前曲目的 artwork 并显示真实专辑封面；无封面时回退到内置占位图。
 - Clipboard 三类保留项（Text / Images / File Lists）改为独立保留时长，prune 按 clip 类型分别计算。
+- 偏好窗口细节对齐：搜索框 420pt、标题栏 80pt、Remote 左栏 240pt、内容区 13pt 边距。
 - Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `jfredlocal://music` 可打开。
 - Remote 补 “Add iOS Remote” QR 配对面板（本地 URL + token，可复制）与一键 Regenerate Token，仍不实现 Alfred 的私有 iOS 配对协议。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。

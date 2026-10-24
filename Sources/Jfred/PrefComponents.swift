@@ -168,7 +168,7 @@ struct PageHeaderBand: View {
             }
         }
         .padding(.horizontal, 24)
-        .frame(height: 78)
+        .frame(height: 80)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(hex: 0xD9D9D9))
         .overlay(alignment: .bottom) {
@@ -184,7 +184,7 @@ struct PageSurface<Content: View>: View {
     var body: some View {
         ScrollView {
             content()
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 13)
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
