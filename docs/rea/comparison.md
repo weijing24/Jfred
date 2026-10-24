@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 11,707 |
+| Swift 行数（含测试） | 9,083 | 11,760 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
 | 测试 | 12 个 | 16 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,624 行 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +2,677 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -33,6 +33,7 @@
 - Snippets 补 Viewer Hotkey、右侧 Auto Expansion 卡片与 Options 面板（展开声音、剪贴板恢复），集合列表加 Get Collections 入口。
 - 1Password 页改为 Alfred 的绿色 Integration 卡片 + 1Password 7/8 说明 + 集成开关，并保留基于 `op` CLI 的实际加载与状态。
 - Appearance 支持导入/导出 `.alfredappearance`：读取 window/search/result 的数字与颜色字段生成自定义主题，导出为同结构 JSON；自定义主题可删除。
+- Clipboard 的 Ignore Apps 列表可编辑并参与轮询过滤；File Buffer 支持超时清理、按配置在动作后清空；联系人 Action Panel 补 Email / Call。
 - 新增统一的 `PageHeaderBand` 与 `FormPanel`：46pt 图标、20pt 标题、12.5pt 副标题、白色圆角表单。
 - Features 列表行高 42pt、图标 34pt、宽 240pt，16 项与 Alfred 顺序一致。
 - 底部 rail 新增 Powerpack、Help，顺序为 Powerpack / Usage / Help / Update。

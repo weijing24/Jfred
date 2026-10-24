@@ -811,6 +811,8 @@ struct FeaturesPane: View {
                 }
             }
             SettingsNote("The clipboard history is stored locally with 0600 permissions inside Jfred's support folder. Items copied from 1Password, Keychain Access, Passwords, Wallet and SecurityAgent are never stored. Enable clearing on quit if you don't want it to persist.")
+            stringListEditor(title: "Ignore Apps:", hint: "Application name", keyPath: \.clipboardIgnoreApps)
+            SettingsNote("Drop the applications you would like Jfred to ignore into the list, or add their exact names. Only focusable applications can be ignored.")
         }
     }
 

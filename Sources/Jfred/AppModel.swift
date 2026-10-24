@@ -133,6 +133,7 @@ final class AppModel {
     private var historyCursor: Int?
     private var fromHistory = false
     private var clipChange = 0
+    private var fileBufferLastUsed: Date?
     private var previousApp: NSRunningApplication?
     private var saveWork: DispatchWorkItem?
     var launcher: LauncherController?
@@ -166,7 +167,10 @@ final class AppModel {
         }
         clipChange = NSPasteboard.general.changeCount
         Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.pollClipboard() }
+            Task { @MainActor in
+                self?.pollClipboard()
+                self?.pruneFileBuffer()
+            }
         }
     }
 
@@ -349,6 +353,21 @@ final class AppModel {
             if let clip = clips.first(where: { $0.id.uuidString == item.payload }) { pasteClipboardItem(clip) }
         case .pasteValue:
             pasteToPrevious(value)
+        case .email:
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }),
+               !contact.email.isEmpty,
+               let url = URL(string: "mailto:\(contact.email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact.email)") {
+                NSWorkspace.shared.open(url)
+            }
+            hideLauncher(reactivate: false)
+        case .call:
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
+                let digits = contact.phone.filter { $0.isNumber || $0 == "+" }
+                if !digits.isEmpty, let url = URL(string: "tel:\(digits)") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            hideLauncher(reactivate: false)
         }
     }
 
@@ -371,6 +390,14 @@ final class AppModel {
             actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
         case "contact":
             actions.append(LauncherAction(kind: .open, title: "Open Contact", subtitle: item.title, symbol: "person.crop.circle"))
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
+                if !contact.email.isEmpty {
+                    actions.append(LauncherAction(kind: .email, title: "Email", subtitle: contact.email, symbol: "envelope"))
+                }
+                if !contact.phone.isEmpty {
+                    actions.append(LauncherAction(kind: .call, title: "Call", subtitle: contact.phone, symbol: "phone"))
+                }
+            }
             actions.append(LauncherAction(kind: .copyValue, title: "Copy Email or Phone", subtitle: item.subtitle, symbol: "doc.on.doc"))
             actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
         case "clipboard":
@@ -420,7 +447,18 @@ final class AppModel {
         let item = results[selection]
         guard item.kind == "file" || item.kind == "app" else { return }
         if !fileBuffer.contains(where: { $0.id == item.id }) { fileBuffer.append(item) }
+        fileBufferLastUsed = Date()
         launcher?.layout()
+    }
+
+    func pruneFileBuffer() {
+        guard preferences.fileBufferEnabled, !fileBuffer.isEmpty, let last = fileBufferLastUsed else { return }
+        let timeout = TimeInterval(max(1, preferences.fileBufferTimeoutMinutes) * 60)
+        if Date().timeIntervalSince(last) >= timeout {
+            fileBuffer = []
+            fileBufferLastUsed = nil
+            launcher?.layout()
+        }
     }
 
     func completeSelected() {
@@ -469,7 +507,10 @@ final class AppModel {
             } else {
                 for path in paths { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
             }
-            fileBuffer = []
+            if preferences.fileClearBufferAfterAction {
+                fileBuffer = []
+                fileBufferLastUsed = nil
+            }
             hideLauncher(reactivate: false)
         case "url":
             if let url = URL(string: item.payload) {
@@ -624,6 +665,7 @@ final class AppModel {
         }
         if old.onePasswordEnabled != preferences.onePasswordEnabled && preferences.onePasswordEnabled { reloadOnePassword() }
         if old.contactsEnabled != preferences.contactsEnabled { reloadContacts() }
+        if !preferences.fileBufferEnabled { fileBuffer = []; fileBufferLastUsed = nil }
         if old.safariBookmarks != preferences.safariBookmarks || old.chromeBookmarks != preferences.chromeBookmarks { reloadLinks() }
     }
 
@@ -1462,6 +1504,7 @@ final class AppModel {
         pruneClipboard()
         let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
         if privateClipboardApps.contains(sourceApp) { return }
+        if preferences.clipboardIgnoreApps.contains(where: { $0.caseInsensitiveCompare(sourceApp) == .orderedSame }) { return }
         let types = Set(board.types ?? [])
         if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType")) { return }
         if preferences.clipboardIgnoreConcealed,

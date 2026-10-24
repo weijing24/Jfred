@@ -222,6 +222,7 @@ struct CoreTests {
         prefs.uaShowRightArrow = false
         prefs.uaSelectionHotkey = "⌥⌘K"
         prefs.snippetExpandPlaySound = false
+        prefs.clipboardIgnoreApps = ["Keychain Access", "CustomApp"]
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(Preferences.self, from: data)
         #expect(decoded.contactsEnabled == false)
@@ -234,4 +235,5 @@ struct CoreTests {
         #expect(decoded.uaShowRightArrow == false)
         #expect(decoded.uaSelectionHotkey == "⌥⌘K")
         #expect(decoded.snippetExpandPlaySound == false)
+        #expect(decoded.clipboardIgnoreApps == ["Keychain Access", "CustomApp"])
     }

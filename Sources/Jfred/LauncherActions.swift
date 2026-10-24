@@ -12,6 +12,8 @@ struct LauncherAction: Identifiable, Equatable {
         case largeType
         case pasteClipboard
         case pasteValue
+        case email
+        case call
     }
 
     var kind: Kind
