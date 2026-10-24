@@ -392,6 +392,13 @@ final class AppModel {
                 NSWorkspace.shared.open(url)
             }
             hideLauncher(reactivate: false)
+        case .maps:
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
+                let query = contact.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact.name
+                let template = preferences.contactsMapURL.replacingOccurrences(of: "{query}", with: query)
+                if let url = URL(string: template) { NSWorkspace.shared.open(url) }
+            }
+            hideLauncher(reactivate: false)
         }
     }
 
@@ -421,6 +428,7 @@ final class AppModel {
                 if !contact.phone.isEmpty {
                     actions.append(LauncherAction(kind: .call, title: "Call", subtitle: contact.phone, symbol: "phone"))
                 }
+                actions.append(LauncherAction(kind: .maps, title: "Show in Maps", subtitle: contact.name, symbol: "map"))
             }
             actions.append(LauncherAction(kind: .copyValue, title: "Copy Email or Phone", subtitle: item.subtitle, symbol: "doc.on.doc"))
             actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))

@@ -15,6 +15,7 @@ struct LauncherAction: Identifiable, Equatable {
         case email
         case call
         case searchWeb
+        case maps
     }
 
     var kind: Kind
