@@ -449,7 +449,10 @@ struct WorkflowEditor: View {
                     set: { model.setBreakpoint(index, $0) }
                 ))
                 .toggleStyle(.checkbox)
-                Button("Remove Object", role: .destructive) { removeAction(index) }
+                HStack(spacing: 8) {
+                    Button("Duplicate Object") { model.duplicateWorkflowAction(index) }
+                    Button("Remove Object", role: .destructive) { removeAction(index) }
+                }
             } else {
                 field("Name", model.bindWorkflow(workflowID, \.name, default: ""))
                 field("Keyword", model.bindWorkflow(workflowID, \.keyword, default: ""))

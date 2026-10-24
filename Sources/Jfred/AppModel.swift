@@ -1143,6 +1143,15 @@ final class AppModel {
         }
     }
 
+    func duplicateWorkflowAction(_ index: Int) {
+        guard let id = editingWorkflowID ?? selectedWorkflow,
+              let wf = workflows.firstIndex(where: { $0.id == id }),
+              workflows[wf].actions.indices.contains(index) else { return }
+        let action = workflows[wf].actions[index]
+        workflows[wf].actions.insert(WorkflowAction(kind: action.kind, value: action.value), at: index + 1)
+        workflowSelection = index + 1
+    }
+
     func setBreakpoint(_ index: Int, _ enabled: Bool) {
         if enabled { debugBreakpoints.insert(index) } else { debugBreakpoints.remove(index) }
     }
