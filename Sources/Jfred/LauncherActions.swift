@@ -14,6 +14,7 @@ struct LauncherAction: Identifiable, Equatable {
         case pasteValue
         case email
         case call
+        case searchWeb
     }
 
     var kind: Kind

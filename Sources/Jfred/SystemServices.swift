@@ -508,6 +508,36 @@ enum Accessibility {
     static func trusted() -> Bool {
         AXIsProcessTrusted()
     }
+
+    static func selectedText() -> String? {
+        let system = AXUIElementCreateSystemWide()
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused else { return nil }
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXSelectedTextAttribute as CFString, &value) == .success,
+              let text = value as? String,
+              !text.isEmpty else { return nil }
+        return text
+    }
+
+    static func finderSelection() -> [String] {
+        let text = Shell.osascript("""
+        tell application "Finder"
+          try
+            set sel to selection as alias list
+          on error
+            return ""
+          end try
+          set out to ""
+          repeat with f in sel
+            set out to out & POSIX path of f & linefeed
+          end repeat
+          return out
+        end tell
+        """)
+        return text.split(separator: "\n").map(String.init).filter { $0.hasPrefix("/") }
+    }
 }
 
 func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags = []) {

@@ -93,7 +93,7 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 - **Contacts**：Contacts / Email / Advanced 三个 tab；Open Contacts / Display / Maps / URL handler / 权限状态。
 - **Music**：General / Keywords / Advanced 三个 tab；Mini Player 开关与 keyword、Playback、Now Playing、Play/Pause/Previous/Next。
 - **System**：每个命令的 enable + confirm + keyword；Eject / Eject All / 排除卷。
-- **Universal Actions**：General / Actions 两 tab；Show Actions 的 →/fn/ctrl/⌘ 开关、Selection Hotkey、Action Ordering。
+- **Universal Actions**：General / Actions 两 tab；Show Actions 的 →/fn/ctrl/⌘ 开关、Selection Hotkey、Action Ordering；全局 ⌥⌘\ 读取选中文本/Finder 文件并弹出动作面板。
 - **Appearance**：290pt 主题列表、80×50 缩略图、实时预览；支持 `.alfredappearance` 导入/导出、自定义主题与 Options 编辑器（宽度/圆角/内边距/字号/颜色）。
 - **Help**：版本/诊断、权限与支持目录、可搜索的排障主题列表、Copy Diagnostics。
 - **1Password**：绿色 “1Password 8 Integration” 卡片 + 获取工作流按钮、集成开关、加载状态。

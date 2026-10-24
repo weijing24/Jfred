@@ -83,6 +83,7 @@ final class AppModel {
     var showSnippetExpansionOptions = false
     var workflowSelection: Int? = nil
     var workflowDragIndex: Int? = nil
+    private var transientItem: SearchResult?
     var debuggerVisible = false
     var debugLines: [String] = []
     var debugQuery = "test"
@@ -181,6 +182,10 @@ final class AppModel {
     }
 
     func scheduleSearch() {
+        if transientItem != nil {
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+            transientItem = nil
+        }
         if fromHistory {
             fromHistory = false
         } else {
@@ -236,6 +241,7 @@ final class AppModel {
     }
 
     func showLauncher() {
+        transientItem = nil
         record(category: "hotkeys")
         previousApp = NSWorkspace.shared.frontmostApplication
         if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier { previousApp = nil }
@@ -255,6 +261,7 @@ final class AppModel {
     }
 
     func hideLauncher(reactivate: Bool) {
+        transientItem = nil
         launcherVisible = false
         SnippetExpander.shared.setSuspended(false)
         launcher?.hide()
@@ -374,6 +381,12 @@ final class AppModel {
                 }
             }
             hideLauncher(reactivate: false)
+        case .searchWeb:
+            let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+            if let url = URL(string: "https://www.google.com/search?q=\(encoded)") {
+                NSWorkspace.shared.open(url)
+            }
+            hideLauncher(reactivate: false)
         }
     }
 
@@ -410,6 +423,14 @@ final class AppModel {
             actions.append(LauncherAction(kind: .pasteClipboard, title: "Paste", subtitle: item.title, symbol: "doc.on.clipboard"))
             actions.append(LauncherAction(kind: .copyName, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
             actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        case "text":
+            actions.append(LauncherAction(kind: .copyValue, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+            if let url = URL(string: item.payload), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                actions.append(LauncherAction(kind: .openBrowser, title: "Open as URL", subtitle: item.payload, symbol: "safari"))
+            } else {
+                actions.append(LauncherAction(kind: .searchWeb, title: "Search the Web", subtitle: "Google", symbol: "magnifyingglass"))
+            }
         default:
             if item.kind == "calculation" || item.kind == "copy" || item.kind == "snippet" {
                 actions.append(LauncherAction(kind: .pasteValue, title: "Paste", subtitle: item.title, symbol: "doc.on.clipboard"))
@@ -1394,6 +1415,9 @@ final class AppModel {
         let ok = HotkeyCenter.shared.register(id: 1, keyCode: UInt32(preferences.hotkey.keyCode), modifiers: preferences.hotkey.carbonModifiers) { [weak self] in
             Task { @MainActor in self?.toggleLauncher() }
         }
+        _ = HotkeyCenter.shared.register(id: 2, keyCode: 42, modifiers: Hotkey(keyCode: 42, modifiers: Hotkey.option | Hotkey.command).carbonModifiers) { [weak self] in
+            Task { @MainActor in self?.showSelectionActions() }
+        }
         if ok {
             hotkeyWarning = ""
         } else {
@@ -1485,6 +1509,40 @@ final class AppModel {
     func showMusicPlayer() {
         refreshMusicPanel()
         launcher?.showMusicPlayer()
+    }
+
+    func showSelectionActions() {
+        if let text = Accessibility.selectedText() {
+            let title = String(text.split(separator: "\n").first ?? Substring(text)).trimmingCharacters(in: .whitespaces)
+            presentTransient(SearchResult(
+                id: "selection:text", title: title.isEmpty ? "Selected Text" : String(title.prefix(120)),
+                subtitle: "Universal Action", icon: "symbol:text.cursor", kind: "text",
+                payload: text, category: "action", score: 2
+            ))
+            return
+        }
+        let files = Accessibility.finderSelection()
+        guard let first = files.first else { return }
+        let title = (first as NSString).lastPathComponent
+        presentTransient(SearchResult(
+            id: "selection:file:\(first)", title: title, subtitle: files.count > 1 ? "\(files.count) selected files" : first,
+            icon: "file:\(first)", kind: "file", payload: first, category: "action", score: 2
+        ))
+    }
+
+    private func presentTransient(_ item: SearchResult) {
+        previousApp = NSWorkspace.shared.frontmostApplication
+        if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier { previousApp = nil }
+        transientItem = item
+        query = ""
+        results = [item]
+        selection = 0
+        launcherVisible = true
+        focusToken += 1
+        SnippetExpander.shared.setSuspended(true)
+        launcher?.show()
+        launcher?.layout()
+        showActions()
     }
 
     func reloadContacts() {
