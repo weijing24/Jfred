@@ -214,6 +214,19 @@ struct CoreTests {
         #expect(!Search.results(for: "clear", context: context).contains { $0.kind == "clipclear" })
     }
 
+    @Test func contactDisplayOptions() {
+        var context = SearchContext()
+        context.preferences.contactsEnabled = true
+        context.preferences.contactsInvertName = true
+        context.preferences.contactsShowJobTitle = true
+        context.contacts = [
+            ContactRecord(id: "ada", name: "Ada Lovelace", email: "ada@example.com", phone: "", uid: "ada", jobTitle: "Mathematician"),
+        ]
+        let row = Search.results(for: "ada", context: context).first { $0.kind == "contact" }
+        #expect(row?.title == "Lovelace, Ada")
+        #expect(row?.subtitle.contains("Mathematician") == true)
+    }
+
     @Test func clipboardViewerIncludesSnippets() {
         var context = SearchContext()
         context.preferences.clipboardEnabled = true

@@ -139,16 +139,29 @@ public enum Search {
         }
         if context.preferences.contactsEnabled {
             for contact in context.contacts {
-                var subtitle = contact.email
-                if subtitle.isEmpty { subtitle = contact.phone }
-                if subtitle.isEmpty { subtitle = contact.organization ?? "Contact" }
+                var display = contact.name
+                if context.preferences.contactsInvertName,
+                   let split = contact.name.lastIndex(of: " "),
+                   split != contact.name.startIndex {
+                    display = String(contact.name[contact.name.index(after: split)...]) + ", " + String(contact.name[..<split])
+                }
+                var subtitleParts: [String] = []
+                if context.preferences.contactsShowTitle, let organization = contact.organization, !organization.isEmpty {
+                    subtitleParts.append(organization)
+                }
+                if context.preferences.contactsShowJobTitle, let job = contact.jobTitle, !job.isEmpty {
+                    subtitleParts.append(job)
+                }
+                if !contact.email.isEmpty { subtitleParts.append(contact.email) }
+                if !contact.phone.isEmpty { subtitleParts.append(contact.phone) }
+                if subtitleParts.isEmpty { subtitleParts.append("Contact") }
                 let fields = [contact.name, contact.email, contact.phone, contact.organization ?? "", contact.jobTitle ?? ""]
                 push(scored(
                     query: needle,
                     fields: fields,
                     id: "contact:\(contact.id)",
-                    title: contact.name,
-                    subtitle: subtitle,
+                    title: display,
+                    subtitle: subtitleParts.joined(separator: "  ·  "),
                     icon: "symbol:person.crop.circle",
                     kind: "contact",
                     payload: contact.uid ?? contact.id,
