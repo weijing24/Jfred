@@ -45,6 +45,13 @@
 | Newsletter 邮箱 | `state.json` | 仅本地保存，Subscribe 按钮不发送网络请求 |
 | 工作流/脚本 | `ImportedWorkflows/` | 用户主动导入；脚本按原样执行 |
 
+## 最终扫描
+
+- `Sources/` 与 `Info.plist` 中没有 `URLSession`、`NSURLConnection`、`NSAllowsArbitraryLoads`；外部 URL 只由用户配置的 Web Search / Contacts / 主题/工作流按钮打开。
+- 唯一监听是 Remote 的 `127.0.0.1` HTTP 服务（或用户显式关闭 This Mac only）。
+- 支持目录、state.json、ClipImages 全部 0700/0600。
+- 未发现新的强制解包；workflow/theme 编辑器绑定均带 fallback/边界检查。
+
 ## 验证
 
 ```bash
