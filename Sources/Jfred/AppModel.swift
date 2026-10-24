@@ -82,6 +82,9 @@ final class AppModel {
     var showRemoteQR = false
     var showSnippetExpansionOptions = false
     var workflowSelection: Int? = nil
+    var debuggerVisible = false
+    var debugLines: [String] = []
+    var debugQuery = "test"
     var showThemeEditor = false
     var actionPanelVisible = false
     var actionIndex = 0
@@ -1058,6 +1061,42 @@ final class AppModel {
         section = .workflows
         showPreferences()
         importNote = "Imported \(url.lastPathComponent)."
+    }
+
+    func runWorkflowDebug(_ id: UUID) {
+        guard let workflow = workflows.first(where: { $0.id == id }) else { return }
+        debuggerVisible = true
+        debugLines = ["Running \(workflow.name) with query ‘\(debugQuery)’"]
+        let query = debugQuery
+        let actions = workflow.actions
+        Task {
+            for (index, action) in actions.enumerated() {
+                let value = action.value.replacingOccurrences(of: "{query}", with: query)
+                await MainActor.run { self.debugLines.append("\(index + 1). \(action.kind.rawValue): \(value)") }
+                switch action.kind {
+                case .openURL:
+                    if let url = URL(string: value) { await MainActor.run { NSWorkspace.shared.open(url) } }
+                case .openApp:
+                    await MainActor.run {
+                        let url = value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(fileURLWithPath: "/Applications/\(value).app")
+                        NSWorkspace.shared.open(url)
+                    }
+                case .copy:
+                    await MainActor.run { self.writeClipboard(value) }
+                case .largeType:
+                    await MainActor.run { self.showLarge(value) }
+                case .terminal:
+                    await MainActor.run { self.runInTerminal(value) }
+                case .shell:
+                    let output = await Task.detached { Shell.run("/bin/zsh", ["-lc", value], timeout: 12) }.value
+                    await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
+                case .appleScript:
+                    let output = await Task.detached { Shell.osascript(value, timeout: 12) }.value
+                    await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
+                }
+            }
+            await MainActor.run { self.debugLines.append("Finished.") }
+        }
     }
 
     func reloadWorkflowsFromAlfred() {

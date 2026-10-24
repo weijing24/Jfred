@@ -266,6 +266,7 @@ struct WorkflowEditor: View {
                 canvas
                 inspector
             }
+            if model.debuggerVisible { debuggerPane }
             footer
         }
         .frame(minWidth: 680, maxWidth: .infinity, minHeight: 520, maxHeight: .infinity)
@@ -404,7 +405,7 @@ struct WorkflowEditor: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 12) {
             Menu("Add Action") {
                 ForEach(WorkflowAction.Kind.allCases, id: \.self) { kind in
                     Button(label(for: kind)) { appendAction(kind) }
@@ -412,6 +413,10 @@ struct WorkflowEditor: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 120)
+            TextField("Test query", text: model.bind(\.debugQuery))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 150)
+            Button("Run") { model.runWorkflowDebug(workflowID) }
             Spacer()
             Button("Cancel") { model.cancelWorkflowEdit() }
             Button("Save") { model.saveWorkflowEdit() }.keyboardShortcut(.defaultAction)
@@ -420,6 +425,34 @@ struct WorkflowEditor: View {
         .frame(height: 48)
         .background(Color(hex: 0x2A2A2A))
         .foregroundStyle(.white)
+    }
+
+    private var debuggerPane: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Debugger").font(.system(size: 11, weight: .semibold))
+                Spacer()
+                Button("Clear") { model.debugLines = [] }
+                    .controlSize(.small)
+                Button("Close") { model.debuggerVisible = false }
+                    .controlSize(.small)
+            }
+            .foregroundStyle(.white.opacity(0.8))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(model.debugLines.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .frame(height: 150)
+        .background(Color(hex: 0x111111))
+        .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1) }
     }
 
     private func field(_ title: String, _ binding: Binding<String>) -> some View {
