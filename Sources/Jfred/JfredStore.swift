@@ -19,6 +19,8 @@ struct ScriptNode: Sendable {
     var script: String
     var scriptType: Int
     var icon: String
+    /// Alfred's `alfredfiltersresultsmatchmode`: 0 anchored, 1 word, 2 fuzzy.
+    var matchMode: Int
 }
 
 struct ImportedWorkflow: Sendable {
@@ -311,7 +313,8 @@ enum JfredStore {
                     name: name,
                     script: config["script"] as? String ?? "",
                     scriptType: int(config["type"]) ?? 0,
-                    icon: "symbol:puzzlepiece.extension"
+                    icon: "symbol:puzzlepiece.extension",
+                    matchMode: int(config["alfredfiltersresultsmatchmode"]) ?? 2
                 )
             }
             let connections = info["connections"] as? [String: Any] ?? [:]
@@ -434,11 +437,11 @@ enum ScriptRunner {
         let visible: [ScriptJSON.Item]
         if node.filterLocally && !argument.isEmpty {
             visible = items
-                .filter { matches($0, query: argument) }
+                .filter { matches($0, query: argument, mode: node.matchMode) }
                 .enumerated()
                 .sorted { lhs, rhs in
-                    let left = matchScore(lhs.element, query: argument)
-                    let right = matchScore(rhs.element, query: argument)
+                    let left = matchScore(lhs.element, query: argument, mode: node.matchMode)
+                    let right = matchScore(rhs.element, query: argument, mode: node.matchMode)
                     if left == right { return lhs.offset < rhs.offset }
                     return left > right
                 }
@@ -505,35 +508,85 @@ enum ScriptRunner {
         return .copy(arg)
     }
 
-    /// fzf-style matching: a contiguous substring wins, otherwise the query
-    /// characters may appear in order anywhere in the item.
-    private static func matches(_ item: ScriptJSON.Item, query: String) -> Bool {
+    private static func matches(_ item: ScriptJSON.Item, query: String, mode: Int) -> Bool {
         let haystack = fold(item.title + " " + item.subtitle + " " + item.arg)
         let needle = fold(query)
         guard !needle.isEmpty else { return true }
-        if haystack.contains(needle) { return true }
+        switch mode {
+        case 0:
+            return haystack.hasPrefix(needle)
+        case 1:
+            return words(in: haystack).contains { $0.hasPrefix(needle) }
+        default:
+            return wordStartFuzzy(haystack, needle)
+        }
+    }
+
+    /// Alfred's fuzzy mode: the first character must start a word, the rest of
+    /// the query may appear anywhere in order. This is why "d" only matches
+    /// "dogfooding" and not "uid" or "old".
+    private static func wordStartFuzzy(_ haystack: String, _ needle: String) -> Bool {
+        guard let first = needle.first else { return true }
         var index = haystack.startIndex
-        for character in needle {
-            guard let found = haystack[index...].firstIndex(of: character) else { return false }
-            index = haystack.index(after: found)
+        var start: String.Index?
+        while index < haystack.endIndex {
+            if haystack[index] == first, isWordStart(haystack, index) {
+                start = index
+                break
+            }
+            index = haystack.index(after: index)
+        }
+        guard var cursor = start.map({ haystack.index(after: $0) }) else { return false }
+        for character in needle.dropFirst() {
+            guard let found = haystack[cursor...].firstIndex(of: character) else { return false }
+            cursor = haystack.index(after: found)
         }
         return true
     }
 
-    private static func matchScore(_ item: ScriptJSON.Item, query: String) -> Double {
+    private static func isWordStart(_ text: String, _ index: String.Index) -> Bool {
+        guard index != text.startIndex else { return true }
+        let previous = text[text.index(before: index)]
+        return !previous.isLetter && !previous.isNumber
+    }
+
+    private static func words(in text: String) -> [Substring] {
+        text.split { !$0.isLetter && !$0.isNumber }
+    }
+
+    private static func matchScore(_ item: ScriptJSON.Item, query: String, mode: Int) -> Double {
         let haystack = fold(item.title + " " + item.subtitle + " " + item.arg)
         let needle = fold(query)
-        if let range = haystack.range(of: needle) {
-            return 1000 - Double(haystack.distance(from: haystack.startIndex, to: range.lowerBound))
+        switch mode {
+        case 0:
+            return 1000 - Double(haystack.count)
+        case 1:
+            if let word = words(in: haystack).first(where: { $0.hasPrefix(needle) }) {
+                let offset = haystack.distance(from: haystack.startIndex, to: haystack.range(of: word)?.lowerBound ?? haystack.startIndex)
+                return 1000 - Double(offset)
+            }
+            return 0
+        default:
+            guard let first = needle.first else { return 1 }
+            var index = haystack.startIndex
+            var start: String.Index?
+            while index < haystack.endIndex {
+                if haystack[index] == first, isWordStart(haystack, index) {
+                    start = index
+                    break
+                }
+                index = haystack.index(after: index)
+            }
+            guard let start else { return 0 }
+            var cursor = haystack.index(after: start)
+            var gaps = haystack.distance(from: haystack.startIndex, to: start)
+            for character in needle.dropFirst() {
+                guard let found = haystack[cursor...].firstIndex(of: character) else { return 0 }
+                gaps += haystack.distance(from: cursor, to: found)
+                cursor = haystack.index(after: found)
+            }
+            return 1000 - Double(gaps)
         }
-        var index = haystack.startIndex
-        var gaps = 0
-        for character in needle {
-            guard let found = haystack[index...].firstIndex(of: character) else { return 0 }
-            gaps += haystack.distance(from: index, to: found)
-            index = haystack.index(after: found)
-        }
-        return 500 - Double(gaps)
     }
 
     private static func execute(_ node: ScriptNode, argument: String) -> String? {
