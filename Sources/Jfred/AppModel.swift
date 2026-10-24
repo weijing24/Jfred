@@ -89,6 +89,8 @@ final class AppModel {
     var debugQuery = "test"
     var debugCursor = 0
     var debugWorkflowID: UUID?
+    var debugBreakpoints: Set<Int> = []
+    var debugPaused = false
     var showThemeEditor = false
     var helpQuery = ""
     var actionPanelVisible = false
@@ -1101,22 +1103,44 @@ final class AppModel {
 
     func runWorkflowDebug(_ id: UUID) {
         guard let workflow = workflows.first(where: { $0.id == id }) else { return }
-        debuggerVisible = true
-        debugLines = ["Running \(workflow.name) with query ‘\(debugQuery)’"]
-        debugCursor = 0
-        debugWorkflowID = id
+        let resuming = debugPaused && debugWorkflowID == id
+        if !resuming {
+            debuggerVisible = true
+            debugLines = ["Running \(workflow.name) with query ‘\(debugQuery)’"]
+            debugCursor = 0
+            debugWorkflowID = id
+        }
+        debugPaused = false
         let query = debugQuery
         let actions = workflow.actions
+        let start = resuming ? debugCursor : 0
+        let resumeFrom = start
         Task {
-            for (index, action) in actions.enumerated() {
+            var index = start
+            while index < actions.count {
+                if self.debugBreakpoints.contains(index) && !(resuming && index == resumeFrom) {
+                    await MainActor.run {
+                        self.debugCursor = index
+                        self.debugPaused = true
+                        self.debugLines.append("Paused at breakpoint before action \(index + 1).")
+                    }
+                    return
+                }
                 await MainActor.run { self.debugCursor = index }
-                await executeDebugAction(action, query: query, index: index)
+                await executeDebugAction(actions[index], query: query, index: index)
+                index += 1
+                await MainActor.run { self.debugCursor = index }
             }
             await MainActor.run {
                 self.debugCursor = actions.count
+                self.debugPaused = false
                 self.debugLines.append("Finished.")
             }
         }
+    }
+
+    func setBreakpoint(_ index: Int, _ enabled: Bool) {
+        if enabled { debugBreakpoints.insert(index) } else { debugBreakpoints.remove(index) }
     }
 
     func stepWorkflowDebug(_ id: UUID) {
@@ -1138,6 +1162,7 @@ final class AppModel {
             await executeDebugAction(action, query: query, index: index)
             await MainActor.run {
                 self.debugCursor = index + 1
+                self.debugPaused = false
                 if self.debugCursor >= workflow.actions.count { self.debugLines.append("Finished.") }
             }
         }

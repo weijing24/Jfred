@@ -87,9 +87,9 @@ extension AppModel {
         )
     }
 
-    func bindWorkflow<T: Sendable>(_ id: UUID, _ keyPath: WritableKeyPath<Workflow, T>) -> Binding<T> {
+    func bindWorkflow<T: Sendable>(_ id: UUID, _ keyPath: WritableKeyPath<Workflow, T>, default defaultValue: T) -> Binding<T> {
         Binding(
-            get: { MainActor.assumeIsolated { self.workflows.first { $0.id == id }![keyPath: keyPath] } },
+            get: { MainActor.assumeIsolated { self.workflows.first { $0.id == id }?[keyPath: keyPath] ?? defaultValue } },
             set: { newValue in
                 MainActor.assumeIsolated {
                     guard let index = self.workflows.firstIndex(where: { $0.id == id }) else { return }
@@ -99,9 +99,15 @@ extension AppModel {
         )
     }
 
-    func bindAction<T: Sendable>(_ id: UUID, _ index: Int, _ keyPath: WritableKeyPath<WorkflowAction, T>) -> Binding<T> {
+    func bindAction<T: Sendable>(_ id: UUID, _ index: Int, _ keyPath: WritableKeyPath<WorkflowAction, T>, default defaultValue: T) -> Binding<T> {
         Binding(
-            get: { MainActor.assumeIsolated { self.workflows.first { $0.id == id }!.actions[index][keyPath: keyPath] } },
+            get: {
+                MainActor.assumeIsolated {
+                    guard let workflow = self.workflows.first(where: { $0.id == id }),
+                          workflow.actions.indices.contains(index) else { return defaultValue }
+                    return workflow.actions[index][keyPath: keyPath]
+                }
+            },
             set: { newValue in
                 MainActor.assumeIsolated {
                     guard let workflowIndex = self.workflows.firstIndex(where: { $0.id == id }),
@@ -128,6 +134,8 @@ extension AppModel {
         debugLines = []
         debugCursor = 0
         debugWorkflowID = nil
+        debugBreakpoints = []
+        debugPaused = false
     }
 
     func cancelWorkflowEdit() {

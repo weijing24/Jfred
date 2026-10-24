@@ -76,7 +76,7 @@ struct WorkflowsPane: View {
 
     @ViewBuilder
     private func workflowMenu(_ workflow: Workflow) -> some View {
-        Toggle("Enabled", isOn: model.bindWorkflow(workflow.id, \.enabled))
+        Toggle("Enabled", isOn: model.bindWorkflow(workflow.id, \.enabled, default: false))
         Divider()
         Button("Configure…") { model.beginWorkflowEdit(workflow) }
         Button("Edit Details…") { model.beginWorkflowEdit(workflow) }
@@ -286,7 +286,7 @@ struct WorkflowEditor: View {
                 Text("Keyword: \(workflow?.keyword ?? "")").font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
             }
             Spacer()
-            Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled))
+            Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled, default: false))
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .foregroundStyle(.white)
@@ -345,7 +345,8 @@ struct WorkflowEditor: View {
                         icon: symbol(for: action.kind),
                         title: label(for: action.kind),
                         subtitle: action.value,
-                        selected: model.workflowSelection == index
+                        selected: model.workflowSelection == index,
+                        breakpoint: model.debugBreakpoints.contains(index)
                     ) { model.workflowSelection = index }
                     .onDrag {
                         model.workflowSelection = index
@@ -386,7 +387,7 @@ struct WorkflowEditor: View {
             .frame(width: 34)
     }
 
-    private func node(icon: String, title: String, subtitle: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func node(icon: String, title: String, subtitle: String, selected: Bool, breakpoint: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -405,6 +406,14 @@ struct WorkflowEditor: View {
             .frame(width: 170, height: 110, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Color(hex: 0x3C2350) : Color(hex: 0x2B2B2B)))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color(hex: 0x8E5AB5) : Color.white.opacity(0.08), lineWidth: selected ? 1.5 : 1))
+            .overlay(alignment: .topTrailing) {
+                if breakpoint {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .padding(6)
+                }
+            }
         }
         .buttonStyle(.plain)
     }
@@ -414,12 +423,12 @@ struct WorkflowEditor: View {
             Text(model.workflowSelection == nil ? "Workflow" : "Object")
                 .font(.system(size: 14, weight: .semibold))
             if let index = model.workflowSelection, actions.indices.contains(index) {
-                Picker("Type", selection: model.bindAction(workflowID, index, \.kind)) {
+                Picker("Type", selection: model.bindAction(workflowID, index, \.kind, default: .copy)) {
                     ForEach(WorkflowAction.Kind.allCases, id: \.self) { kind in
                         Text(label(for: kind)).tag(kind)
                     }
                 }
-                TextEditor(text: model.bindAction(workflowID, index, \.value))
+                TextEditor(text: model.bindAction(workflowID, index, \.value, default: ""))
                     .font(.system(size: 11, design: .monospaced))
                     .frame(height: 140)
                     .padding(4)
@@ -435,14 +444,19 @@ struct WorkflowEditor: View {
                         .disabled(index >= actions.count - 1)
                 }
                 .controlSize(.small)
+                Toggle("Pause at this action", isOn: Binding(
+                    get: { model.debugBreakpoints.contains(index) },
+                    set: { model.setBreakpoint(index, $0) }
+                ))
+                .toggleStyle(.checkbox)
                 Button("Remove Object", role: .destructive) { removeAction(index) }
             } else {
-                field("Name", model.bindWorkflow(workflowID, \.name))
-                field("Keyword", model.bindWorkflow(workflowID, \.keyword))
-                field("Author", model.bindWorkflow(workflowID, \.author))
-                field("SF Symbol", model.bindWorkflow(workflowID, \.symbol))
-                field("Tint (hex)", model.bindWorkflow(workflowID, \.tint))
-                Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled))
+                field("Name", model.bindWorkflow(workflowID, \.name, default: ""))
+                field("Keyword", model.bindWorkflow(workflowID, \.keyword, default: ""))
+                field("Author", model.bindWorkflow(workflowID, \.author, default: ""))
+                field("SF Symbol", model.bindWorkflow(workflowID, \.symbol, default: "bolt.fill"))
+                field("Tint (hex)", model.bindWorkflow(workflowID, \.tint, default: "561D7E"))
+                Toggle("Enabled", isOn: model.bindWorkflow(workflowID, \.enabled, default: false))
             }
             Spacer()
         }
