@@ -109,9 +109,10 @@ extension MusicService {
         var id: String { "\(title) — \(artist)" }
         var title: String
         var artist: String
+        var isPlaylist = false
     }
 
-    static func searchTracks(_ query: String) -> [Track] {
+    static func searchTracks(_ query: String, includePlaylists: Bool = true) -> [Track] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return [] }
         let escaped = appleScriptEscaped(q)
@@ -126,14 +127,39 @@ extension MusicService {
             set t to item i of matches
             set output to output & (name of t) & tab & (artist of t) & linefeed
           end repeat
+          if "\(includePlaylists ? "1" : "0")" is "1" then
+            set playlistMatches to (every playlist whose name contains "\(escaped)")
+            set playlistTotal to count of playlistMatches
+            if playlistTotal > 10 then set playlistTotal to 10
+            repeat with i from 1 to playlistTotal
+              set p to item i of playlistMatches
+              set output to output & (name of p) & tab & "Playlist" & linefeed
+            end repeat
+          end if
           return output
         end tell
         """, timeout: 10)
         return text.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
             guard let title = parts.first, !title.isEmpty else { return nil }
-            return Track(title: String(title), artist: parts.count > 1 ? String(parts[1]) : "")
+            let artist = parts.count > 1 ? String(parts[1]) : ""
+            return Track(title: String(title), artist: artist, isPlaylist: artist == "Playlist")
         }
+    }
+
+    static func playPlaylist(_ name: String) -> Bool {
+        let escaped = appleScriptEscaped(name)
+        let result = Shell.osascript("""
+        tell application "Music"
+          if it is not running then launch
+          set matches to (every playlist whose name is "\(escaped)")
+          if (count of matches) is greater than 0 then
+            play item 1 of matches
+            return "playing"
+          end if
+        end tell
+        """, timeout: 8)
+        return result.contains("playing")
     }
 
     static func artworkURL() -> String? {

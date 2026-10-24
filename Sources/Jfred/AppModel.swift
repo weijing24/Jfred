@@ -1629,15 +1629,20 @@ final class AppModel {
 
     func searchMusic() {
         let query = musicSearch
+        let includePlaylists = preferences.musicIncludePlaylists
         Task.detached {
-            let tracks = MusicService.searchTracks(query)
+            let tracks = MusicService.searchTracks(query, includePlaylists: includePlaylists)
             await MainActor.run { self.musicTracks = tracks }
         }
     }
 
     func playMusic(_ track: MusicService.Track) {
         Task.detached {
-            _ = MusicService.playSearch(track.title)
+            if track.isPlaylist {
+                _ = MusicService.playPlaylist(track.title)
+            } else {
+                _ = MusicService.playSearch(track.title)
+            }
             try? await Task.sleep(nanoseconds: 350_000_000)
             let info = MusicService.info()
             await MainActor.run {

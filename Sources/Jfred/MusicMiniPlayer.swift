@@ -137,7 +137,7 @@ struct MusicMiniPlayer: View {
                             model.playMusic(track)
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "music.note")
+                                Image(systemName: track.isPlaylist ? "music.note.list" : "music.note")
                                     .font(.system(size: 12))
                                     .foregroundStyle(.white.opacity(0.5))
                                     .frame(width: 22)
