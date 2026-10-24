@@ -60,4 +60,7 @@ Remote 头验证（本机 127.0.0.1:8910）：
 GET  /?token=<32hex>            -> 200，含 CSP / nosniff / Referrer-Policy
 Host: evil.example              -> 403 Invalid host
 POST /?token=<32hex>            -> 405 Method Not Allowed, Allow: GET
+Regenerate Token then old URL  -> 403/token-required; new URL -> 200
 ```
+
+Token 轮换已在运行中的服务上验证：旧 token 立即失效，新 token 正常返回页面；测试后已关闭 Remote 监听。
