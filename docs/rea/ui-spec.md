@@ -58,15 +58,16 @@
 - **Clipboard**：History / Merging / Advanced 三个 tab；三类保留项；Viewer Hotkey/Keyword；Clear Keyword；Snippets；Universal；Merging 的 Fast append、分隔符、声音、回写剪贴板；Advanced 的 Max Clip Size、Concealed/Auto Generated、Unicode 匹配、Used 置顶、PNG、退出清空。
 - **Calculator**：Standard / Advanced（`=` 前缀）/ Input / Output / 千分位。
 - **Dictionary**：Define / Spell / Language / Paste on action / Only show dictionary words。
-- **Contacts**：Open Contacts / Display / Maps / 联系人索引状态。
-- **Music**：Mini Player 开关与 keyword、Playback、Now Playing、Play/Pause/Previous/Next。
+- **File Search**：Navigation 的 ←/→、↩ 打开 Finder、Previous Path；Buffer 的启用、清理、⇧⌥；Advanced 的 Home Folder、Copy Path、AppleScript、外置盘图标、Touch folders/aliases。
+- **Contacts**：Contacts / Email / Advanced 三个 tab；Open Contacts / Display / Maps / URL handler / 权限状态。
+- **Music**：General / Keywords / Advanced 三个 tab；Mini Player 开关与 keyword、Playback、Now Playing、Play/Pause/Previous/Next。
+- **System**：每个命令的 enable + confirm + keyword；Eject / Eject All / 排除卷。
 - **Terminal**：Application、Prefix、Custom AppleScript。
 - **System**：系统命令关键词、确认、Eject、Eject All、排除卷。
 - **Previews**：Quick Look、rich previews、No Previews For/In。
 
 ## 已知未对齐
 
-- Alfred 的 Contacts 还有 Email / Advanced 两个 tab；Jfred 目前把选项合并在一页。
 - Music 还没有真正的 Mini Player 窗口，只有命令与状态。
 - Appearance 的实时主题预览、Workflows 的画布/调试器、Remote 的 iOS 配对协议、Powerpack/Help 的营销与诊断内容只做了结构级对齐。
 - Alfred 的部分图标为手绘位图，Jfred 使用 SF Symbols + 同色块，形状不同。

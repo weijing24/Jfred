@@ -255,46 +255,80 @@ struct FeaturesPane: View {
 
     private var fileSearchNavigationTab: some View {
         VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Previous Path:") {
+                Text("Use this hotkey or keyword to show the file browser for the last browsed path from the results.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+                    .frame(maxWidth: 480, alignment: .leading)
+            }
+            SettingsLabeled(title: "Folder Keys:") {
+                Toggle("Use ← and → for folder navigation", isOn: model.bindPref(\.fileNavigateWithArrows))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("By default, → shows the action panel and you can use ⌘↓ and ⌘↑ to navigate in and out of folders.")
+            SettingsLabeled(title: "Return:") {
+                Toggle("Use ↩ to open folders in Finder", isOn: model.bindPref(\.fileOpenFoldersInFinder))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("By default, while browsing ↩ navigates into a folder. At any point you can use ⌘O to open a folder in Finder.")
             SettingsLabeled(title: "Open Files:") {
                 Toggle("Reveal files in Finder instead of opening them", isOn: model.bindPref(\.fileOpenWithFinder))
                     .toggleStyle(.checkbox)
             }
-            SettingsNote("When enabled, pressing return on a file result reveals it in Finder instead of opening it with the default application.")
         }
     }
 
     private var fileSearchBufferTab: some View {
         VStack(alignment: .leading, spacing: 14) {
             SettingsLabeled(title: "Buffer:") {
-                Toggle("Keep a file buffer (option-up adds the selected file)", isOn: model.bindPref(\.fileBufferEnabled))
+                Toggle("Enable temporary file buffer", isOn: model.bindPref(\.fileBufferEnabled))
                     .toggleStyle(.checkbox)
             }
-            SettingsNote("Return opens every file in the buffer. ⌘Y previews the selected file with Quick Look.")
+            SettingsNote("The buffer is controlled using the ⌥ key in combination with the selected file in the results: ⌥↑ adds/removes, ⌥↓ adds and moves down, ⌥← removes the last item, ⌥→ actions all items.")
+            SettingsLabeled(title: "Clearing:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Clear after actioning items in the buffer", isOn: model.bindPref(\.fileClearBufferAfterAction))
+                        .toggleStyle(.checkbox)
+                    Stepper("Clear if buffer isn't used for \(model.preferences.fileBufferTimeoutMinutes) minutes", value: model.bindPref(\.fileBufferTimeoutMinutes), in: 1...60)
+                }
+            }
+            SettingsLabeled(title: "Keys:") {
+                Toggle("Use ⇧⌥ as modifier key", isOn: model.bindPref(\.fileUseShiftOptionBuffer))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("Use the same keys as above but with ⇧⌥ as the modifier instead of ⌥, which may better fit your default key bindings.")
         }
     }
 
     private var fileSearchAdvancedTab: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SettingsLabeled(title: "Unintelligent:") {
-                Toggle("Search all file types", isOn: model.bindPref(\.searchAllFileTypes))
+            SettingsLabeled(title: "Home Folder:") {
+                TextField("~ (Unix standard)", text: model.bindPref(\.fileCustomHomeFolder))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 260)
+            }
+            SettingsNote("Use a custom home folder location. The default ~ follows the Unix standard.")
+            SettingsLabeled(title: "Copy Path:") {
+                Toggle("Escape path on 'Copy path to Clipboard' action", isOn: model.bindPref(\.fileEscapePathForTerminal))
                     .toggleStyle(.checkbox)
             }
-            SettingsNote("WARNING: Selecting this will slow down and muddle the default search results considerably. Use 'open' and 'find' for file operations instead.")
-            SettingsLabeled(title: "Extras:") {
-                LazyVGrid(
-                    columns: [GridItem(.fixed(130), alignment: .leading), GridItem(.fixed(130), alignment: .leading), GridItem(.fixed(130), alignment: .leading)],
-                    alignment: .leading,
-                    spacing: 6
-                ) {
-                    Toggle("Folders", isOn: model.bindPref(\.extraFolders)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("Documents", isOn: model.bindPref(\.extraDocuments)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("Text Files", isOn: model.bindPref(\.extraText)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("Images", isOn: model.bindPref(\.extraImages)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("Archives", isOn: model.bindPref(\.extraArchives)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("AppleScripts", isOn: model.bindPref(\.extraScripts)).toggleStyle(.checkbox).font(.system(size: 12))
+            SettingsNote("Escape the path for Terminal, e.g. '/Users/name/Desktop/Andrew\'s Folder!'.")
+            SettingsLabeled(title: "AppleScripts:") {
+                Toggle("Run AppleScripts instead of opening", isOn: model.bindPref(\.fileRunAppleScriptsInsteadOfOpening))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("When dealing with AppleScripts in results and file navigation, run them on pressing return instead of opening. Use ⌘O to open them at any point.")
+            SettingsLabeled(title: "Performance:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Use file type icons for files on external drives", isOn: model.bindPref(\.fileUseTypeIconsForExternal))
+                        .toggleStyle(.checkbox)
+                    Toggle("Touch folders after opening them", isOn: model.bindPref(\.fileTouchFolders))
+                        .toggleStyle(.checkbox)
+                    Toggle("Touch aliases after opening them", isOn: model.bindPref(\.fileTouchAliases))
+                        .toggleStyle(.checkbox)
                 }
             }
-            SettingsNote("These items are added to the default results when they are enabled.")
+            SettingsNote("Touching a folder updates kMDItemFSContentChangeDate so it is prioritised in Spotlight and file search results.")
         }
     }
 
@@ -943,6 +977,21 @@ struct FeaturesPane: View {
 
     private var contactsPage: some View {
         VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Spacer()
+                SettingsTabBar(selection: model.bind(\.contactsTab), tabs: ["Contacts", "Email", "Advanced"])
+                Spacer()
+            }
+            switch model.contactsTab {
+            case "Email": contactsEmailTab
+            case "Advanced": contactsAdvancedTab
+            default: contactsGeneralTab
+            }
+        }
+    }
+
+    private var contactsGeneralTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
             SettingsLabeled(title: "Contacts:") {
                 Toggle("Open Contacts in Jfred", isOn: model.bindPref(\.contactsOpenInAlfred))
                     .toggleStyle(.checkbox)
@@ -953,8 +1002,6 @@ struct FeaturesPane: View {
                     Toggle("Show title", isOn: model.bindPref(\.contactsShowTitle))
                         .toggleStyle(.checkbox)
                     Toggle("Show job title", isOn: model.bindPref(\.contactsShowJobTitle))
-                        .toggleStyle(.checkbox)
-                    Toggle("Show notes", isOn: model.bindPref(\.contactsShowNotes))
                         .toggleStyle(.checkbox)
                     Toggle("Invert name order", isOn: model.bindPref(\.contactsInvertName))
                         .toggleStyle(.checkbox)
@@ -973,11 +1020,70 @@ struct FeaturesPane: View {
                 Button("Grant Access…") { model.requestContactsAccess() }
                 Button("Reload") { model.reloadContacts() }
             }
-            SettingsNote("Jfred reads contact names, email addresses, phone numbers, job titles and notes. The data stays on this Mac and is only used for launcher results.")
+            SettingsNote("Jfred reads contact names, email addresses, phone numbers and job titles. The data stays on this Mac and is only used for launcher results.")
+        }
+    }
+
+    private var contactsEmailTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Email:") {
+                Text("Email actions open the macOS default mail application. Use the action panel on a contact result to start a new message.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+                    .frame(maxWidth: 520, alignment: .leading)
+            }
+            SettingsLabeled(title: "Gmail:") {
+                Text("https://mail.google.com/mail/?view=cm&fs=1&to={query}")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(JfredColor.sub)
+                    .textSelection(.enabled)
+            }
+            SettingsNote("A {query} placeholder is replaced with the contact's email address when a custom email URL is used.")
+        }
+    }
+
+    private var contactsAdvancedTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Maps:") {
+                TextField("https://maps.apple.com/?q={query}", text: model.bindPref(\.contactsMapURL))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 420)
+            }
+            SettingsNote("The URL used by the Show in Maps action. {query} is replaced with the contact's address or name.")
+            SettingsLabeled(title: "Opening:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Use a custom URL handler", isOn: model.bindPref(\.contactsURLHandlerEnabled))
+                        .toggleStyle(.checkbox)
+                    TextField("addressbook://{uid}", text: model.bindPref(\.contactsURLHandler))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 420)
+                }
+            }
+            SettingsNote("When enabled, opening a contact uses this URL with {uid} replaced by the contact identifier.")
+            SettingsLabeled(title: "Permissions:") {
+                Button("Grant Contacts Access…") { model.requestContactsAccess() }
+                Button("Reload") { model.reloadContacts() }
+            }
+            SettingsNote("Jfred only requests Contacts access when you press Grant Access. Without it, contact results are simply absent.")
         }
     }
 
     private var musicPage: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Spacer()
+                SettingsTabBar(selection: model.bind(\.musicTab), tabs: ["General", "Keywords", "Advanced"])
+                Spacer()
+            }
+            switch model.musicTab {
+            case "Keywords": musicKeywordsTab
+            case "Advanced": musicAdvancedTab
+            default: musicGeneralTab
+            }
+        }
+    }
+
+    private var musicGeneralTab: some View {
         VStack(alignment: .leading, spacing: 14) {
             SettingsLabeled(title: "Mini Player:") {
                 Toggle("Enable Music mini player", isOn: model.bindPref(\.musicEnabled))
@@ -1012,6 +1118,45 @@ struct FeaturesPane: View {
                 }
             }
             SettingsNote("Music control uses AppleScript and requires Automation access to Music.app. Jfred never reads or uploads your music library.")
+        }
+    }
+
+    private var musicKeywordsTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Mini Player Keyword:") {
+                Toggle("", isOn: model.bindPref(\.musicEnabled))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+                TextField("music", text: model.bindPref(\.musicKeyword))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 182)
+            }
+            SettingsNote("Use this hotkey or keyword to show the Music Mini Player.")
+            SettingsLabeled(title: "Play Keyword:") {
+                Text("play")
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(width: 120, alignment: .leading)
+                Text("play <song> starts the first matching song or album.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+            }
+            SettingsNote("The play keyword is always available while Music is enabled.")
+        }
+    }
+
+    private var musicAdvancedTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Playback:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Hide Mini Player after selecting song", isOn: model.bindPref(\.musicHideMiniPlayerAfterSong))
+                        .toggleStyle(.checkbox)
+                    Toggle("When randomising, only play larger albums", isOn: model.bindPref(\.musicRandomLargerAlbums))
+                        .toggleStyle(.checkbox)
+                    Toggle("Include Playlists in Mini Player Search Results", isOn: model.bindPref(\.musicIncludePlaylists))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            SettingsNote("Jfred never reads or uploads your music library. Playback is controlled through AppleScript.")
         }
     }
 
@@ -1163,6 +1308,15 @@ struct FeaturesPane: View {
                     Text(command.title)
                         .font(.system(size: 12))
                         .frame(width: 110, alignment: .trailing)
+                    Toggle("", isOn: Binding(
+                        get: { !model.preferences.systemDisabled.contains(command.id) },
+                        set: { enabled in
+                            model.preferences.systemDisabled.removeAll { $0 == command.id }
+                            if !enabled { model.preferences.systemDisabled.append(command.id) }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
                     Toggle("", isOn: model.bindMember(\.systemConfirm, command.id))
                         .labelsHidden()
                         .toggleStyle(.checkbox)

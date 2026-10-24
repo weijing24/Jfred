@@ -35,7 +35,7 @@
 | 数据 | 位置 | 保护 |
 | --- | --- | --- |
 | 剪贴板历史 | `~/Library/Application Support/JfredLocal/state.json` + `ClipImages/` | 0600/0700，屏蔽密码管理器，可退出清空 |
-| 联系人姓名/邮箱/电话/职位 | 内存，运行时从 Contacts 读取 | 不写入 state.json |
+| 联系人姓名/邮箱/电话/职位 | 内存，运行时从 Contacts 读取 | 不写入 state.json；不读取 note（需要额外 entitlement） |
 | Remote token | `state.json` | 0600，32 hex，常量时间比较 |
 | 书签/浏览器标签/Chrome profile | 运行时读取 | 仅用于搜索结果，不写盘 |
 | 搜索历史/使用统计 | `state.json` | 0600，可关闭 `showLatestQuery` |
@@ -46,7 +46,7 @@
 
 ```bash
 swift build
-./scripts/test.sh          # 15 个测试，全部通过
+./scripts/test.sh          # 16 个测试，全部通过
 ./scripts/build-app.sh
 open build/Jfred.app
 ```

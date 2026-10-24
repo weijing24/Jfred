@@ -194,6 +194,14 @@ struct CoreTests {
         #expect(Search.results(for: "music", context: context).contains { $0.id == "sys:musicplaypause" })
     }
 
+    @Test func disabledSystemCommandIsHidden() {
+        var context = SearchContext()
+        context.preferences.systemDisabled = ["sleep"]
+        #expect(!Search.results(for: "sleep", context: context).contains { $0.id == "sys:sleep" })
+        context.preferences.systemDisabled = []
+        #expect(Search.results(for: "sleep", context: context).contains { $0.id == "sys:sleep" })
+    }
+
     @Test func customTerminalPrefix() {
         var context = SearchContext()
         context.preferences.terminalPrefix = "!"

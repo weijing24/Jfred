@@ -231,6 +231,7 @@ public struct Preferences: Codable, Equatable, Sendable {
     // System commands.
     public var systemKeywords: [String: String]
     public var systemConfirm: [String]
+    public var systemDisabled: [String]
     public var ejectScope: String
     public var ejectAllEnabled: Bool
     public var ejectExclusions: [String]
@@ -401,6 +402,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         terminalCustomScript = ""
         systemKeywords = [:]
         systemConfirm = []
+        systemDisabled = []
         ejectScope = "local"
         ejectAllEnabled = false
         ejectExclusions = []
@@ -431,7 +433,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case snippetKeyword, snippetShowKeywordInResult, snippetMatching, snippetWordBased
         case largeTypeBackgroundMode, largeTypeAutoHide, largeTypeShowOnMouseScreen
         case richPreviewsEnabled, noPreviewTypes, noPreviewPaths
-        case systemKeywords, systemConfirm, ejectScope, ejectAllEnabled, ejectExclusions
+        case systemKeywords, systemConfirm, systemDisabled, ejectScope, ejectAllEnabled, ejectExclusions
         case dictionaryDefineEnabled, dictionarySpellEnabled, dictionaryDefineKeyword, dictionarySpellKeyword
         case dictionaryLanguage, dictionaryPasteOnAction, dictionaryOnlyDictionary
         case terminalPrefix, terminalCustomScript
@@ -602,6 +604,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         terminalCustomScript = value(.terminalCustomScript, d.terminalCustomScript)
         systemKeywords = value(.systemKeywords, d.systemKeywords)
         systemConfirm = value(.systemConfirm, d.systemConfirm)
+        systemDisabled = value(.systemDisabled, d.systemDisabled)
         ejectScope = value(.ejectScope, d.ejectScope)
         ejectAllEnabled = value(.ejectAllEnabled, d.ejectAllEnabled)
         ejectExclusions = value(.ejectExclusions, d.ejectExclusions)

@@ -71,6 +71,8 @@ final class AppModel {
     var links: [LinkRecord] = []
     var contacts: [ContactRecord] = []
     var musicTrack = ""
+    var contactsTab = "Contacts"
+    var musicTab = "General"
     var opItems: [AppRecord] = []
 
     var query = ""
@@ -395,12 +397,26 @@ final class AppModel {
             pasteToPrevious(text)
         case "contact":
             let uid = item.payload
-            if let url = URL(string: "addressbook://\(uid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? uid)") {
-                NSWorkspace.shared.open(url)
-            } else if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.AddressBook") {
-                NSWorkspace.shared.open(app)
+            let contact = contacts.first { ($0.uid ?? $0.id) == uid }
+            if preferences.contactsOpenInAlfred, let contact {
+                let details = [contact.name, contact.email, contact.phone, contact.jobTitle ?? "", contact.organization ?? ""]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n")
+                hideLauncher(reactivate: false)
+                showLarge(details)
+            } else if preferences.contactsURLHandlerEnabled, !preferences.contactsURLHandler.isEmpty {
+                let encoded = uid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? uid
+                let template = preferences.contactsURLHandler.replacingOccurrences(of: "{uid}", with: encoded)
+                if let url = URL(string: template) { NSWorkspace.shared.open(url) }
+                hideLauncher(reactivate: false)
+            } else {
+                if let url = URL(string: "addressbook://\(uid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? uid)") {
+                    NSWorkspace.shared.open(url)
+                } else if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.AddressBook") {
+                    NSWorkspace.shared.open(app)
+                }
+                hideLauncher(reactivate: false)
             }
-            hideLauncher(reactivate: false)
         case "musicplay":
             hideLauncher(reactivate: false)
             Task.detached { _ = MusicService.playSearch(item.payload) }
@@ -1069,6 +1085,7 @@ final class AppModel {
     }
 
     private func performSystem(_ id: String) {
+        if preferences.systemDisabled.contains(id) { return }
         if id.hasPrefix("volume:") {
             guard let value = Int(id.dropFirst("volume:".count)), (0...100).contains(value) else { return }
             _ = Shell.osascript("set volume output volume \(value)")

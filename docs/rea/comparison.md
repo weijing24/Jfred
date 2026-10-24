@@ -19,10 +19,10 @@
 
 | 指标 | main | rea |
 | --- | --- | --- |
-| Swift 行数（含测试） | 9,083 | 10,154 |
+| Swift 行数（含测试） | 9,083 | 10,337 |
 | Swift 文件数 | 22 | 24（新增 `ContactsIndex.swift`、`MusicService.swift`） |
-| 测试 | 12 个 | 15 个，全部通过 |
-| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +1,071 行 |
+| 测试 | 12 个 | 16 个，全部通过 |
+| 新增/修改 | — | 15 个文件（含 4 个文档），代码 +1,254 行 |
 
 ## 界面差异（rea 已对齐）
 
@@ -36,7 +36,9 @@
 - Calculator 补 Advanced（`=`）、Input/Output 小数分隔符、千分位。
 - Dictionary 补 Define/Spell/Language/Paste on action/Only dictionary words。
 - Terminal 补 Application、Prefix、Custom AppleScript。
-- Contacts、Music 为新增页面；Music 已接 Play/Pause、Previous、Next、Current Track。
+- File Search 补 Navigation / Buffer / Advanced 三页的文件夹导航、缓冲区清理、Home Folder、Copy Path、AppleScript、外置盘图标与 Touch 选项。
+- System 每个命令补 enable 开关；禁用后搜索结果和 Remote `/run` 都会拒绝执行。
+- Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。
 
 ## 行为差异（rea 已接）
 
@@ -49,11 +51,10 @@
 
 ## 仍未对齐（诚实清单）
 
-- Contacts 的 Email/Advanced 两个 tab 尚未拆开。
 - Music Mini Player 还没有独立窗口/封面/播放列表浏览，只有命令与状态。
 - Appearance 的实时主题预览、Workflows 画布/调试器、Remote iOS 配对协议、Powerpack/Help 的完整内容仍是结构级。
 - Alfred 的手绘图标/主题壁纸没有复制（版权与独立性考虑），Jfred 用 SF Symbols + 同色块。
-- 少数 Alfred 选项只落了 UI 与偏好字段，未逐一接行为（例如 File Buffer 的 Shift+Option 变体、Snippets 的完整 Auto Expansion 子选项、System 每个命令的 enable 开关）。
+- 少数 Alfred 选项只落了 UI 与偏好字段，未逐一接行为（例如 File Buffer 的 Shift+Option 变体、Snippets 的完整 Auto Expansion 子选项、Calculator 的高级函数全集）。
 - 像素级字体/间距仍有 1–3pt 级差异；REA 证据给出的是 frame 与颜色，不是渲染后的字形度量。
 
 ## 复现
