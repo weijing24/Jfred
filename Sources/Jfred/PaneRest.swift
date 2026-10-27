@@ -1,21 +1,26 @@
 import SwiftUI
 import JfredCore
+import CoreImage.CIFilterBuiltins
+import UniformTypeIdentifiers
 
 struct AppearancePane: View {
     var model: AppModel
+
+    private var themes: [LauncherTheme] {
+        LauncherTheme.all + model.preferences.customThemes.map { LauncherTheme(custom: $0) }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(LauncherTheme.all) { theme in
+                    ForEach(themes) { theme in
                         Button {
                             model.preferences.themeID = theme.id
                         } label: {
-                            HStack(spacing: 8) {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(theme.selected)
-                                    .frame(width: 18, height: 28)
-                                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.white.opacity(0.4)))
+                            HStack(spacing: 10) {
+                                ThemeThumbnail(theme: theme)
+                                    .frame(width: 80, height: 50)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(theme.name).font(.system(size: 13, weight: .semibold))
                                     Text(theme.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.75))
@@ -23,7 +28,8 @@ struct AppearancePane: View {
                                 Spacer()
                             }
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
+                            .padding(.vertical, 2)
+                            .frame(height: 54)
                             .foregroundStyle(.white)
                             .background(model.preferences.themeID == theme.id ? Color.white.opacity(0.22) : Color.clear)
                             .contentShape(Rectangle())
@@ -32,14 +38,204 @@ struct AppearancePane: View {
                     }
                 }
             }
-            .frame(width: 250)
+            .frame(width: 290)
             .jfredSidebar(tint: JfredColor.sidebarDeep)
-            ZStack {
+            ZStack(alignment: .bottom) {
                 WallpaperArt()
-                PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID))
+                PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes))
                     .padding(.top, 30)
+                HStack(spacing: 10) {
+                    Button("Options…") { model.showThemeEditor = true }
+                        .controlSize(.small)
+                    Button("Import…") { importTheme() }
+                        .controlSize(.small)
+                    Button("Export…") { exportTheme() }
+                        .controlSize(.small)
+                    if model.preferences.customThemes.contains(where: { $0.id == model.preferences.themeID }) {
+                        Button("Remove") { removeTheme() }
+                            .controlSize(.small)
+                    }
+                    Button("Help") { model.section = .help }
+                        .controlSize(.small)
+                    Spacer()
+                    Text("Theme files are read/written locally; no assets are uploaded.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 24)
+                .background(.black.opacity(0.35))
             }
         }
+        .sheet(isPresented: model.bind(\.showThemeEditor)) {
+            ThemeEditorSheet(model: model)
+        }
+    }
+
+    private func importTheme() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if let type = UTType(filenameExtension: "alfredappearance") {
+            panel.allowedContentTypes = [type]
+        }
+        guard panel.runModal() == .OK, let url = panel.url, let custom = ThemeFiles.read(url) else { return }
+        model.preferences.customThemes.append(custom)
+        model.preferences.themeID = custom.id
+    }
+
+    private func exportTheme() {
+        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = theme.name + ".alfredappearance"
+        if let type = UTType(filenameExtension: "alfredappearance") {
+            panel.allowedContentTypes = [type]
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        _ = ThemeFiles.write(theme, to: url)
+    }
+
+    private func removeTheme() {
+        guard model.preferences.customThemes.contains(where: { $0.id == model.preferences.themeID }) else { return }
+        model.preferences.customThemes.removeAll { $0.id == model.preferences.themeID }
+        model.preferences.themeID = "alfred"
+    }
+}
+
+struct ThemeEditorSheet: View {
+    var model: AppModel
+
+    private var index: Int? {
+        model.preferences.customThemes.firstIndex { $0.id == model.preferences.themeID }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Theme Options").font(.system(size: 16, weight: .semibold))
+                Spacer()
+                Button("Done") { model.showThemeEditor = false }
+                    .keyboardShortcut(.defaultAction)
+            }
+            if let index {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        field("Name", binding(index, \.name, default: ""))
+                        numberField("Window width", binding(index, \.width, default: 0))
+                        numberField("Corner radius", binding(index, \.radius, default: 0))
+                        numberField("Horizontal padding", binding(index, \.paddingH, default: 0))
+                        numberField("Vertical padding", binding(index, \.paddingV, default: 0))
+                        numberField("Search size", binding(index, \.querySize, default: 0))
+                        numberField("Result title size", binding(index, \.resultTextSize, default: 0))
+                        numberField("Result subtitle size", binding(index, \.resultSubtextSize, default: 0))
+                        numberField("Shortcut size", binding(index, \.shortcutSize, default: 0))
+                        numberField("Icon size", binding(index, \.iconSize, default: 0))
+                        Divider()
+                        field("Background", binding(index, \.background, default: ""))
+                        field("Search background", binding(index, \.searchBackground, default: ""))
+                        field("Selected background", binding(index, \.selected, default: ""))
+                        field("Border", binding(index, \.border, default: ""))
+                        field("Query text", binding(index, \.query, default: ""))
+                        field("Result text", binding(index, \.title, default: ""))
+                        field("Result subtitle", binding(index, \.subtitle, default: ""))
+                        field("Selected text", binding(index, \.selectedTitle, default: ""))
+                        field("Selected subtitle", binding(index, \.selectedSubtitle, default: ""))
+                        Text("Colours use #RRGGBBAA. Changes apply to the live launcher immediately.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(JfredColor.sub)
+                        HStack {
+                            Button("Delete Theme", role: .destructive) {
+                                model.preferences.customThemes.remove(at: index)
+                                model.preferences.themeID = "alfred"
+                                model.showThemeEditor = false
+                            }
+                            Spacer()
+                            Button("Export…") {
+                                let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
+                                let panel = NSSavePanel()
+                                panel.nameFieldStringValue = theme.name + ".alfredappearance"
+                                if let type = UTType(filenameExtension: "alfredappearance") {
+                                    panel.allowedContentTypes = [type]
+                                }
+                                if panel.runModal() == .OK, let url = panel.url { _ = ThemeFiles.write(theme, to: url) }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("The selected theme is a built-in preset. Duplicate it to edit its metrics and colours.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(JfredColor.sub)
+                    Button("Duplicate as Custom Theme") {
+                        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
+                        let custom = ThemeFiles.custom(from: theme)
+                        model.preferences.customThemes.append(custom)
+                        model.preferences.themeID = custom.id
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(width: 580, height: 640)
+    }
+
+    private func field(_ title: String, _ binding: Binding<String>) -> some View {
+        HStack(spacing: 10) {
+            Text(title).font(.system(size: 12)).frame(width: 160, alignment: .trailing)
+            TextField("", text: binding).textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func numberField(_ title: String, _ binding: Binding<Double>) -> some View {
+        HStack(spacing: 10) {
+            Text(title).font(.system(size: 12)).frame(width: 160, alignment: .trailing)
+            TextField("", value: binding, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 120)
+            Spacer()
+        }
+    }
+
+    private func binding<T>(_ index: Int, _ keyPath: WritableKeyPath<CustomTheme, T>, default defaultValue: T) -> Binding<T> {
+        Binding(
+            get: {
+                guard model.preferences.customThemes.indices.contains(index) else { return defaultValue }
+                return model.preferences.customThemes[index][keyPath: keyPath]
+            },
+            set: { newValue in
+                guard model.preferences.customThemes.indices.contains(index) else { return }
+                model.preferences.customThemes[index][keyPath: keyPath] = newValue
+            }
+        )
+    }
+}
+
+private struct ThemeThumbnail: View {
+    var theme: LauncherTheme
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(theme.background)
+            VStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(theme.searchBackground)
+                    .frame(height: 9)
+                ForEach(0..<3, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(index == 0 ? theme.selected : theme.title.opacity(0.22))
+                        .frame(height: 8)
+                }
+            }
+            .padding(4)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .stroke(Color.white.opacity(0.25), lineWidth: 0.7)
+        )
     }
 }
 
@@ -67,7 +263,7 @@ struct RemotePane: View {
                 }
                 Spacer()
             }
-            .frame(width: 250)
+            .frame(width: 240)
             .jfredSidebar(tint: JfredColor.sidebarDeep)
             ZStack {
                 Color(hex: 0x161616)
@@ -100,10 +296,18 @@ struct RemotePane: View {
                     .frame(maxWidth: .infinity)
                     .foregroundStyle(.secondary)
                 Toggle("This Mac only", isOn: model.bindPref(\.remoteLocalOnly))
+                if !model.preferences.remoteLocalOnly {
+                    Text("Warning: the token is sent over plain HTTP on your network. Use this only on a trusted network.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Stepper("Port \(model.preferences.remotePort)", value: model.bindPref(\.remotePort), in: 1024...65535)
                 Text("Token \(model.preferences.remoteToken)")
                     .font(.system(size: 12, design: .monospaced))
                     .textSelection(.enabled)
+                Button("Regenerate Token") { model.regenerateRemoteToken() }
+                    .controlSize(.small)
                 Spacer()
                 VStack(spacing: 8) {
                     Text("Jfred Remote for iOS")
@@ -112,6 +316,8 @@ struct RemotePane: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                    Button("Add iOS Remote…") { model.showRemoteQR = true }
+                        .disabled(!model.preferences.remoteEnabled)
                     Button("Open Remote Page") {
                         let url = "http://127.0.0.1:\(model.preferences.remotePort)/?token=\(model.preferences.remoteToken)"
                         if let link = URL(string: url) { NSWorkspace.shared.open(link) }
@@ -125,6 +331,66 @@ struct RemotePane: View {
             .frame(width: 280)
             .background(Color.white)
         }
+        .sheet(isPresented: model.bind(\.showRemoteQR)) {
+            RemoteQRCode(url: "http://127.0.0.1:\(model.preferences.remotePort)/?token=\(model.preferences.remoteToken)") {
+                model.showRemoteQR = false
+            }
+        }
+    }
+}
+
+struct RemoteQRCode: View {
+    var url: String
+    var done: () -> Void
+
+    private var image: NSImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(url.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+        let rep = NSCIImageRep(ciImage: scaled)
+        let image = NSImage(size: rep.size)
+        image.addRepresentation(rep)
+        return image
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("Add Jfred Remote")
+                .font(.system(size: 18, weight: .semibold))
+            Text("Scan this code from the Jfred Remote page on your iPhone, or copy the URL below.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 320)
+            if let image {
+                Image(nsImage: image)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 220, height: 220)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
+            } else {
+                Text("Could not generate the QR code.")
+                    .foregroundStyle(.red)
+            }
+            Text(url)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .lineLimit(3)
+                .multilineTextAlignment(.center)
+            HStack {
+                Button("Copy URL") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url, forType: .string)
+                }
+                Button("Done") { done() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
     }
 }
 
@@ -404,6 +670,174 @@ struct UpdatePane: View {
         HStack(alignment: .top, spacing: 8) {
             Text("•")
             Text(text)
+        }
+    }
+}
+
+struct PowerpackPane: View {
+    var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PageHeaderBand(
+                icon: "bolt.fill",
+                tint: Color(hex: 0x4F217A),
+                title: "Powerpack",
+                subtitle: "The extra features that make Jfred a full launcher."
+            )
+            PageSurface {
+                FormPanel {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("Jfred includes the Powerpack feature set locally")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Clipboard History, Snippets, File Search, Universal Actions, Workflows, Contacts, Music, Themes, Remote and Large Type are available without a separate purchase. Jfred is an independent, local project and is not affiliated with Running with Crayons.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(JfredColor.sub)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Divider()
+                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 10) {
+                            powerItem("Clipboard History", "list.clipboard")
+                            powerItem("Snippets", "note.text")
+                            powerItem("File Search", "doc.text.magnifyingglass")
+                            powerItem("Universal Actions", "arrow.right.square")
+                            powerItem("Workflows", "square.grid.2x2")
+                            powerItem("Contacts", "person.crop.circle")
+                            powerItem("Music", "music.note")
+                            powerItem("Themes", "paintbrush.fill")
+                            powerItem("Remote", "antenna.radiowaves.left.and.right")
+                            powerItem("Large Type", "textformat.size")
+                        }
+                        Divider()
+                        HStack {
+                            Text("Version \(AppRelease.version)")
+                                .font(.system(size: 12))
+                                .foregroundStyle(JfredColor.sub)
+                            Spacer()
+                            Button("Open Help") { model.section = .help }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func powerItem(_ title: String, _ symbol: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 13))
+                .foregroundStyle(Color(hex: 0x4F217A))
+                .frame(width: 20)
+            Text(title).font(.system(size: 12.5))
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+struct HelpPane: View {
+    var model: AppModel
+
+    private struct Topic: Identifiable {
+        var id: String { title }
+        var title: String
+        var detail: String
+    }
+
+    private let topics: [Topic] = [
+        Topic(title: "Permissions", detail: "Accessibility is needed for snippets, window commands and global hotkeys. Automation is needed for Finder, Terminal, browsers and Music. Contacts is only requested when you press Grant Access. Full Disk Access improves file search completeness."),
+        Topic(title: "Hotkey does not open the launcher", detail: "Another app may already own the shortcut. Open General, click the hotkey field and press a different combination. Jfred keeps running as a menu bar accessory even when the settings window closes."),
+        Topic(title: "Clipboard history is empty", detail: "Check that Clipboard History is enabled, that the source app is not in Ignore Apps, and that the item was not marked Concealed or Auto Generated. Password managers are deliberately excluded."),
+        Topic(title: "Snippets do not expand", detail: "Auto expansion needs Accessibility permission. Keep the snippet keyword unique and make sure the snippet is enabled and its collection is not filtered out."),
+        Topic(title: "A workflow does not run", detail: "Imported workflows run their own scripts with the same permissions as Jfred. Check the workflow's script interpreter, its working directory, and the shell PATH. Use the workflow Debugger to see the first failing action."),
+        Topic(title: "Remote page cannot connect", detail: "Enable the server, keep This Mac only on unless you need LAN access, and use the exact token from the Remote pane. If a token or QR code leaked, press Regenerate Token."),
+        Topic(title: "Theme import or export failed", detail: "Theme files are .alfredappearance JSON. Jfred reads the window/search/result fields and ignores unknown keys. Export produces a compatible file; importing a broken file leaves the current theme unchanged."),
+        Topic(title: "File search is slow", detail: "Reduce Search Scope, turn off Search all file types, or disable unnecessary Extras. Use the open, find, in and tags keywords instead of searching every file in the default results."),
+    ]
+
+    private var visibleTopics: [Topic] {
+        let query = model.helpQuery.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return topics }
+        return topics.filter { $0.title.localizedCaseInsensitiveContains(query) || $0.detail.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PageHeaderBand(
+                icon: "lifepreserver",
+                tint: Color(hex: 0x4F217A),
+                title: "Help",
+                subtitle: "Troubleshooting, permissions and diagnostics for Jfred."
+            )
+            PageSurface {
+                FormPanel {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("Jfred \(AppRelease.version) [local]")
+                            .font(.system(size: 18, weight: .semibold))
+                        HStack(spacing: 10) {
+                            Button("Request Permissions…") { model.requestPermissions() }
+                            Button("Reveal Support Folder") { model.revealSupportFolder() }
+                            Button("Copy Diagnostics") { copyDiagnostics() }
+                            Button("Clear Clipboard History") { model.clearClipboardHistory() }
+                            Button("Clear Usage Data") { model.clearUsageData() }
+                        }
+                        Divider()
+                        VStack(alignment: .leading, spacing: 8) {
+                            helpRow("Support folder", SupportPaths.directory(syncFolder: model.preferences.syncFolder).path)
+                            helpRow("Contacts indexed", "\(model.contacts.count)")
+                            helpRow("Workflows", "\(model.workflows.count)")
+                            helpRow("Snippets", "\(model.snippets.count)")
+                            helpRow("Clipboard items", "\(model.clips.count)")
+                        }
+                        Divider()
+                        SettingsFilterField(placeholder: "Search Help", text: model.bind(\.helpQuery), width: 320)
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(visibleTopics) { topic in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(topic.title)
+                                        .font(.system(size: 13, weight: .semibold))
+                                    Text(topic.detail)
+                                        .font(.system(size: 11.5))
+                                        .foregroundStyle(JfredColor.sub)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .padding(10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xF7F7F7)))
+                            }
+                        }
+                        Divider()
+                        Text("Alfred is a trademark of Running with Crayons Ltd. Jfred is not affiliated with or endorsed by Running with Crayons.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(JfredColor.sub)
+                    }
+                }
+            }
+        }
+    }
+
+    private func copyDiagnostics() {
+        let lines = [
+            "Jfred \(AppRelease.version)",
+            "Support folder: \(SupportPaths.directory(syncFolder: model.preferences.syncFolder).path)",
+            "Contacts: \(model.contacts.count)",
+            "Workflows: \(model.workflows.count)",
+            "Snippets: \(model.snippets.count)",
+            "Clipboard items: \(model.clips.count)",
+            "Remote enabled: \(model.preferences.remoteEnabled)",
+        ]
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+    }
+
+    private func helpRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 130, alignment: .trailing)
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(JfredColor.sub)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
         }
     }
 }

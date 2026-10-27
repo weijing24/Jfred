@@ -93,10 +93,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             guard url.scheme == "jfredlocal" else { continue }
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            let query = items.first { $0.name == "q" }?.value ?? ""
+            let query = String((items.first { $0.name == "q" }?.value ?? "").prefix(512))
             if url.host == "search" || url.host == nil {
                 model.query = query
                 model.showLauncher()
+            } else if url.host == "music" {
+                model.showMusicPlayer()
+            } else if url.host == "selection" {
+                model.showSelectionActions()
+            } else if url.host == "actions" {
+                model.query = query
+                model.showLauncher()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.model.showActions() }
             } else if url.host == "run", let keyword = items.first(where: { $0.name == "keyword" })?.value {
                 model.query = keyword + " "
                 model.showLauncher()

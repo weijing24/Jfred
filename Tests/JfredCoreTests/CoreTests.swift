@@ -66,7 +66,7 @@ struct CoreTests {
 
     @Test func matchTierOutranksUsageAndShorterNames() {
         #expect(fieldMatch(query: "cal", target: "Calendar")?.tier == 1)
-        #expect(fieldMatch(query: "cal", target: "Local")?.tier == 4)
+        #expect(fieldMatch(query: "cal", target: "Local")?.tier == 3) // contiguous substring, not fuzzy
         var context = SearchContext()
         context.apps = [
             AppRecord(id: "local", name: "Local", path: "/Applications/Local.app"),
@@ -175,3 +175,132 @@ struct CoreTests {
         #expect(stats.series["hotkeys"]?.reduce(0, +) == 1)
     }
 }
+
+    @Test func contactsAndMusicResults() {
+        var context = SearchContext()
+        context.preferences.contactsEnabled = true
+        context.contacts = [
+            ContactRecord(id: "ada", name: "Ada Lovelace", email: "ada@example.com", phone: "", uid: "ada"),
+        ]
+        let people = Search.results(for: "lovelace", context: context)
+        #expect(people.contains { $0.kind == "contact" && $0.title == "Ada Lovelace" })
+
+        context.preferences.contactsEnabled = false
+        #expect(!Search.results(for: "lovelace", context: context).contains { $0.kind == "contact" })
+
+        context.preferences.musicEnabled = true
+        let playback = Search.results(for: "play daft punk", context: context)
+        #expect(playback.contains { $0.kind == "musicplay" && $0.payload == "daft punk" })
+        #expect(Search.results(for: "music", context: context).contains { $0.id == "sys:musicplaypause" })
+    }
+
+    @Test func disabledSystemCommandIsHidden() {
+        var context = SearchContext()
+        context.preferences.systemDisabled = ["sleep"]
+        #expect(!Search.results(for: "sleep", context: context).contains { $0.id == "sys:sleep" })
+        context.preferences.systemDisabled = []
+        #expect(Search.results(for: "sleep", context: context).contains { $0.id == "sys:sleep" })
+    }
+
+    @Test func clipboardClearKeyword() {
+        var context = SearchContext()
+        context.preferences.clipboardEnabled = true
+        context.preferences.clipboardClearKeywordEnabled = true
+        let all = Search.results(for: "clear", context: context)
+        #expect(all.contains { $0.kind == "clipclear" && $0.payload == "all" })
+        let five = Search.results(for: "clear 5", context: context)
+        #expect(five.contains { $0.kind == "clipclear" && $0.payload == "5" })
+        context.preferences.clipboardClearKeywordEnabled = false
+        #expect(!Search.results(for: "clear", context: context).contains { $0.kind == "clipclear" })
+    }
+
+    @Test func contactDisplayOptions() {
+        var context = SearchContext()
+        context.preferences.contactsEnabled = true
+        context.preferences.contactsInvertName = true
+        context.preferences.contactsShowJobTitle = true
+        context.contacts = [
+            ContactRecord(id: "ada", name: "Ada Lovelace", email: "ada@example.com", phone: "", uid: "ada", jobTitle: "Mathematician"),
+        ]
+        let row = Search.results(for: "ada", context: context).first { $0.kind == "contact" }
+        #expect(row?.title == "Lovelace, Ada")
+        #expect(row?.subtitle.contains("Mathematician") == true)
+    }
+
+    @Test func ejectAllRespectsEnableSwitch() {
+        var context = SearchContext()
+        context.preferences.ejectAllEnabled = false
+        #expect(!Search.results(for: "ejectall", context: context).contains { $0.id == "sys:ejectall" })
+        context.preferences.ejectAllEnabled = true
+        #expect(Search.results(for: "ejectall", context: context).contains { $0.id == "sys:ejectall" })
+    }
+
+    @Test func fileBrowserListsDirectoriesFirst() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("jfred-browser-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Folder"), withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: root.appendingPathComponent("beta.txt"))
+        try Data("x".utf8).write(to: root.appendingPathComponent("alpha.txt"))
+        let entries = FileBrowser.entries(for: root.path + "/")
+        #expect(entries?.first?.isDirectory == true)
+        #expect(entries?.first?.name == "Folder")
+        #expect(entries?.contains { $0.name == "alpha.txt" } == true)
+        #expect(FileBrowser.entries(for: root.path + "/al")?.map(\.name) == ["alpha.txt"])
+        #expect(FileBrowser.entries(for: "not/a/path") == nil)
+    }
+
+    @Test func clipboardViewerIncludesSnippets() {
+        var context = SearchContext()
+        context.preferences.clipboardEnabled = true
+        context.preferences.clipboardSnippetsAtTop = true
+        context.preferences.clipboardSnippetsWhenSearching = true
+        context.snippets = [Snippet(name: "Address", keyword: ";addr", text: "1 Infinite Loop", autoExpand: true)]
+        let all = Search.results(for: "clipboard", context: context)
+        #expect(all.contains { $0.id == "snippets:all" })
+        let filtered = Search.results(for: "clipboard infinite", context: context)
+        #expect(filtered.contains { $0.kind == "snippet" && $0.title == "Address" })
+    }
+
+    @Test func customTerminalPrefix() {
+        var context = SearchContext()
+        context.preferences.terminalPrefix = "!"
+        let rows = Search.results(for: "!echo hi", context: context)
+        #expect(rows.first?.kind == "terminal")
+        #expect(rows.first?.payload == "echo hi")
+    }
+
+    @Test func newPreferencesRoundTrip() throws {
+        var prefs = Preferences()
+        prefs.contactsEnabled = false
+        prefs.musicKeyword = "tunes"
+        prefs.clipboardAutoPaste = false
+        prefs.fileBufferTimeoutMinutes = 9
+        prefs.calculatorOutputThousands = false
+        prefs.dictionaryDefineKeyword = "lookup"
+        prefs.terminalPrefix = "!"
+        prefs.uaShowRightArrow = false
+        prefs.uaSelectionHotkey = "⌥⌘K"
+        prefs.snippetExpandPlaySound = false
+        prefs.clipboardIgnoreApps = ["Keychain Access", "CustomApp"]
+        prefs.clipboardRetentionImages = "1 week"
+        prefs.contactsEmailMode = "gmail"
+        prefs.customThemes = [CustomTheme(name: "Test Theme", width: 600)]
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(Preferences.self, from: data)
+        #expect(decoded.contactsEnabled == false)
+        #expect(decoded.musicKeyword == "tunes")
+        #expect(decoded.clipboardAutoPaste == false)
+        #expect(decoded.fileBufferTimeoutMinutes == 9)
+        #expect(decoded.calculatorOutputThousands == false)
+        #expect(decoded.dictionaryDefineKeyword == "lookup")
+        #expect(decoded.terminalPrefix == "!")
+        #expect(decoded.uaShowRightArrow == false)
+        #expect(decoded.uaSelectionHotkey == "⌥⌘K")
+        #expect(decoded.snippetExpandPlaySound == false)
+        #expect(decoded.clipboardIgnoreApps == ["Keychain Access", "CustomApp"])
+        #expect(decoded.clipboardRetentionImages == "1 week")
+        #expect(decoded.contactsEmailMode == "gmail")
+        #expect(decoded.customThemes.first?.name == "Test Theme")
+        #expect(decoded.customThemes.first?.width == 600)
+    }

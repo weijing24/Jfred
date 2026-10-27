@@ -12,6 +12,7 @@ final class LauncherController {
     let model: AppModel
     private var panel: LauncherPanel?
     private var largePanel: NSPanel?
+    private var musicPanel: NSPanel?
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var pinnedTop: CGFloat?
@@ -72,13 +73,13 @@ final class LauncherController {
 
     func layout() {
         guard let panel else { return }
+        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
         let filled = model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : max(model.results.count, 1)
         let rows = CGFloat(min(filled, LauncherMetrics.visibleRows))
         let buffer: CGFloat = model.fileBuffer.isEmpty ? 0 : 34
-        // 10pt panel inset above the field, 8pt below it when results follow.
-        let header: CGFloat = 10 + LauncherMetrics.queryHeight + (rows > 0 ? 8 : 10)
-        let height = header + buffer + rows * LauncherMetrics.rowStride + (rows > 0 ? 8 : 0)
-        let width: CGFloat = 760
+        let header: CGFloat = theme.paddingV + theme.queryBoxHeight + (rows > 0 ? 6 : theme.paddingV)
+        let height = header + buffer + rows * theme.rowHeight + (rows > 0 ? theme.paddingV : 0)
+        let width: CGFloat = theme.width
         var frame = panel.frame
         let top = pinnedTop ?? frame.maxY
         frame.size = NSSize(width: width, height: height)
@@ -91,6 +92,43 @@ final class LauncherController {
         }
         panel.setFrame(frame, display: true)
         pinnedTop = panel.frame.maxY
+    }
+
+    func hideMusicPlayer() {
+        musicPanel?.orderOut(nil)
+        musicPanel = nil
+    }
+
+    func showMusicPlayer() {
+        if let musicPanel {
+            model.refreshMusicPanel()
+            musicPanel.makeKeyAndOrderFront(nil)
+            return
+        }
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 560),
+            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.isFloatingPanel = true
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isMovableByWindowBackground = true
+        let host = NSHostingView(rootView: MusicMiniPlayer(model: model) { [weak self] in
+            self?.musicPanel?.orderOut(nil)
+            self?.musicPanel = nil
+        })
+        host.frame = panel.contentView?.bounds ?? .zero
+        host.autoresizingMask = [.width, .height]
+        panel.contentView = host
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        musicPanel = panel
+        model.refreshMusicPanel()
     }
 
     func showLarge(_ text: String, size: Double, font: String) {
@@ -193,6 +231,16 @@ final class LauncherController {
     private func handle(_ event: NSEvent) -> NSEvent? {
         guard model.launcherVisible, panel?.isKeyWindow == true else { return event }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if model.actionPanelVisible {
+            switch event.keyCode {
+            case 125: model.moveAction(1); return nil
+            case 126: model.moveAction(-1); return nil
+            case 36, 76: model.commitAction(); return nil
+            case 53: model.closeActions(); return nil
+            case 123: model.closeActions(); return nil
+            default: model.closeActions()
+            }
+        }
         switch event.keyCode {
         case 125:
             model.move(1)
@@ -213,6 +261,9 @@ final class LauncherController {
         case 48:
             model.completeSelected()
             return nil
+        case 124:
+            if model.preferences.uaShowRightArrow { model.showActions() }
+            return nil
         default:
             break
         }
@@ -224,6 +275,7 @@ final class LauncherController {
             if chars == "c" { model.copySelected(); return nil }
             if chars == "l" { model.largeTypeSelected(); return nil }
             if chars == "y" { model.quickLookSelected(); return nil }
+            if chars == "k" { model.showActions(); return nil }
         }
         return event
     }
@@ -233,23 +285,23 @@ struct LauncherRoot: View {
     var model: AppModel
 
     var body: some View {
-        let theme = LauncherTheme.by(id: model.preferences.themeID)
+        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
         let searching = !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let panel = RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             QueryField(
                 text: model.query,
                 token: model.focusToken,
-                font: NSFont.systemFont(ofSize: 22),
+                font: theme.queryNSFont,
                 color: NSColor(theme.query),
                 onChange: { model.query = $0 }
             )
-            .padding(.horizontal, 16)
-            .frame(height: LauncherMetrics.queryHeight)
-            .background { LauncherFieldBackground() }
-            .padding(.horizontal, 10)
-            .padding(.top, 10)
-            .padding(.bottom, searching ? 8 : 10)
+            .padding(.horizontal, 8)
+            .frame(height: theme.queryBoxHeight)
+            .background { LauncherFieldBackground(color: theme.searchBackground) }
+            .padding(.horizontal, theme.paddingH)
+            .padding(.top, theme.paddingV)
+            .padding(.bottom, searching ? 6 : theme.paddingV)
             if !model.fileBuffer.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -265,27 +317,51 @@ struct LauncherRoot: View {
                     .padding(.bottom, 6)
                 }
             }
-            if !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if model.actionPanelVisible {
+                actionList(theme)
+                    .padding(.horizontal, theme.paddingH)
+                    .padding(.bottom, theme.paddingV)
+            } else if !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 resultList(theme)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, theme.paddingH)
+                    .padding(.bottom, theme.paddingV)
             }
         }
         .background {
             panel
                 .fill(theme.background)
                 .background {
-                    if theme.material != nil {
-                        panel.fill(theme.material ?? .ultraThin)
+                    if theme.blur > 0 {
+                        panel.fill(.ultraThinMaterial)
                     }
                 }
         }
         .clipShape(panel)
         .overlay(
-            panel.strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
+            panel.strokeBorder(theme.border, lineWidth: 0.7)
         )
         .shadow(color: .black.opacity(0.26), radius: 24, y: 12)
-        .onChange(of: model.query) { _, _ in model.scheduleSearch() }
+        .onChange(of: model.query) { _, _ in
+            model.closeActions()
+            model.scheduleSearch()
+        }
+    }
+
+    private func actionList(_ theme: LauncherTheme) -> some View {
+        let shown = min(max(model.launcherActions.count, 1), LauncherMetrics.visibleRows)
+        return ScrollView {
+            VStack(spacing: 2) {
+                ForEach(Array(model.launcherActions.enumerated()), id: \.element.id) { index, action in
+                    LauncherActionRow(action: action, selected: index == model.actionIndex, theme: theme)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            model.actionIndex = index
+                            model.commitAction()
+                        }
+                }
+            }
+        }
+        .frame(height: CGFloat(shown) * theme.rowHeight - 2)
     }
 
     private func resultList(_ theme: LauncherTheme) -> some View {
@@ -310,7 +386,7 @@ struct LauncherRoot: View {
                 }
             }
             .scrollIndicators(model.results.count > LauncherMetrics.visibleRows ? .visible : .hidden)
-            .frame(height: CGFloat(shown) * LauncherMetrics.rowStride - 2)
+            .frame(height: CGFloat(shown) * theme.rowHeight - 2)
             .onChange(of: model.selection) { _, newValue in
                 proxy.scrollTo(newValue)
             }
@@ -390,8 +466,6 @@ struct QueryField: NSViewRepresentable {
 
 enum LauncherMetrics {
     static let visibleRows = 9
-    static let rowStride: CGFloat = 70
-    static let queryHeight: CGFloat = 58
 }
 
 /// Alfred-style field: a flat, slightly recessed rounded rectangle that sits
@@ -399,13 +473,10 @@ enum LauncherMetrics {
 /// the panel is always drawn, the field has the same backdrop and colour in
 /// the empty and expanded states.
 struct LauncherFieldBackground: View {
+    var color: Color = Color.black.opacity(0.10)
     var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(Color.black.opacity(0.11))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.45), lineWidth: 1)
-            }
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(color)
     }
 }
 
@@ -436,28 +507,63 @@ struct LauncherRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            ResultIcon(icon: item.icon, tint: selected ? theme.selectedTitle : theme.title)
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: theme.iconPadding + 4) {
+            ResultIcon(icon: item.icon, tint: selected ? theme.selectedTitle : theme.title, size: theme.iconSize)
+            VStack(alignment: .leading, spacing: theme.textSpacing) {
                 Text(item.title)
-                    .font(theme.font(size: 18, weight: .semibold))
+                    .font(theme.font(size: theme.resultTextSize, weight: .regular))
                     .foregroundStyle(selected ? theme.selectedTitle : theme.title)
                     .lineLimit(1)
                 Text(item.subtitle)
-                    .font(.system(size: 13))
+                    .font(.system(size: theme.resultSubtextSize))
                     .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text(shortcut)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: theme.shortcutSize, weight: .regular))
                 .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
                 .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 66, maxHeight: 66, alignment: .leading)
+        .padding(.horizontal, theme.paddingH)
+        .frame(maxWidth: .infinity, minHeight: theme.rowHeight, maxHeight: theme.rowHeight, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+                .fill(selected ? theme.selected : Color.clear)
+        )
+    }
+}
+
+struct LauncherActionRow: View {
+    var action: LauncherAction
+    var selected: Bool
+    var theme: LauncherTheme
+
+    var body: some View {
+        HStack(spacing: theme.iconPadding + 4) {
+            Image(systemName: action.symbol)
+                .font(.system(size: theme.iconSize * 0.45))
+                .foregroundStyle(selected ? theme.selectedTitle : theme.title)
+                .frame(width: theme.iconSize)
+            VStack(alignment: .leading, spacing: theme.textSpacing) {
+                Text(action.title)
+                    .font(theme.font(size: theme.resultTextSize, weight: .regular))
+                    .foregroundStyle(selected ? theme.selectedTitle : theme.title)
+                    .lineLimit(1)
+                Text(action.subtitle)
+                    .font(.system(size: theme.resultSubtextSize))
+                    .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(selected ? "↩" : "")
+                .font(.system(size: theme.shortcutSize))
+                .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
+        }
+        .padding(.horizontal, theme.paddingH)
+        .frame(maxWidth: .infinity, minHeight: theme.rowHeight, maxHeight: theme.rowHeight, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
                 .fill(selected ? theme.selected : Color.clear)
         )
     }
@@ -509,39 +615,40 @@ struct PreviewLauncher: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Co")
-                .font(.system(size: 22))
+                .font(theme.queryFont)
                 .foregroundStyle(theme.query)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: LauncherMetrics.queryHeight)
-                .background { LauncherFieldBackground() }
-                .padding(.horizontal, 10)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
+                .frame(height: theme.queryBoxHeight)
+                .background { LauncherFieldBackground(color: theme.searchBackground) }
+                .padding(.horizontal, theme.paddingH)
+                .padding(.top, theme.paddingV)
+                .padding(.bottom, 6)
             VStack(spacing: 2) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                    HStack(spacing: 12) {
+                    HStack(spacing: theme.iconPadding + 4) {
                         Image(systemName: String(row.2.dropFirst("symbol:".count)))
-                            .font(.system(size: 26))
-                            .frame(width: 40)
+                            .font(.system(size: theme.iconSize * 0.62))
+                            .frame(width: theme.iconSize)
                             .foregroundStyle(index == 0 ? theme.selectedTitle : theme.title)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(row.0).font(theme.font(size: 18, weight: .semibold)).foregroundStyle(index == 0 ? theme.selectedTitle : theme.title)
-                            Text(row.1).font(.system(size: 13)).foregroundStyle(index == 0 ? theme.selectedSubtitle : theme.subtitle).lineLimit(1)
+                        VStack(alignment: .leading, spacing: theme.textSpacing) {
+                            Text(row.0).font(theme.font(size: theme.resultTextSize, weight: .regular)).foregroundStyle(index == 0 ? theme.selectedTitle : theme.title)
+                            Text(row.1).font(.system(size: theme.resultSubtextSize)).foregroundStyle(index == 0 ? theme.selectedSubtitle : theme.subtitle).lineLimit(1)
                         }
                         Spacer()
                         Text(index == 0 ? "↩" : "⌘\(index + 1)")
+                            .font(.system(size: theme.shortcutSize))
                             .foregroundStyle(index == 0 ? theme.selectedSubtitle : theme.subtitle)
                     }
-                    .padding(.horizontal, 12)
-                    .frame(height: 66)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(index == 0 ? theme.selected : Color.clear))
+                    .padding(.horizontal, theme.paddingH)
+                    .frame(height: theme.rowHeight)
+                    .background(RoundedRectangle(cornerRadius: theme.radius).fill(index == 0 ? theme.selected : Color.clear))
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 10)
+            .padding(.horizontal, theme.paddingH)
+            .padding(.bottom, theme.paddingV)
         }
-        .frame(width: 640)
+        .frame(width: theme.width)
         .background {
             RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
                 .fill(theme.background)

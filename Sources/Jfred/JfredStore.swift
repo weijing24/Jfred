@@ -220,6 +220,16 @@ enum JfredStore {
         let root = importedWorkflowsURL()
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let destination = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        // Inspect the archive before extraction: reject absolute paths, parent
+        // traversal and absurd member counts instead of trusting ditto's
+        // extraction behaviour with a hostile .alfredworkflow.
+        let listing = Shell.run("/usr/bin/unzip", ["-Z1", url.path], timeout: 10)
+        let members = listing.split(separator: "\n", omittingEmptySubsequences: true)
+        guard members.count <= 20_000 else { return nil }
+        for member in members {
+            let name = String(member)
+            if name.hasPrefix("/") || name.split(separator: "/").contains("..") { return nil }
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         process.arguments = ["-x", "-k", url.path, destination.path]

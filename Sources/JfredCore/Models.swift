@@ -58,6 +58,60 @@ public struct WebSearch: Codable, Equatable, Sendable, Identifiable {
     ]
 }
 
+public struct CustomTheme: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var width: Double
+    public var radius: Double
+    public var paddingH: Double
+    public var paddingV: Double
+    public var querySize: Double
+    public var resultTextSize: Double
+    public var resultSubtextSize: Double
+    public var shortcutSize: Double
+    public var iconSize: Double
+    public var iconPadding: Double
+    public var rowPaddingV: Double
+    public var textSpacing: Double
+    public var background: String
+    public var query: String
+    public var title: String
+    public var subtitle: String
+    public var selected: String
+    public var selectedTitle: String
+    public var selectedSubtitle: String
+    public var searchBackground: String
+    public var border: String
+    public var fontName: String?
+
+    public init(id: String = UUID().uuidString, name: String, width: Double = 559, radius: Double = 3, paddingH: Double = 9, paddingV: Double = 8, querySize: Double = 34, resultTextSize: Double = 18, resultSubtextSize: Double = 12, shortcutSize: Double = 16, iconSize: Double = 40, iconPadding: Double = 4, rowPaddingV: Double = 3, textSpacing: Double = 5, background: String = "#FFFFFFDB", query: String = "#000000FF", title: String = "#000000E5", subtitle: String = "#00000065", selected: String = "#480069E4", selectedTitle: String = "#FFFFFFFF", selectedSubtitle: String = "#FFFFFFC4", searchBackground: String = "#0000001A", border: String = "#0000007F", fontName: String? = nil) {
+        self.id = id
+        self.name = name
+        self.width = width
+        self.radius = radius
+        self.paddingH = paddingH
+        self.paddingV = paddingV
+        self.querySize = querySize
+        self.resultTextSize = resultTextSize
+        self.resultSubtextSize = resultSubtextSize
+        self.shortcutSize = shortcutSize
+        self.iconSize = iconSize
+        self.iconPadding = iconPadding
+        self.rowPaddingV = rowPaddingV
+        self.textSpacing = textSpacing
+        self.background = background
+        self.query = query
+        self.title = title
+        self.subtitle = subtitle
+        self.selected = selected
+        self.selectedTitle = selectedTitle
+        self.selectedSubtitle = selectedSubtitle
+        self.searchBackground = searchBackground
+        self.border = border
+        self.fontName = fontName
+    }
+}
+
 public struct Preferences: Codable, Equatable, Sendable {
     public var launchAtLogin: Bool
     public var hotkey: Hotkey
@@ -81,6 +135,7 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var webSearches: [WebSearch]
     public var urlHistory: [String]
     public var themeID: String
+    public var customThemes: [CustomTheme]
     public var storeTypedQuery: Bool
     public var showLatestQuery: Bool
     public var topResultLatching: Bool
@@ -143,14 +198,20 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var clipboardKeepImages: Bool
     public var clipboardKeepFiles: Bool
     public var clipboardRetention: String
+    public var clipboardRetentionText: String
+    public var clipboardRetentionImages: String
+    public var clipboardRetentionFiles: String
     public var clipboardViewerKeyword: String
     public var clipboardClearKeyword: String
+    public var clipboardClearKeywordEnabled: Bool
 
     // Snippets.
     public var snippetKeyword: String
     public var snippetShowKeywordInResult: Bool
     public var snippetMatching: String
     public var snippetWordBased: Bool
+    public var snippetExpandPlaySound: Bool
+    public var snippetExpandRestoreClipboard: Bool
 
     // Large type.
     public var largeTypeBackgroundMode: String
@@ -162,9 +223,87 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var noPreviewTypes: [String]
     public var noPreviewPaths: [String]
 
+    // Contacts.
+    public var contactsEnabled: Bool
+    public var contactsOpenInAlfred: Bool
+    public var contactsShowTitle: Bool
+    public var contactsShowJobTitle: Bool
+    public var contactsShowNotes: Bool
+    public var contactsInvertName: Bool
+    public var contactsMapURL: String
+    public var contactsEmailMode: String
+    public var contactsEmailURL: String
+    public var contactsURLHandler: String
+    public var contactsURLHandlerEnabled: Bool
+
+    // Music.
+    public var musicEnabled: Bool
+    public var musicKeyword: String
+    public var musicHideMiniPlayerAfterSong: Bool
+    public var musicRandomLargerAlbums: Bool
+    public var musicIncludePlaylists: Bool
+
+    // Clipboard additions.
+    public var clipboardAutoPaste: Bool
+    public var clipboardFastAppend: Bool
+    public var clipboardFastAppendSeparator: String
+    public var clipboardFastAppendBackToClipboard: Bool
+    public var clipboardFastAppendPlaySound: Bool
+    public var clipboardMaxSize: Int
+    public var clipboardIgnoreConcealed: Bool
+    public var clipboardIgnoreAutoGenerated: Bool
+    public var clipboardUnicodeMatching: Bool
+    public var clipboardMoveToTopOnUse: Bool
+    public var clipboardSnippetsAtTop: Bool
+    public var clipboardSnippetsWhenSearching: Bool
+    public var clipboardConvertImagesToPNG: Bool
+    public var clipboardIgnoreApps: [String]
+
+    // File search additions.
+    public var fileNavigateWithArrows: Bool
+    public var fileOpenFoldersInFinder: Bool
+    public var fileUseShiftOptionBuffer: Bool
+    public var fileClearBufferAfterAction: Bool
+    public var fileBufferTimeoutMinutes: Int
+    public var fileCustomHomeFolder: String
+    public var fileEscapePathForTerminal: Bool
+    public var fileRunAppleScriptsInsteadOfOpening: Bool
+    public var fileUseTypeIconsForExternal: Bool
+    public var fileTouchFolders: Bool
+    public var fileTouchAliases: Bool
+
+    // Calculator additions.
+    public var calculatorAdvanced: Bool
+    public var calculatorInputType: String
+    public var calculatorOutputType: String
+    public var calculatorInputThousands: Bool
+    public var calculatorOutputThousands: Bool
+
+    // Dictionary.
+    public var dictionaryDefineEnabled: Bool
+    public var dictionarySpellEnabled: Bool
+    public var dictionaryDefineKeyword: String
+    public var dictionarySpellKeyword: String
+    public var dictionaryLanguage: String
+    public var dictionaryPasteOnAction: Bool
+    public var dictionaryOnlyDictionary: Bool
+
+    // Terminal.
+    public var terminalPrefix: String
+    public var terminalCustomScript: String
+
+    // Universal Actions.
+    public var uaShowRightArrow: Bool
+    public var uaShowFunction: Bool
+    public var uaShowControl: Bool
+    public var uaShowCommand: Bool
+    public var uaSelectionHotkey: String
+    public var uaSortByUsage: Bool
+
     // System commands.
     public var systemKeywords: [String: String]
     public var systemConfirm: [String]
+    public var systemDisabled: [String]
     public var ejectScope: String
     public var ejectAllEnabled: Bool
     public var ejectExclusions: [String]
@@ -212,7 +351,8 @@ public struct Preferences: Codable, Equatable, Sendable {
         fallbackMode = "none"
         webSearches = WebSearch.defaults
         urlHistory = []
-        themeID = "modern"
+        themeID = "alfred"
+        customThemes = []
         storeTypedQuery = true
         showLatestQuery = false
         topResultLatching = true
@@ -269,20 +409,88 @@ public struct Preferences: Codable, Equatable, Sendable {
         clipboardKeepImages = true
         clipboardKeepFiles = true
         clipboardRetention = "3 months"
+        clipboardRetentionText = "3 months"
+        clipboardRetentionImages = "3 months"
+        clipboardRetentionFiles = "3 months"
         clipboardViewerKeyword = "clipboard"
         clipboardClearKeyword = "clear"
+        clipboardClearKeywordEnabled = true
         snippetKeyword = "snip"
         snippetShowKeywordInResult = true
         snippetMatching = "nameandkeyword"
         snippetWordBased = true
+        snippetExpandPlaySound = true
+        snippetExpandRestoreClipboard = true
         largeTypeBackgroundMode = "fit"
         largeTypeAutoHide = true
         largeTypeShowOnMouseScreen = false
         richPreviewsEnabled = true
         noPreviewTypes = []
         noPreviewPaths = []
+        contactsEnabled = true
+        contactsOpenInAlfred = false
+        contactsShowTitle = false
+        contactsShowJobTitle = false
+        contactsShowNotes = true
+        contactsInvertName = false
+        contactsMapURL = "https://maps.apple.com/?q={query}"
+        contactsEmailMode = "mail"
+        contactsEmailURL = "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to={query}"
+        contactsURLHandler = "addressbook://{uid}"
+        contactsURLHandlerEnabled = false
+        musicEnabled = true
+        musicKeyword = "music"
+        musicHideMiniPlayerAfterSong = true
+        musicRandomLargerAlbums = true
+        musicIncludePlaylists = true
+        clipboardAutoPaste = true
+        clipboardFastAppend = false
+        clipboardFastAppendSeparator = "space"
+        clipboardFastAppendBackToClipboard = false
+        clipboardFastAppendPlaySound = true
+        clipboardMaxSize = 262144
+        clipboardIgnoreConcealed = true
+        clipboardIgnoreAutoGenerated = true
+        clipboardUnicodeMatching = false
+        clipboardMoveToTopOnUse = true
+        clipboardSnippetsAtTop = true
+        clipboardSnippetsWhenSearching = true
+        clipboardConvertImagesToPNG = false
+        clipboardIgnoreApps = ["1Password", "Keychain Access", "Passwords", "Wallet", "SecurityAgent"]
+        fileNavigateWithArrows = false
+        fileOpenFoldersInFinder = false
+        fileUseShiftOptionBuffer = false
+        fileClearBufferAfterAction = false
+        fileBufferTimeoutMinutes = 5
+        fileCustomHomeFolder = "~"
+        fileEscapePathForTerminal = false
+        fileRunAppleScriptsInsteadOfOpening = false
+        fileUseTypeIconsForExternal = false
+        fileTouchFolders = false
+        fileTouchAliases = false
+        calculatorAdvanced = true
+        calculatorInputType = "standard"
+        calculatorOutputType = "standard"
+        calculatorInputThousands = false
+        calculatorOutputThousands = true
+        dictionaryDefineEnabled = true
+        dictionarySpellEnabled = true
+        dictionaryDefineKeyword = "define"
+        dictionarySpellKeyword = "spell"
+        dictionaryLanguage = "Default"
+        dictionaryPasteOnAction = false
+        dictionaryOnlyDictionary = true
+        terminalPrefix = ">"
+        terminalCustomScript = ""
+        uaShowRightArrow = true
+        uaShowFunction = true
+        uaShowControl = false
+        uaShowCommand = false
+        uaSelectionHotkey = "⌥⌘\\"
+        uaSortByUsage = false
         systemKeywords = [:]
         systemConfirm = []
+        systemDisabled = []
         ejectScope = "local"
         ejectAllEnabled = false
         ejectExclusions = []
@@ -293,7 +501,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case extraFolders, extraDocuments, extraText, extraImages, extraArchives, extraScripts
         case searchAllFileTypes, scopeApplications, scopeHome, scopePaths
         case includeSystemApps, includeUserApps, includePreferencePanes
-        case fallbackMode, webSearches, urlHistory, themeID
+        case fallbackMode, webSearches, urlHistory, themeID, customThemes
         case storeTypedQuery, showLatestQuery, topResultLatching
         case removeNotificationWhenClicked, showNotificationIcons, useHTTPProxy
         case selectionHotkeyMode, forceKeyboard, modifierControl, modifierOption, modifierCommand
@@ -309,11 +517,32 @@ public struct Preferences: Codable, Equatable, Sendable {
         case fileOpenWithFinder, clipboardIgnoreDuplicates, clipboardClearOnQuit
         case clipboardIgnoreUniversalText, clipboardIgnoreUniversalFiles
         case clipboardKeepText, clipboardKeepImages, clipboardKeepFiles, clipboardRetention
-        case clipboardViewerKeyword, clipboardClearKeyword
+        case clipboardRetentionText, clipboardRetentionImages, clipboardRetentionFiles
+        case clipboardViewerKeyword, clipboardClearKeyword, clipboardClearKeywordEnabled
         case snippetKeyword, snippetShowKeywordInResult, snippetMatching, snippetWordBased
+        case snippetExpandPlaySound, snippetExpandRestoreClipboard
         case largeTypeBackgroundMode, largeTypeAutoHide, largeTypeShowOnMouseScreen
         case richPreviewsEnabled, noPreviewTypes, noPreviewPaths
-        case systemKeywords, systemConfirm, ejectScope, ejectAllEnabled, ejectExclusions
+        case systemKeywords, systemConfirm, systemDisabled, ejectScope, ejectAllEnabled, ejectExclusions
+        case dictionaryDefineEnabled, dictionarySpellEnabled, dictionaryDefineKeyword, dictionarySpellKeyword
+        case dictionaryLanguage, dictionaryPasteOnAction, dictionaryOnlyDictionary
+        case terminalPrefix, terminalCustomScript
+        case uaShowRightArrow, uaShowFunction, uaShowControl, uaShowCommand, uaSelectionHotkey, uaSortByUsage
+        case contactsEnabled, contactsOpenInAlfred, contactsShowTitle, contactsShowJobTitle
+        case contactsShowNotes, contactsInvertName, contactsMapURL, contactsURLHandler, contactsURLHandlerEnabled
+        case contactsEmailMode, contactsEmailURL
+        case musicEnabled, musicKeyword, musicHideMiniPlayerAfterSong, musicRandomLargerAlbums, musicIncludePlaylists
+        case clipboardAutoPaste, clipboardFastAppend, clipboardFastAppendSeparator
+        case clipboardFastAppendBackToClipboard, clipboardFastAppendPlaySound, clipboardMaxSize
+        case clipboardIgnoreConcealed, clipboardIgnoreAutoGenerated, clipboardUnicodeMatching
+        case clipboardMoveToTopOnUse, clipboardSnippetsAtTop, clipboardSnippetsWhenSearching, clipboardConvertImagesToPNG
+        case clipboardIgnoreApps
+        case fileNavigateWithArrows, fileOpenFoldersInFinder, fileUseShiftOptionBuffer
+        case fileClearBufferAfterAction, fileBufferTimeoutMinutes, fileCustomHomeFolder
+        case fileEscapePathForTerminal, fileRunAppleScriptsInsteadOfOpening
+        case fileUseTypeIconsForExternal, fileTouchFolders, fileTouchAliases
+        case calculatorAdvanced, calculatorInputType, calculatorOutputType
+        case calculatorInputThousands, calculatorOutputThousands
     }
 
     /// Decodes older saved state: every key is optional and falls back to the
@@ -346,6 +575,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         webSearches = value(.webSearches, d.webSearches)
         urlHistory = value(.urlHistory, d.urlHistory)
         themeID = value(.themeID, d.themeID)
+        customThemes = value(.customThemes, d.customThemes)
         storeTypedQuery = value(.storeTypedQuery, d.storeTypedQuery)
         showLatestQuery = value(.showLatestQuery, d.showLatestQuery)
         topResultLatching = value(.topResultLatching, d.topResultLatching)
@@ -402,20 +632,88 @@ public struct Preferences: Codable, Equatable, Sendable {
         clipboardKeepImages = value(.clipboardKeepImages, d.clipboardKeepImages)
         clipboardKeepFiles = value(.clipboardKeepFiles, d.clipboardKeepFiles)
         clipboardRetention = value(.clipboardRetention, d.clipboardRetention)
+        clipboardRetentionText = value(.clipboardRetentionText, d.clipboardRetentionText)
+        clipboardRetentionImages = value(.clipboardRetentionImages, d.clipboardRetentionImages)
+        clipboardRetentionFiles = value(.clipboardRetentionFiles, d.clipboardRetentionFiles)
         clipboardViewerKeyword = value(.clipboardViewerKeyword, d.clipboardViewerKeyword)
         clipboardClearKeyword = value(.clipboardClearKeyword, d.clipboardClearKeyword)
+        clipboardClearKeywordEnabled = value(.clipboardClearKeywordEnabled, d.clipboardClearKeywordEnabled)
         snippetKeyword = value(.snippetKeyword, d.snippetKeyword)
         snippetShowKeywordInResult = value(.snippetShowKeywordInResult, d.snippetShowKeywordInResult)
         snippetMatching = value(.snippetMatching, d.snippetMatching)
         snippetWordBased = value(.snippetWordBased, d.snippetWordBased)
+        snippetExpandPlaySound = value(.snippetExpandPlaySound, d.snippetExpandPlaySound)
+        snippetExpandRestoreClipboard = value(.snippetExpandRestoreClipboard, d.snippetExpandRestoreClipboard)
         largeTypeBackgroundMode = value(.largeTypeBackgroundMode, d.largeTypeBackgroundMode)
         largeTypeAutoHide = value(.largeTypeAutoHide, d.largeTypeAutoHide)
         largeTypeShowOnMouseScreen = value(.largeTypeShowOnMouseScreen, d.largeTypeShowOnMouseScreen)
         richPreviewsEnabled = value(.richPreviewsEnabled, d.richPreviewsEnabled)
         noPreviewTypes = value(.noPreviewTypes, d.noPreviewTypes)
         noPreviewPaths = value(.noPreviewPaths, d.noPreviewPaths)
+        contactsEnabled = value(.contactsEnabled, d.contactsEnabled)
+        contactsOpenInAlfred = value(.contactsOpenInAlfred, d.contactsOpenInAlfred)
+        contactsShowTitle = value(.contactsShowTitle, d.contactsShowTitle)
+        contactsShowJobTitle = value(.contactsShowJobTitle, d.contactsShowJobTitle)
+        contactsShowNotes = value(.contactsShowNotes, d.contactsShowNotes)
+        contactsInvertName = value(.contactsInvertName, d.contactsInvertName)
+        contactsMapURL = value(.contactsMapURL, d.contactsMapURL)
+        contactsEmailMode = value(.contactsEmailMode, d.contactsEmailMode)
+        contactsEmailURL = value(.contactsEmailURL, d.contactsEmailURL)
+        contactsURLHandler = value(.contactsURLHandler, d.contactsURLHandler)
+        contactsURLHandlerEnabled = value(.contactsURLHandlerEnabled, d.contactsURLHandlerEnabled)
+        musicEnabled = value(.musicEnabled, d.musicEnabled)
+        musicKeyword = value(.musicKeyword, d.musicKeyword)
+        musicHideMiniPlayerAfterSong = value(.musicHideMiniPlayerAfterSong, d.musicHideMiniPlayerAfterSong)
+        musicRandomLargerAlbums = value(.musicRandomLargerAlbums, d.musicRandomLargerAlbums)
+        musicIncludePlaylists = value(.musicIncludePlaylists, d.musicIncludePlaylists)
+        clipboardAutoPaste = value(.clipboardAutoPaste, d.clipboardAutoPaste)
+        clipboardFastAppend = value(.clipboardFastAppend, d.clipboardFastAppend)
+        clipboardFastAppendSeparator = value(.clipboardFastAppendSeparator, d.clipboardFastAppendSeparator)
+        clipboardFastAppendBackToClipboard = value(.clipboardFastAppendBackToClipboard, d.clipboardFastAppendBackToClipboard)
+        clipboardFastAppendPlaySound = value(.clipboardFastAppendPlaySound, d.clipboardFastAppendPlaySound)
+        clipboardMaxSize = value(.clipboardMaxSize, d.clipboardMaxSize)
+        clipboardIgnoreConcealed = value(.clipboardIgnoreConcealed, d.clipboardIgnoreConcealed)
+        clipboardIgnoreAutoGenerated = value(.clipboardIgnoreAutoGenerated, d.clipboardIgnoreAutoGenerated)
+        clipboardUnicodeMatching = value(.clipboardUnicodeMatching, d.clipboardUnicodeMatching)
+        clipboardMoveToTopOnUse = value(.clipboardMoveToTopOnUse, d.clipboardMoveToTopOnUse)
+        clipboardSnippetsAtTop = value(.clipboardSnippetsAtTop, d.clipboardSnippetsAtTop)
+        clipboardSnippetsWhenSearching = value(.clipboardSnippetsWhenSearching, d.clipboardSnippetsWhenSearching)
+        clipboardConvertImagesToPNG = value(.clipboardConvertImagesToPNG, d.clipboardConvertImagesToPNG)
+        clipboardIgnoreApps = value(.clipboardIgnoreApps, d.clipboardIgnoreApps)
+        fileNavigateWithArrows = value(.fileNavigateWithArrows, d.fileNavigateWithArrows)
+        fileOpenFoldersInFinder = value(.fileOpenFoldersInFinder, d.fileOpenFoldersInFinder)
+        fileUseShiftOptionBuffer = value(.fileUseShiftOptionBuffer, d.fileUseShiftOptionBuffer)
+        fileClearBufferAfterAction = value(.fileClearBufferAfterAction, d.fileClearBufferAfterAction)
+        fileBufferTimeoutMinutes = value(.fileBufferTimeoutMinutes, d.fileBufferTimeoutMinutes)
+        fileCustomHomeFolder = value(.fileCustomHomeFolder, d.fileCustomHomeFolder)
+        fileEscapePathForTerminal = value(.fileEscapePathForTerminal, d.fileEscapePathForTerminal)
+        fileRunAppleScriptsInsteadOfOpening = value(.fileRunAppleScriptsInsteadOfOpening, d.fileRunAppleScriptsInsteadOfOpening)
+        fileUseTypeIconsForExternal = value(.fileUseTypeIconsForExternal, d.fileUseTypeIconsForExternal)
+        fileTouchFolders = value(.fileTouchFolders, d.fileTouchFolders)
+        fileTouchAliases = value(.fileTouchAliases, d.fileTouchAliases)
+        calculatorAdvanced = value(.calculatorAdvanced, d.calculatorAdvanced)
+        calculatorInputType = value(.calculatorInputType, d.calculatorInputType)
+        calculatorOutputType = value(.calculatorOutputType, d.calculatorOutputType)
+        calculatorInputThousands = value(.calculatorInputThousands, d.calculatorInputThousands)
+        calculatorOutputThousands = value(.calculatorOutputThousands, d.calculatorOutputThousands)
+        dictionaryDefineEnabled = value(.dictionaryDefineEnabled, d.dictionaryDefineEnabled)
+        dictionarySpellEnabled = value(.dictionarySpellEnabled, d.dictionarySpellEnabled)
+        dictionaryDefineKeyword = value(.dictionaryDefineKeyword, d.dictionaryDefineKeyword)
+        dictionarySpellKeyword = value(.dictionarySpellKeyword, d.dictionarySpellKeyword)
+        dictionaryLanguage = value(.dictionaryLanguage, d.dictionaryLanguage)
+        dictionaryPasteOnAction = value(.dictionaryPasteOnAction, d.dictionaryPasteOnAction)
+        dictionaryOnlyDictionary = value(.dictionaryOnlyDictionary, d.dictionaryOnlyDictionary)
+        terminalPrefix = value(.terminalPrefix, d.terminalPrefix)
+        terminalCustomScript = value(.terminalCustomScript, d.terminalCustomScript)
+        uaShowRightArrow = value(.uaShowRightArrow, d.uaShowRightArrow)
+        uaShowFunction = value(.uaShowFunction, d.uaShowFunction)
+        uaShowControl = value(.uaShowControl, d.uaShowControl)
+        uaShowCommand = value(.uaShowCommand, d.uaShowCommand)
+        uaSelectionHotkey = value(.uaSelectionHotkey, d.uaSelectionHotkey)
+        uaSortByUsage = value(.uaSortByUsage, d.uaSortByUsage)
         systemKeywords = value(.systemKeywords, d.systemKeywords)
         systemConfirm = value(.systemConfirm, d.systemConfirm)
+        systemDisabled = value(.systemDisabled, d.systemDisabled)
         ejectScope = value(.ejectScope, d.ejectScope)
         ejectAllEnabled = value(.ejectAllEnabled, d.ejectAllEnabled)
         ejectExclusions = value(.ejectExclusions, d.ejectExclusions)
@@ -649,12 +947,20 @@ public struct ContactRecord: Codable, Equatable, Sendable, Identifiable {
     public var name: String
     public var email: String
     public var phone: String
+    public var uid: String?
+    public var jobTitle: String?
+    public var notes: String?
+    public var organization: String?
 
-    public init(id: String, name: String, email: String, phone: String) {
+    public init(id: String, name: String, email: String, phone: String, uid: String? = nil, jobTitle: String? = nil, notes: String? = nil, organization: String? = nil) {
         self.id = id
         self.name = name
         self.email = email
         self.phone = phone
+        self.uid = uid
+        self.jobTitle = jobTitle
+        self.notes = notes
+        self.organization = organization
     }
 }
 

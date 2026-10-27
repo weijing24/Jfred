@@ -254,7 +254,11 @@ enum FileSearch {
             roots.append("/System/Applications")
         }
         if preferences.scopeHome {
-            let home = URL(fileURLWithPath: NSHomeDirectory())
+            let configured = preferences.fileCustomHomeFolder.trimmingCharacters(in: .whitespaces)
+            let homePath = (configured.isEmpty || configured == "~")
+                ? NSHomeDirectory()
+                : (configured as NSString).expandingTildeInPath
+            let home = URL(fileURLWithPath: homePath)
             if let items = try? FileManager.default.contentsOfDirectory(at: home, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
                 for url in items where shouldIndex(url.path) {
                     roots.append(url.path)
@@ -508,6 +512,36 @@ enum Accessibility {
     static func trusted() -> Bool {
         AXIsProcessTrusted()
     }
+
+    static func selectedText() -> String? {
+        let system = AXUIElementCreateSystemWide()
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused else { return nil }
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXSelectedTextAttribute as CFString, &value) == .success,
+              let text = value as? String,
+              !text.isEmpty else { return nil }
+        return text
+    }
+
+    static func finderSelection() -> [String] {
+        let text = Shell.osascript("""
+        tell application "Finder"
+          try
+            set sel to selection as alias list
+          on error
+            return ""
+          end try
+          set out to ""
+          repeat with f in sel
+            set out to out & POSIX path of f & linefeed
+          end repeat
+          return out
+        end tell
+        """)
+        return text.split(separator: "\n").map(String.init).filter { $0.hasPrefix("/") }
+    }
 }
 
 func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags = []) {
@@ -531,11 +565,15 @@ final class SnippetExpander: @unchecked Sendable {
     private var ignore = 0
 
     private var wordBased = true
+    private var playSound = true
+    private var restoreClipboard = true
 
-    func update(enabled: Bool, snippets: [Snippet], wordBased: Bool = true) {
+    func update(enabled: Bool, snippets: [Snippet], wordBased: Bool = true, playSound: Bool = true, restoreClipboard: Bool = true) {
         lock.lock()
         self.enabled = enabled
         self.wordBased = wordBased
+        self.playSound = playSound
+        self.restoreClipboard = restoreClipboard
         self.snippets = Dictionary(snippets.filter(\.autoExpand).map { ($0.keyword, $0.text) }, uniquingKeysWith: { first, _ in first })
         lock.unlock()
         if enabled { install() }
@@ -613,6 +651,10 @@ final class SnippetExpander: @unchecked Sendable {
             self.lock.unlock()
             for _ in 0..<deletes { postKey(51) }
             self.paste(expanded)
+            self.lock.lock()
+            let sound = self.playSound
+            self.lock.unlock()
+            if sound { NSSound(named: "Purr")?.play() }
             Task { @MainActor in
                 AppRuntime.model?.record(category: "expansion")
             }
@@ -641,6 +683,10 @@ final class SnippetExpander: @unchecked Sendable {
         ignore += 1
         lock.unlock()
         postKey(9, flags: .maskCommand)
+        lock.lock()
+        let restore = restoreClipboard
+        lock.unlock()
+        guard restore else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             board.clearContents()
             if let previous { board.setString(previous, forType: .string) }
@@ -655,10 +701,12 @@ final class RemoteReply: @unchecked Sendable {
 final class RemoteServer: @unchecked Sendable {
     private var fd: Int32 = -1
     private var running = false
+    private var localOnly = true
     var handle: ((String) -> String)?
 
     func start(port: UInt16, localOnly: Bool) -> String? {
         stop()
+        self.localOnly = localOnly
         let socketFD = socket(AF_INET, SOCK_STREAM, 0)
         guard socketFD >= 0 else { return "Could not open a socket" }
         var yes: Int32 = 1
@@ -701,9 +749,27 @@ final class RemoteServer: @unchecked Sendable {
         var buffer = [UInt8](repeating: 0, count: 8192)
         let count = read(client, &buffer, buffer.count)
         guard count > 0, let request = String(bytes: buffer.prefix(count), encoding: .utf8) else { return }
-        let first = request.split(separator: "\r\n", maxSplits: 1).first ?? ""
+        let lines = request.components(separatedBy: "\r\n")
+        let first = lines.first ?? ""
         let parts = first.split(separator: " ")
-        let target = parts.count >= 2 ? String(parts[1]) : "/"
+        guard parts.count >= 2, parts[0] == "GET" else {
+            writeResponse(client, status: "405 Method Not Allowed", body: "<p>Method not allowed.</p>", extraHeaders: "Allow: GET\r\n")
+            return
+        }
+        if localOnly {
+            let host = lines.first(where: { $0.lowercased().hasPrefix("host:") })?
+                .dropFirst(5).trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+            let allowed = ["127.0.0.1", "localhost", "[::1]", "::1"]
+            guard allowed.contains(where: { host == $0 || host.hasPrefix($0 + ":") }) else {
+                writeResponse(client, status: "403 Forbidden", body: "<p>Invalid host.</p>")
+                return
+            }
+        }
+        let target = String(parts[1])
+        guard target.hasPrefix("/") else {
+            writeResponse(client, status: "400 Bad Request", body: "<p>Bad request.</p>")
+            return
+        }
         let sem = DispatchSemaphore(value: 0)
         let slot = RemoteReply()
         DispatchQueue.main.async {
@@ -711,8 +777,22 @@ final class RemoteServer: @unchecked Sendable {
             sem.signal()
         }
         _ = sem.wait(timeout: .now() + 2)
-        let data = Data(slot.body.utf8)
-        let header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(data.count)\r\nConnection: close\r\n\r\n"
+        writeResponse(client, status: "200 OK", body: slot.body)
+    }
+
+    private func writeResponse(_ client: Int32, status: String, body: String, extraHeaders: String = "") {
+        let data = Data(body.utf8)
+        let header = """
+        HTTP/1.1 \(status)\r
+        Content-Type: text/html; charset=utf-8\r
+        Content-Length: \(data.count)\r
+        Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'\r
+        X-Content-Type-Options: nosniff\r
+        Referrer-Policy: no-referrer\r
+        Connection: close\r
+        \(extraHeaders)\r
+
+        """
         var packet = Data(header.utf8)
         packet.append(data)
         packet.withUnsafeBytes { raw in
@@ -732,6 +812,8 @@ enum SupportPaths {
             url = appSupport.appendingPathComponent("JfredLocal", isDirectory: true)
             adoptPreviousState(into: url)
         }
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
         return url
     }
 
@@ -741,7 +823,8 @@ enum SupportPaths {
         let legacy = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("JlfredLocal/state.json")
         guard FileManager.default.fileExists(atPath: legacy.path) else { return }
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try? FileManager.default.copyItem(at: legacy, to: destination)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
     }
 }

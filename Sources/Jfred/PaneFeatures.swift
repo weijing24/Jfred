@@ -8,31 +8,44 @@ struct FeaturesPane: View {
     var body: some View {
         HStack(spacing: 0) {
             featureList
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    switch model.feature {
-                    case .defaultResults: defaultResults
-                    case .fileSearch: fileSearch
-                    case .universalActions: actions
-                    case .webSearch: webSearch
-                    case .bookmarks: bookmarks
-                    case .clipboard: clipboard
-                    case .snippets: snippets
-                    case .calculator: calculator
-                    case .dictionary: dictionary
-                    case .onePassword: onePassword
-                    case .system: system
-                    case .terminal: terminal
-                    case .largeType: largeType
-                    case .previews: previews
+            VStack(spacing: 0) {
+                PageHeaderBand(
+                    icon: model.feature.symbol,
+                    tint: tint(for: model.feature),
+                    title: headerTitle,
+                    subtitle: headerSubtitle
+                )
+                PageSurface {
+                    FormPanel {
+                        VStack(alignment: .leading, spacing: 16) {
+                            switch model.feature {
+                            case .defaultResults: defaultResults
+                            case .fileSearch: fileSearch
+                            case .universalActions: actions
+                            case .webSearch: webSearch
+                            case .bookmarks: bookmarks
+                            case .clipboard: clipboard
+                            case .snippets: snippets
+                            case .calculator: calculator
+                            case .dictionary: dictionary
+                            case .contacts: contactsPage
+                            case .music: musicPage
+                            case .onePassword: onePassword
+                            case .system: system
+                            case .terminal: terminal
+                            case .largeType: largeType
+                            case .previews: previews
+                            }
+                        }
                     }
                 }
-                .padding(28)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .sheet(item: model.bind(\.featureSheet)) { kind in
             sheetView(kind)
+        }
+        .sheet(isPresented: model.bind(\.showSnippetExpansionOptions)) {
+            snippetExpansionSheet
         }
     }
 
@@ -47,7 +60,7 @@ struct FeaturesPane: View {
                             Image(systemName: feature.symbol)
                                 .font(.system(size: 17))
                                 .foregroundStyle(.white)
-                                .frame(width: 36, height: 36)
+                                .frame(width: 34, height: 34)
                                 .background(
                                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                                         .fill(tint(for: feature))
@@ -59,7 +72,8 @@ struct FeaturesPane: View {
                             Spacer()
                         }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 4)
+                        .frame(height: 42)
                         .foregroundStyle(.white)
                         .background(model.feature == feature ? Color.white.opacity(0.22) : Color.clear)
                         .contentShape(Rectangle())
@@ -69,16 +83,16 @@ struct FeaturesPane: View {
             }
             .padding(.bottom, 8)
         }
-        .frame(width: 250)
+        .frame(width: 240)
         .jfredSidebar(tint: JfredColor.sidebarDeep)
         .layoutPriority(1)
     }
 
     private var defaultResults: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Default Results", "These are the main results Jfred presents by default, and where he looks for them.")
             labeled("Applications:") { Button("Options...") { model.featureSheet = .appOptions } }
             labeled("Essentials:") {
+                Toggle("Contacts", isOn: model.bindPref(\.contactsEnabled))
                 Toggle("System Settings", isOn: model.bindPref(\.systemSettingsEnabled))
             }
             labeled("Extras:") {
@@ -105,7 +119,7 @@ struct FeaturesPane: View {
             labeled("Search Scope:") {
                 HStack(spacing: 16) {
                     Toggle("macOS Applications folder", isOn: model.bindPref(\.scopeApplications))
-                    Toggle("Folders in Home, excluding Library, Music, and network volumes", isOn: model.bindPref(\.scopeHome))
+                    Toggle("Folders in Home - Excluding ~/Library", isOn: model.bindPref(\.scopeHome))
                 }
             }
             scopeList
@@ -188,7 +202,6 @@ struct FeaturesPane: View {
 
     private var fileSearch: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("File Search", "Using the file search keywords is the best way to find files; it keeps the default results both fast and focused.")
             HStack {
                 Spacer()
                 SettingsTabBar(selection: model.bind(\.fileSearchTab), tabs: ["Search", "Navigation", "Buffer", "Advanced"])
@@ -245,46 +258,80 @@ struct FeaturesPane: View {
 
     private var fileSearchNavigationTab: some View {
         VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Previous Path:") {
+                Text("Use this hotkey or keyword to show the file browser for the last browsed path from the results.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+                    .frame(maxWidth: 480, alignment: .leading)
+            }
+            SettingsLabeled(title: "Folder Keys:") {
+                Toggle("Use ← and → for folder navigation", isOn: model.bindPref(\.fileNavigateWithArrows))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("By default, → shows the action panel and you can use ⌘↓ and ⌘↑ to navigate in and out of folders.")
+            SettingsLabeled(title: "Return:") {
+                Toggle("Use ↩ to open folders in Finder", isOn: model.bindPref(\.fileOpenFoldersInFinder))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("By default, while browsing ↩ navigates into a folder. At any point you can use ⌘O to open a folder in Finder.")
             SettingsLabeled(title: "Open Files:") {
                 Toggle("Reveal files in Finder instead of opening them", isOn: model.bindPref(\.fileOpenWithFinder))
                     .toggleStyle(.checkbox)
             }
-            SettingsNote("When enabled, pressing return on a file result reveals it in Finder instead of opening it with the default application.")
         }
     }
 
     private var fileSearchBufferTab: some View {
         VStack(alignment: .leading, spacing: 14) {
             SettingsLabeled(title: "Buffer:") {
-                Toggle("Keep a file buffer (option-up adds the selected file)", isOn: model.bindPref(\.fileBufferEnabled))
+                Toggle("Enable temporary file buffer", isOn: model.bindPref(\.fileBufferEnabled))
                     .toggleStyle(.checkbox)
             }
-            SettingsNote("Return opens every file in the buffer. ⌘Y previews the selected file with Quick Look.")
+            SettingsNote("The buffer is controlled using the ⌥ key in combination with the selected file in the results: ⌥↑ adds/removes, ⌥↓ adds and moves down, ⌥← removes the last item, ⌥→ actions all items.")
+            SettingsLabeled(title: "Clearing:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Clear after actioning items in the buffer", isOn: model.bindPref(\.fileClearBufferAfterAction))
+                        .toggleStyle(.checkbox)
+                    Stepper("Clear if buffer isn't used for \(model.preferences.fileBufferTimeoutMinutes) minutes", value: model.bindPref(\.fileBufferTimeoutMinutes), in: 1...60)
+                }
+            }
+            SettingsLabeled(title: "Keys:") {
+                Toggle("Use ⇧⌥ as modifier key", isOn: model.bindPref(\.fileUseShiftOptionBuffer))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("Use the same keys as above but with ⇧⌥ as the modifier instead of ⌥, which may better fit your default key bindings.")
         }
     }
 
     private var fileSearchAdvancedTab: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SettingsLabeled(title: "Unintelligent:") {
-                Toggle("Search all file types", isOn: model.bindPref(\.searchAllFileTypes))
+            SettingsLabeled(title: "Home Folder:") {
+                TextField("~ (Unix standard)", text: model.bindPref(\.fileCustomHomeFolder))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 260)
+            }
+            SettingsNote("Use a custom home folder location. The default ~ follows the Unix standard.")
+            SettingsLabeled(title: "Copy Path:") {
+                Toggle("Escape path on 'Copy path to Clipboard' action", isOn: model.bindPref(\.fileEscapePathForTerminal))
                     .toggleStyle(.checkbox)
             }
-            SettingsNote("WARNING: Selecting this will slow down and muddle the default search results considerably. Use 'open' and 'find' for file operations instead.")
-            SettingsLabeled(title: "Extras:") {
-                LazyVGrid(
-                    columns: [GridItem(.fixed(130), alignment: .leading), GridItem(.fixed(130), alignment: .leading), GridItem(.fixed(130), alignment: .leading)],
-                    alignment: .leading,
-                    spacing: 6
-                ) {
-                    Toggle("Folders", isOn: model.bindPref(\.extraFolders)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("Documents", isOn: model.bindPref(\.extraDocuments)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("Text Files", isOn: model.bindPref(\.extraText)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("Images", isOn: model.bindPref(\.extraImages)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("Archives", isOn: model.bindPref(\.extraArchives)).toggleStyle(.checkbox).font(.system(size: 12))
-                    Toggle("AppleScripts", isOn: model.bindPref(\.extraScripts)).toggleStyle(.checkbox).font(.system(size: 12))
+            SettingsNote("Escape the path for Terminal, e.g. '/Users/name/Desktop/Andrew\'s Folder!'.")
+            SettingsLabeled(title: "AppleScripts:") {
+                Toggle("Run AppleScripts instead of opening", isOn: model.bindPref(\.fileRunAppleScriptsInsteadOfOpening))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("When dealing with AppleScripts in results and file navigation, run them on pressing return instead of opening. Use ⌘O to open them at any point.")
+            SettingsLabeled(title: "Performance:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Use file type icons for files on external drives", isOn: model.bindPref(\.fileUseTypeIconsForExternal))
+                        .toggleStyle(.checkbox)
+                    Toggle("Touch folders after opening them", isOn: model.bindPref(\.fileTouchFolders))
+                        .toggleStyle(.checkbox)
+                    Toggle("Touch aliases after opening them", isOn: model.bindPref(\.fileTouchAliases))
+                        .toggleStyle(.checkbox)
                 }
             }
-            SettingsNote("These items are added to the default results when they are enabled.")
+            SettingsNote("Touching a folder updates kMDItemFSContentChangeDate so it is prioritised in Spotlight and file search results.")
         }
     }
 
@@ -316,30 +363,64 @@ struct FeaturesPane: View {
 
     private var actions: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Universal Actions", "Modifiers on return change what the selected result does.")
-            Text("Control, option, and command are set below. By default control searches the web, option searches in Finder, and command reveals a local file.")
-                .font(.system(size: 12))
-                .foregroundStyle(JfredColor.sub)
-            SettingsCard {
-                VStack(spacing: 0) {
-                    actionRow("Copy", "⌘C", "Copy the path, URL, or subtitle")
-                    Divider().opacity(0.25)
-                    actionRow("Large Type", "⌘L", "Show the selected item in large type")
-                    Divider().opacity(0.25)
-                    actionRow("Quick Look", "⌘Y", "Preview the selected file with Quick Look")
-                    Divider().opacity(0.25)
-                    actionRow("Complete", "⇥", "Insert the selected title into the query")
-                }
+            HStack {
+                Spacer()
+                SettingsTabBar(selection: model.bind(\.actionsTab), tabs: ["General", "Actions"])
+                Spacer()
             }
-            .frame(width: 560)
-            SettingsLabeled(title: "Modifiers:") {
-                VStack(alignment: .leading, spacing: 8) {
-                    modifierPicker("⌃ control", selection: model.bindPref(\.modifierControl))
-                    modifierPicker("⌥ option", selection: model.bindPref(\.modifierOption))
-                    modifierPicker("⌘ command", selection: model.bindPref(\.modifierCommand))
+            if model.actionsTab == "Actions" {
+                SettingsCard {
+                    VStack(spacing: 0) {
+                        actionRow("Copy", "⌘C", "Copy the path, URL, or subtitle")
+                        Divider().opacity(0.25)
+                        actionRow("Large Type", "⌘L", "Show the selected item in large type")
+                        Divider().opacity(0.25)
+                        actionRow("Quick Look", "⌘Y", "Preview the selected file with Quick Look")
+                        Divider().opacity(0.25)
+                        actionRow("Complete", "⇥", "Insert the selected title into the query")
+                        Divider().opacity(0.25)
+                        actionRow("Actions", "→ / ⌘K", "Show the action panel for the selected result")
+                        Divider().opacity(0.25)
+                        actionRow("Reveal", "⌘O", "Reveal the selected file in Finder")
+                    }
                 }
+                .frame(maxWidth: 620)
+                SettingsNote("Actions are generated per result type: apps/files, URLs, contacts, clipboard items and calculations.")
+            } else {
+                SettingsLabeled(title: "Show Actions:") {
+                    HStack(spacing: 12) {
+                        Toggle("→", isOn: model.bindPref(\.uaShowRightArrow))
+                            .toggleStyle(.checkbox)
+                        Toggle("fn", isOn: model.bindPref(\.uaShowFunction))
+                            .toggleStyle(.checkbox)
+                        Toggle("ctrl", isOn: model.bindPref(\.uaShowControl))
+                            .toggleStyle(.checkbox)
+                        Toggle("⌘", isOn: model.bindPref(\.uaShowCommand))
+                            .toggleStyle(.checkbox)
+                        Text("to action selected item")
+                            .font(.system(size: 12))
+                            .foregroundStyle(JfredColor.sub)
+                    }
+                }
+                SettingsNote("Use these options to tweak how else you can show the action panel. If → is selected, use ⇧→ in views which use → for navigation.")
+                SettingsLabeled(title: "Selection Hotkey:") {
+                    TextField("⌥⌘\\", text: model.bindPref(\.uaSelectionHotkey))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+                }
+                SettingsNote("Use this hotkey to show the actions panel for the currently selected item in macOS.")
+                if !model.selectionHotkeyWarning.isEmpty {
+                    Text(model.selectionHotkeyWarning)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .padding(.leading, 130)
+                }
+                SettingsLabeled(title: "Action Ordering:") {
+                    Toggle("Sort actions by last used per type", isOn: model.bindPref(\.uaSortByUsage))
+                        .toggleStyle(.checkbox)
+                }
+                SettingsNote("By default, Jfred fixes the order of actions. If you prefer, Jfred will order actions based on your usage per type actioned.")
             }
-            SettingsNote("Perform actions on core results using modifiers. Reveal in Finder works for local files and apps.")
         }
     }
 
@@ -379,7 +460,6 @@ struct FeaturesPane: View {
 
     private var webSearch: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Web Search", "Search the web using the built-in default web searches or create your own custom web searches.")
             HStack {
                 Spacer()
                 SettingsTabBar(selection: model.bind(\.webSearchTab), tabs: ["Search", "URLs / History"])
@@ -541,7 +621,6 @@ struct FeaturesPane: View {
 
     private var bookmarks: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Web Bookmarks", "Search Safari and Google Chrome bookmarks.")
             SettingsLabeled(title: "Sources:") {
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle("Safari Bookmarks", isOn: model.bindPref(\.safariBookmarks))
@@ -585,7 +664,6 @@ struct FeaturesPane: View {
 
     private var clipboard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Clipboard History", "Automatically store copied items in a searchable clipboard history.")
             HStack {
                 Spacer()
                 SettingsTabBar(selection: model.bind(\.clipboardTab), tabs: ["History", "Merging", "Advanced"])
@@ -603,75 +681,98 @@ struct FeaturesPane: View {
         VStack(alignment: .leading, spacing: 14) {
             SettingsLabeled(title: "Clipboard History:") {
                 HStack(alignment: .top, spacing: 12) {
-                    clipKeepBox("Keep Plain Text", isOn: model.bindPref(\.clipboardKeepText), enabled: true)
-                    clipKeepBox("Keep Images", isOn: model.bindPref(\.clipboardKeepImages), enabled: true)
-                    clipKeepBox("Keep File Lists", isOn: model.bindPref(\.clipboardKeepFiles), enabled: true)
+                    clipKeepBox("Keep Plain Text", isOn: model.bindPref(\.clipboardKeepText), retention: model.bindPref(\.clipboardRetentionText), enabled: true)
+                    clipKeepBox("Keep Images", isOn: model.bindPref(\.clipboardKeepImages), retention: model.bindPref(\.clipboardRetentionImages), enabled: true)
+                    clipKeepBox("Keep File Lists", isOn: model.bindPref(\.clipboardKeepFiles), retention: model.bindPref(\.clipboardRetentionFiles), enabled: true)
                 }
             }
             SettingsNote("When disabled, the clipboard viewer can still show your snippets.")
+            SettingsLabeled(title: "Viewer Hotkey:") {
+                HStack(spacing: 8) {
+                    Text("⌥⌘C")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(JfredColor.hotkey)
+                        .frame(width: 180, height: 26, alignment: .leading)
+                        .padding(.horizontal, 8)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.black.opacity(0.12)))
+                    Text("Hotkey is not configurable yet")
+                        .font(.system(size: 11))
+                        .foregroundStyle(JfredColor.sub)
+                }
+            }
             SettingsLabeled(title: "Viewer Keyword:") {
                 Toggle("", isOn: model.bindPref(\.clipboardEnabled))
                     .labelsHidden()
                     .toggleStyle(.checkbox)
                 TextField("clipboard", text: model.bindPref(\.clipboardViewerKeyword))
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 160)
+                    .frame(width: 182)
             }
-            SettingsNote("Hotkey and keyword to open the clipboard viewer. The hotkey is not configurable yet.")
+            SettingsNote("Hotkey and keyword to open Jfred's clipboard viewer.")
             SettingsLabeled(title: "Clear Keyword:") {
+                Toggle("", isOn: model.bindPref(\.clipboardClearKeywordEnabled))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
                 TextField("clear", text: model.bindPref(\.clipboardClearKeyword))
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 160)
+                    .frame(width: 182)
                 Button("Clear All History Now") { model.clearClipboardHistory() }
             }
-            SettingsNote("Typing the clear keyword in the launcher empties the clipboard history.")
-            SettingsLabeled(title: "Limit:") {
-                Stepper("\(model.preferences.clipboardLimit) items", value: model.bindPref(\.clipboardLimit), in: 20...1000, step: 10)
-            }
-            SettingsLabeled(title: "Recent Items:") {
-                SettingsCard {
-                    VStack(spacing: 0) {
-                        if model.clips.isEmpty {
-                            Text("Nothing copied yet.")
-                                .font(.system(size: 12))
-                                .foregroundStyle(JfredColor.sub)
-                                .frame(maxWidth: .infinity, minHeight: 80)
-                        } else {
-                            ForEach(model.clips.prefix(8)) { clip in
-                                HStack(spacing: 8) {
-                                    if clip.kind == "image", let path = clip.imageFile, let image = NSImage(contentsOfFile: path) {
-                                        Image(nsImage: image)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 22, height: 22)
-                                            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-                                    } else {
-                                        Image(systemName: clip.kind == "file" ? "doc" : "doc.on.clipboard")
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(JfredColor.sub)
-                                    }
-                                    Text(clip.text.replacingOccurrences(of: "\n", with: " "))
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Text(clip.date, style: .time)
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(JfredColor.sub)
-                                }
-                                .padding(.horizontal, 8)
-                                .frame(height: 24)
-                                Divider().opacity(0.25)
-                            }
-                        }
-                    }
+            SettingsNote("Clear the Clipboard History. This keyword allows for clearing all history or just history for the past 5 or 15 minutes.")
+            SettingsLabeled(title: "Snippets:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Show \"All Snippets\" at top of Clipboard History", isOn: model.bindPref(\.clipboardSnippetsAtTop))
+                        .toggleStyle(.checkbox)
+                    Toggle("Show Snippets when searching Clipboard History", isOn: model.bindPref(\.clipboardSnippetsWhenSearching))
+                        .toggleStyle(.checkbox)
                 }
-                .frame(width: 520)
             }
+            SettingsNote("Integrate your snippets in the clipboard history viewer.")
+            SettingsLabeled(title: "Universal:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Ignore Text and Images from other Apple devices", isOn: model.bindPref(\.clipboardIgnoreUniversalText))
+                        .toggleStyle(.checkbox)
+                    Toggle("Ignore File Lists from other Apple devices", isOn: model.bindPref(\.clipboardIgnoreUniversalFiles))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            SettingsNote("These options control whether Jfred ignores the macOS Universal Clipboard.\nNote: File lists are not fully compatible with clipboard history, so are disabled by default.")
         }
     }
 
     private var clipboardMergingTab: some View {
         VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Merging:") {
+                Toggle("Fast append selected text", isOn: model.bindPref(\.clipboardFastAppend))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("Hold ⌘ and double tap C to append the currently selected clipboard item to the previously copied text in the Clipboard History.")
+            SettingsLabeled(title: "") {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text("Separate appended item with").font(.system(size: 12))
+                        Picker("", selection: model.bindPref(\.clipboardFastAppendSeparator)) {
+                            Text("space").tag("space")
+                            Text("new line").tag("newline")
+                            Text("nothing").tag("none")
+                        }
+                        .labelsHidden()
+                        .frame(width: 140)
+                    }
+                    Toggle("Play a sound when appending", isOn: model.bindPref(\.clipboardFastAppendPlaySound))
+                        .toggleStyle(.checkbox)
+                    Toggle("Place merged text back into macOS clipboard", isOn: model.bindPref(\.clipboardFastAppendBackToClipboard))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            SettingsNote("By placing the merged text back into the macOS clipboard, you can paste with ⌘V without having to use Jfred's Clipboard History view.")
+            Divider()
+            SettingsLabeled(title: "Pasting:") {
+                Toggle("Auto-paste on return", isOn: model.bindPref(\.clipboardAutoPaste))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("Automatically paste selected item to the currently active application.")
             SettingsLabeled(title: "Duplicates:") {
                 Toggle("Ignore consecutive duplicate clips", isOn: model.bindPref(\.clipboardIgnoreDuplicates))
                     .toggleStyle(.checkbox)
@@ -686,20 +787,41 @@ struct FeaturesPane: View {
 
     private var clipboardAdvancedTab: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SettingsLabeled(title: "Universal:") {
+            SettingsLabeled(title: "Max Clip Size:") {
+                Stepper(value: model.bindPref(\.clipboardMaxSize), in: 4096...2_000_000, step: 16384) {
+                    Text("\(model.preferences.clipboardMaxSize / 1024)k characters")
+                        .font(.system(size: 12))
+                }
+                .frame(width: 200)
+            }
+            SettingsNote("Ignore any copied text over the specified limit. This prevents accidental Clipboard History bloating.")
+            SettingsLabeled(title: "Privacy:") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Ignore Text and Images from other Apple devices", isOn: model.bindPref(\.clipboardIgnoreUniversalText))
+                    Toggle("Ignore clipboard data marked as Concealed", isOn: model.bindPref(\.clipboardIgnoreConcealed))
                         .toggleStyle(.checkbox)
-                    Toggle("Ignore File Lists from other Apple devices", isOn: model.bindPref(\.clipboardIgnoreUniversalFiles))
+                    Toggle("Ignore clipboard data marked as Auto Generated", isOn: model.bindPref(\.clipboardIgnoreAutoGenerated))
                         .toggleStyle(.checkbox)
                 }
             }
-            SettingsNote("These options control whether Jfred ignores items received through the macOS Universal Clipboard. Items marked as concealed, transient or auto-generated by other apps (for example password managers) are always skipped.")
-            SettingsLabeled(title: "Privacy:") {
-                Toggle("Clear clipboard history when Jfred quits", isOn: model.bindPref(\.clipboardClearOnQuit))
+            SettingsNote("Apps can mark data as org.nspasteboard.ConcealedType if it is potentially sensitive, or org.nspasteboard.AutoGeneratedType if it has been automatically placed in the clipboard without user intent.")
+            SettingsLabeled(title: "Matching:") {
+                Toggle("Diacritic and Unicode case insensitive matching of clipboard history", isOn: model.bindPref(\.clipboardUnicodeMatching))
                     .toggleStyle(.checkbox)
             }
-            SettingsNote("The clipboard history is stored unencrypted in Jfred's support folder. Enable this if you don't want it to persist after quitting.")
+            SettingsNote("Note that with very large clipboard databases, this can have a small effect on performance as Jfred implements a matching function for this.")
+            SettingsLabeled(title: "Behaviour:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Move items to top of clipboard history when used", isOn: model.bindPref(\.clipboardMoveToTopOnUse))
+                        .toggleStyle(.checkbox)
+                    Toggle("Convert image data to PNG on pasting", isOn: model.bindPref(\.clipboardConvertImagesToPNG))
+                        .toggleStyle(.checkbox)
+                    Toggle("Clear clipboard history when Jfred quits", isOn: model.bindPref(\.clipboardClearOnQuit))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            SettingsNote("The clipboard history is stored locally with 0600 permissions inside Jfred's support folder. Items copied from 1Password, Keychain Access, Passwords, Wallet and SecurityAgent are never stored. Enable clearing on quit if you don't want it to persist.")
+            stringListEditor(title: "Ignore Apps:", hint: "Application name", keyPath: \.clipboardIgnoreApps)
+            SettingsNote("Drop the applications you would like Jfred to ignore into the list, or add their exact names. Only focusable applications can be ignored.")
         }
     }
 
@@ -710,13 +832,13 @@ struct FeaturesPane: View {
         }
     }
 
-    private func clipKeepBox(_ title: String, isOn: Binding<Bool>, enabled: Bool) -> some View {
+    private func clipKeepBox(_ title: String, isOn: Binding<Bool>, retention: Binding<String>, enabled: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(title, isOn: isOn)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 12))
                 .disabled(!enabled)
-            Picker("", selection: model.bindPref(\.clipboardRetention)) {
+            Picker("", selection: retention) {
                 ForEach(["1 day", "1 week", "1 month", "3 months", "1 year", "never"], id: \.self) { Text($0).tag($0) }
             }
             .labelsHidden()
@@ -731,34 +853,56 @@ struct FeaturesPane: View {
 
     private var snippets: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Snippets", "Keep your most useful snippets always at hand.")
-            SettingsLabeled(title: "Snippet Keyword:") {
-                Toggle("", isOn: model.bindPref(\.snippetsEnabled))
-                    .labelsHidden()
-                    .toggleStyle(.checkbox)
-                TextField("snip", text: model.bindPref(\.snippetKeyword))
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 160)
-                Toggle("Show Keyword in Result", isOn: model.bindPref(\.snippetShowKeywordInResult))
-                    .toggleStyle(.checkbox)
-            }
-            SettingsNote("Use the keyword to show snippets in the default results.")
-            SettingsLabeled(title: "Matching:") {
-                Picker("", selection: model.bindPref(\.snippetMatching)) {
-                    Text("Name").tag("name")
-                    Text("Keyword").tag("keyword")
-                    Text("Name or Keyword").tag("nameandkeyword")
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsLabeled(title: "Viewer Hotkey:") {
+                        Text("⌥⌘S")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(JfredColor.hotkey)
+                            .frame(width: 200, height: 26, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .background(RoundedRectangle(cornerRadius: 5).fill(Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.black.opacity(0.12)))
+                    }
+                    SettingsLabeled(title: "Snippet Keyword:") {
+                        Toggle("", isOn: model.bindPref(\.snippetsEnabled))
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                        TextField("snip", text: model.bindPref(\.snippetKeyword))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 160)
+                        Toggle("Show Keyword in Result", isOn: model.bindPref(\.snippetShowKeywordInResult))
+                            .toggleStyle(.checkbox)
+                    }
+                    SettingsNote("Use keyword to show snippets in Jfred's default results.")
+                    SettingsLabeled(title: "Matching:") {
+                        Picker("", selection: model.bindPref(\.snippetMatching)) {
+                            Text("Name").tag("name")
+                            Text("Keyword").tag("keyword")
+                            Text("Name or Keyword").tag("nameandkeyword")
+                        }
+                        .labelsHidden()
+                        .frame(width: 180)
+                        Toggle("Word based", isOn: model.bindPref(\.snippetWordBased))
+                            .toggleStyle(.checkbox)
+                    }
+                    SettingsNote("To match the behaviour of the Clipboard History search (non-anchored broad search), uncheck \"Word based\".")
                 }
-                .labelsHidden()
-                .frame(width: 180)
-                Toggle("Word based", isOn: model.bindPref(\.snippetWordBased))
-                    .toggleStyle(.checkbox)
+                .frame(maxWidth: 560, alignment: .leading)
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Automatically expand snippets by keyword", isOn: model.bindPref(\.snippetsEnabled))
+                        .toggleStyle(.checkbox)
+                    Text("Type a snippet keyword in any macOS text field and have it automatically replaced with your snippet. This requires Accessibility permission.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(JfredColor.sub)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Auto Expansion Options") { model.showSnippetExpansionOptions = true }
+                }
+                .padding(14)
+                .frame(width: 300, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Color(hex: 0xF2F2F2)))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.black.opacity(0.07)))
             }
-            SettingsLabeled(title: "Auto Expansion:") {
-                Toggle("Automatically expand snippets by keyword", isOn: model.bindPref(\.snippetsEnabled))
-                    .toggleStyle(.checkbox)
-            }
-            SettingsNote("Type a snippet keyword in any text field and have it replaced with your snippet. This requires Accessibility permission.")
             HStack(alignment: .top, spacing: 10) {
                 snippetCollectionsCard
                 VStack(spacing: 8) {
@@ -792,6 +936,7 @@ struct FeaturesPane: View {
                         }
                     }
                     HStack {
+                        Button("Get Collections…") { model.section = .help }
                         Spacer()
                         Button("+") { addSnippet() }.frame(width: 26)
                         Button("−") { removeSnippet() }.frame(width: 26)
@@ -800,6 +945,28 @@ struct FeaturesPane: View {
                 .frame(maxWidth: .infinity)
             }
         }
+    }
+
+    private var snippetExpansionSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Auto Expansion Options")
+                .font(.system(size: 16, weight: .semibold))
+            Toggle("Play sound when expanding", isOn: model.bindPref(\.snippetExpandPlaySound))
+                .toggleStyle(.checkbox)
+            Toggle("Restore clipboard after expanding", isOn: model.bindPref(\.snippetExpandRestoreClipboard))
+                .toggleStyle(.checkbox)
+            Text("Expansion replaces the typed keyword with the snippet. With clipboard restore disabled, the expanded snippet stays on the clipboard.")
+                .font(.system(size: 11))
+                .foregroundStyle(JfredColor.sub)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Done") { model.showSnippetExpansionOptions = false }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
     }
 
     private var snippetCollections: [String] {
@@ -897,47 +1064,331 @@ struct FeaturesPane: View {
         model.selectedSnippetID = nil
     }
 
-    private var calculator: some View {
+    private var contactsPage: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Calculator", "Type an expression such as (2+2)*3 or sqrt(9).")
-            SettingsLabeled(title: "Calculator:") {
-                Toggle("Calculate in the default results", isOn: model.bindPref(\.calculatorEnabled))
+            HStack {
+                Spacer()
+                SettingsTabBar(selection: model.bind(\.contactsTab), tabs: ["Contacts", "Email", "Advanced"])
+                Spacer()
+            }
+            switch model.contactsTab {
+            case "Email": contactsEmailTab
+            case "Advanced": contactsAdvancedTab
+            default: contactsGeneralTab
+            }
+        }
+    }
+
+    private var contactsGeneralTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Contacts:") {
+                Toggle("Open Contacts in Jfred", isOn: model.bindPref(\.contactsOpenInAlfred))
                     .toggleStyle(.checkbox)
             }
-            SettingsNote("Return pastes the result into the previous app. Functions: sqrt, sin, cos, tan, log, ln, abs, pi, e.")
+            SettingsNote("Instead of opening in Apple's Contacts.app. If you enable this feature, you can still open contacts in Contacts.app from the action panel.")
+            SettingsLabeled(title: "Display:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Show title", isOn: model.bindPref(\.contactsShowTitle))
+                        .toggleStyle(.checkbox)
+                    Toggle("Show job title", isOn: model.bindPref(\.contactsShowJobTitle))
+                        .toggleStyle(.checkbox)
+                    Toggle("Invert name order", isOn: model.bindPref(\.contactsInvertName))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            SettingsLabeled(title: "Maps:") {
+                TextField("https://maps.apple.com/?q={query}", text: model.bindPref(\.contactsMapURL))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 360)
+            }
+            SettingsNote("The URL used by the Show in Maps action. {query} is replaced with the contact's address or name.")
+            SettingsLabeled(title: "Status:") {
+                Text(model.contacts.isEmpty ? "No contacts loaded. Grant Contacts access, then reload." : "\(model.contacts.count) contacts indexed")
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+                Button("Grant Access…") { model.requestContactsAccess() }
+                Button("Reload") { model.reloadContacts() }
+            }
+            SettingsNote("Jfred reads contact names, email addresses, phone numbers and job titles. The data stays on this Mac and is only used for launcher results.")
+        }
+    }
+
+    private var contactsEmailTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Email Action:") {
+                Picker("", selection: model.bindPref(\.contactsEmailMode)) {
+                    Text("Open the default mail app").tag("mail")
+                    Text("Compose in Gmail").tag("gmail")
+                    Text("Use a custom URL").tag("custom")
+                }
+                .labelsHidden()
+                .frame(width: 260)
+            }
+            SettingsNote("Choose how the Email action on a contact result works.")
+            if model.preferences.contactsEmailMode != "mail" {
+                SettingsLabeled(title: "URL:") {
+                    TextField("https://mail.google.com/mail/?view=cm&fs=1&tf=1&to={query}", text: model.bindPref(\.contactsEmailURL))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 420)
+                }
+                SettingsNote("The {query} placeholder is replaced with the contact's email address.")
+            }
+            SettingsLabeled(title: "Address:") {
+                Text("Email actions use the contact's first email address. Jfred never sends mail itself; it opens the selected mail client or URL.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+                    .frame(maxWidth: 520, alignment: .leading)
+            }
+        }
+    }
+
+    private var contactsAdvancedTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Maps:") {
+                TextField("https://maps.apple.com/?q={query}", text: model.bindPref(\.contactsMapURL))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 420)
+            }
+            SettingsNote("The URL used by the Show in Maps action. {query} is replaced with the contact's address or name.")
+            SettingsLabeled(title: "Opening:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Use a custom URL handler", isOn: model.bindPref(\.contactsURLHandlerEnabled))
+                        .toggleStyle(.checkbox)
+                    TextField("addressbook://{uid}", text: model.bindPref(\.contactsURLHandler))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 420)
+                }
+            }
+            SettingsNote("When enabled, opening a contact uses this URL with {uid} replaced by the contact identifier.")
+            SettingsLabeled(title: "Permissions:") {
+                Button("Grant Contacts Access…") { model.requestContactsAccess() }
+                Button("Reload") { model.reloadContacts() }
+            }
+            SettingsNote("Jfred only requests Contacts access when you press Grant Access. Without it, contact results are simply absent.")
+        }
+    }
+
+    private var musicPage: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Spacer()
+                SettingsTabBar(selection: model.bind(\.musicTab), tabs: ["General", "Keywords", "Advanced"])
+                Spacer()
+            }
+            switch model.musicTab {
+            case "Keywords": musicKeywordsTab
+            case "Advanced": musicAdvancedTab
+            default: musicGeneralTab
+            }
+        }
+    }
+
+    private var musicGeneralTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Mini Player:") {
+                Toggle("Enable Music mini player", isOn: model.bindPref(\.musicEnabled))
+                    .toggleStyle(.checkbox)
+                TextField("music", text: model.bindPref(\.musicKeyword))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 150)
+            }
+            SettingsNote("Use this hotkey or keyword to show the Music Mini Player. The keyword opens Music playback commands in the launcher.")
+            SettingsLabeled(title: "Playback:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Hide Mini Player after selecting song", isOn: model.bindPref(\.musicHideMiniPlayerAfterSong))
+                        .toggleStyle(.checkbox)
+                    Toggle("When randomising, only play larger albums", isOn: model.bindPref(\.musicRandomLargerAlbums))
+                        .toggleStyle(.checkbox)
+                    Toggle("Include Playlists in Mini Player Search Results", isOn: model.bindPref(\.musicIncludePlaylists))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            SettingsLabeled(title: "Now Playing:") {
+                Text(model.musicTrack.isEmpty ? "Nothing playing" : model.musicTrack)
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+                    .lineLimit(1)
+                Button("Refresh") { model.refreshMusicTrack() }
+            }
+            SettingsLabeled(title: "Controls:") {
+                HStack(spacing: 8) {
+                    Button("Play / Pause") { _ = MusicService.playPause() }
+                    Button("Previous") { _ = MusicService.previous() }
+                    Button("Next") { _ = MusicService.next() }
+                    Button("Open Mini Player") { model.showMusicPlayer() }
+                }
+            }
+            SettingsNote("Music control uses AppleScript and requires Automation access to Music.app. Jfred never reads or uploads your music library.")
+        }
+    }
+
+    private var musicKeywordsTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Mini Player Keyword:") {
+                Toggle("", isOn: model.bindPref(\.musicEnabled))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+                TextField("music", text: model.bindPref(\.musicKeyword))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 182)
+            }
+            SettingsNote("Use this hotkey or keyword to show the Music Mini Player.")
+            SettingsLabeled(title: "Play Keyword:") {
+                Text("play")
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(width: 120, alignment: .leading)
+                Text("play <song> starts the first matching song or album.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+            }
+            SettingsNote("The play keyword is always available while Music is enabled.")
+        }
+    }
+
+    private var musicAdvancedTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Playback:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Hide Mini Player after selecting song", isOn: model.bindPref(\.musicHideMiniPlayerAfterSong))
+                        .toggleStyle(.checkbox)
+                    Toggle("When randomising, only play larger albums", isOn: model.bindPref(\.musicRandomLargerAlbums))
+                        .toggleStyle(.checkbox)
+                    Toggle("Include Playlists in Mini Player Search Results", isOn: model.bindPref(\.musicIncludePlaylists))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            SettingsNote("Jfred never reads or uploads your music library. Playback is controlled through AppleScript.")
+        }
+    }
+
+    private var calculator: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsLabeled(title: "Calculator:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Enable standard calculator", isOn: model.bindPref(\.calculatorEnabled))
+                        .toggleStyle(.checkbox)
+                    Toggle("Enable advanced calculator with keyword '='", isOn: model.bindPref(\.calculatorAdvanced))
+                        .toggleStyle(.checkbox)
+                }
+            }
+            SettingsNote("= before your calculation enables advanced mode. Available functions: sqrt, sin, cos, tan, log, ln, abs, pi, e, and more.")
+            SettingsLabeled(title: "Input:") {
+                Picker("", selection: model.bindPref(\.calculatorInputType)) {
+                    Text("Use macOS locale specified decimal separator").tag("standard")
+                    Text("Use full stop (.) as decimal separator").tag("dot")
+                    Text("Use comma (,) as decimal separator").tag("comma")
+                }
+                .labelsHidden()
+                .frame(width: 330)
+                Toggle("Ignore thousands grouping separator", isOn: model.bindPref(\.calculatorInputThousands))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("Force the input to a particular decimal separator other than the system locale. You can also use both.")
+            SettingsLabeled(title: "Output:") {
+                Picker("", selection: model.bindPref(\.calculatorOutputType)) {
+                    Text("Use macOS locale specified decimal separator").tag("standard")
+                    Text("Use full stop (.) as decimal separator").tag("dot")
+                    Text("Use comma (,) as decimal separator").tag("comma")
+                }
+                .labelsHidden()
+                .frame(width: 330)
+                Toggle("Show thousands grouping separator", isOn: model.bindPref(\.calculatorOutputThousands))
+                    .toggleStyle(.checkbox)
+            }
+            SettingsNote("Force the output to a particular decimal separator other than the system locale. Show grouping separators for easier reading.")
+            SettingsLabeled(title: "Result:") {
+                Text("Return copies the result to the clipboard and pastes it into the previous application.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(JfredColor.sub)
+            }
         }
     }
 
     private var dictionary: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Dictionary", "define word uses the macOS dictionary.")
-            SettingsLabeled(title: "Dictionary:") {
-                Toggle("Enable define", isOn: model.bindPref(\.dictionaryEnabled))
+            SettingsLabeled(title: "Define a Word:") {
+                Toggle("", isOn: model.bindPref(\.dictionaryDefineEnabled))
+                    .labelsHidden()
                     .toggleStyle(.checkbox)
+                TextField("define", text: model.bindPref(\.dictionaryDefineKeyword))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 150)
             }
-            SettingsNote("Type define followed by a word to look it up in the built-in macOS dictionary.")
+            SettingsNote("Use keyword followed by a word to open the selected word in macOS Dictionary.")
+            SettingsLabeled(title: "Spell a Word:") {
+                Toggle("", isOn: model.bindPref(\.dictionarySpellEnabled))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+                TextField("spell", text: model.bindPref(\.dictionarySpellKeyword))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 150)
+            }
+            SettingsNote("Use keyword followed by a word to suggest spellings as you type, then copy the selected spelling after the action.")
+            SettingsLabeled(title: "Language:") {
+                Picker("", selection: model.bindPref(\.dictionaryLanguage)) {
+                    Text("Default").tag("Default")
+                    Text("English").tag("English")
+                    Text("English (UK)").tag("English (UK)")
+                    Text("French").tag("French")
+                    Text("German").tag("German")
+                    Text("Spanish").tag("Spanish")
+                    Text("Italian").tag("Italian")
+                    Text("Japanese").tag("Japanese")
+                    Text("Chinese").tag("Chinese")
+                }
+                .labelsHidden()
+                .frame(width: 220)
+            }
+            SettingsNote("Select the language of the words you would like to look up when using the spell and define actions.")
+            SettingsLabeled(title: "Options:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Paste word on action", isOn: model.bindPref(\.dictionaryPasteOnAction))
+                        .toggleStyle(.checkbox)
+                    Toggle("Only show words with macOS Dictionary definition", isOn: model.bindPref(\.dictionaryOnlyDictionary))
+                        .toggleStyle(.checkbox)
+                }
+            }
         }
     }
 
     private var onePassword: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header("1Password", "Uses the op command-line tool when it is installed and signed in.")
-            SettingsLabeled(title: "1Password:") {
-                Toggle("Search 1Password items", isOn: model.bindPref(\.onePasswordEnabled))
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("1Password 8 Integration")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Jfred uses the 1Password CLI (op) to list and open items. Sign in with op signin first, then enable the integration below.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Get 1Password 8 Integration Workflow") {
+                    if let url = URL(string: "https://alfred.app/workflows/alfredapp/1password/") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+            }
+            .padding(18)
+            .frame(maxWidth: 620, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Color(hex: 0x2F7F7F)))
+            SettingsLabeled(title: "Integration:") {
+                Toggle("Enable 1Password Bookmarks", isOn: model.bindPref(\.onePasswordEnabled))
                     .toggleStyle(.checkbox)
             }
+            SettingsNote("Jfred can import and present your 1Password items in the results. This allows you to quickly open items from 1Password.")
             SettingsLabeled(title: "Status:") {
                 Text(model.opItems.isEmpty ? "No items loaded. Turn this on after op item list works in Terminal." : "\(model.opItems.count) items loaded.")
                     .font(.system(size: 12))
                     .foregroundStyle(JfredColor.sub)
                 Button("Reload items") { model.reloadOnePassword() }
             }
+            SettingsNote("Only item names are read. Jfred never asks for or stores your 1Password master password.")
         }
     }
 
     private var system: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("System", "Control macOS directly from your keyboard; ejecting, quitting and hiding apps.")
             HStack(alignment: .top, spacing: 40) {
                 systemColumn(Array(SystemCommand.all.prefix(7)))
                 systemColumn(Array(SystemCommand.all.dropFirst(7)))
@@ -979,6 +1430,15 @@ struct FeaturesPane: View {
                     Text(command.title)
                         .font(.system(size: 12))
                         .frame(width: 110, alignment: .trailing)
+                    Toggle("", isOn: Binding(
+                        get: { !model.preferences.systemDisabled.contains(command.id) },
+                        set: { enabled in
+                            model.preferences.systemDisabled.removeAll { $0 == command.id }
+                            if !enabled { model.preferences.systemDisabled.append(command.id) }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
                     Toggle("", isOn: model.bindMember(\.systemConfirm, command.id))
                         .labelsHidden()
                         .toggleStyle(.checkbox)
@@ -1029,24 +1489,40 @@ struct FeaturesPane: View {
 
     private var terminal: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Terminal", "Prefix a command with > to run it in a terminal window.")
-            SettingsLabeled(title: "Terminal App:") {
+            SettingsLabeled(title: "Application:") {
                 Picker("", selection: model.bindPref(\.terminalApp)) {
                     Text("Terminal").tag("Terminal")
                     Text("iTerm").tag("iTerm")
                     Text("Ghostty").tag("Ghostty")
                     Text("Alacritty").tag("Alacritty")
+                    Text("Custom").tag("Custom")
                 }
                 .labelsHidden()
                 .frame(width: 220)
             }
-            SettingsNote("The selected application is used for the > prefix and for workflow terminal actions.")
+            SettingsNote("Select Terminal or Custom. Changing the terminal here will also change the terminal used for the 'Open in Terminal' action.")
+            SettingsLabeled(title: "Prefix:") {
+                TextField(">", text: model.bindPref(\.terminalPrefix))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+            }
+            SettingsNote("Type this character to make Jfred recognise your shell command.")
+            if model.preferences.terminalApp == "Custom" {
+                SettingsLabeled(title: "Custom:") {
+                    TextEditor(text: model.bindPref(\.terminalCustomScript))
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(width: 420, height: 120)
+                        .padding(4)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.black.opacity(0.12)))
+                }
+                SettingsNote("Enter the AppleScript you would like to use for all Jfred terminal actions.")
+            }
         }
     }
 
     private var largeType: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Large Type", "Show text and results in large characters across your screen.")
             HStack {
                 Spacer()
                 Picker("", selection: model.bindPref(\.largeTypeBackgroundMode)) {
@@ -1106,7 +1582,6 @@ struct FeaturesPane: View {
 
     private var previews: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header("Previews", "Customise usage of macOS Quick Look, and how Jfred displays file previews.")
             SettingsLabeled(title: "Quick Look:") {
                 Toggle("⇧ to Quick Look selected item", isOn: model.bindPref(\.quickLookEnabled))
                     .toggleStyle(.checkbox)
@@ -1187,6 +1662,48 @@ struct FeaturesPane: View {
         .padding(.bottom, 8)
     }
 
+    private var headerTitle: String {
+        switch model.feature {
+        case .defaultResults: "Default Results"
+        case .fileSearch: "File Search"
+        case .universalActions: "Universal Actions"
+        case .webSearch: "Web Search"
+        case .bookmarks: "Web Bookmarks"
+        case .clipboard: "Clipboard History"
+        case .snippets: "Snippets"
+        case .calculator: "Calculator"
+        case .dictionary: "Dictionary"
+        case .contacts: "Contacts"
+        case .music: "Music"
+        case .onePassword: "1Password"
+        case .system: "System"
+        case .terminal: "Terminal"
+        case .largeType: "Large Type"
+        case .previews: "Previews"
+        }
+    }
+
+    private var headerSubtitle: String {
+        switch model.feature {
+        case .defaultResults: "These are the main results Jfred presents by default, and where he looks for them."
+        case .fileSearch: "Using the file search keywords is the best way to find files; it keeps the default results both fast and focused."
+        case .universalActions: "Perform actions on selected items in macOS or Jfred's results."
+        case .webSearch: "Search the web using the built-in default web searches or create your own custom web searches."
+        case .bookmarks: "Search Safari and Google Chrome bookmarks."
+        case .clipboard: "Automatically store copied items in a searchable clipboard history."
+        case .snippets: "Keep your most useful snippets always at hand."
+        case .calculator: "Do quick mathematical calculations and copy the result to the macOS clipboard."
+        case .dictionary: "Look up words in Jfred or macOS's dictionary and paste them into another application."
+        case .contacts: "Search and view your Apple Address Book."
+        case .music: "Take control of Music.app to find and play your favourite music, or let Jfred pick for you."
+        case .onePassword: "Search and open your 1Password 1Click Bookmarks."
+        case .system: "Control macOS directly from your keyboard; ejecting, quitting and hiding apps."
+        case .terminal: "Quickly open the terminal and run shell commands."
+        case .largeType: "Show text and results in large characters across your screen."
+        case .previews: "Customise usage of macOS Quick Look, and how Jfred displays file previews."
+        }
+    }
+
     private func tint(for feature: FeatureID) -> Color {
         switch feature {
         case .defaultResults: return Color(hex: 0x4F217A)
@@ -1198,6 +1715,8 @@ struct FeaturesPane: View {
         case .snippets: return Color(hex: 0x8E44AD)
         case .calculator: return Color(hex: 0x4A4A4A)
         case .dictionary: return Color(hex: 0xB03A2E)
+        case .contacts: return Color(hex: 0x2F6F8F)
+        case .music: return Color(hex: 0xB03A5E)
         case .onePassword: return Color(hex: 0x2F4858)
         case .system: return Color(hex: 0x6A3D9A)
         case .terminal: return Color(hex: 0x2F2F2F)

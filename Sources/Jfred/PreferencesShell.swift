@@ -7,15 +7,10 @@ struct PreferencesShell: View {
     var body: some View {
         HStack(spacing: 0) {
             IconRail(model: model)
-            ZStack(alignment: .topLeading) {
-                AuroraBackdrop()
-                DamaskBackground()
-                detail
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(JfredColor.canvas)
-        .modifier(GlassButtons())
+        .background(Color(hex: 0xECECEC))
         .preferredColorScheme(.light)
         .background(WindowReader { window in
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
@@ -44,10 +39,10 @@ struct PreferencesShell: View {
                     TextField("Search Preferences", text: model.bind(\.prefsQuery))
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
-                        .frame(width: 220)
+                        .frame(width: 420)
                 }
                 .padding(.horizontal, 8)
-                .frame(height: 26)
+                .frame(height: 24)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xE3E3E3)))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black.opacity(0.10), lineWidth: 1))
             }
@@ -68,7 +63,9 @@ struct PreferencesShell: View {
             case .appearance: AppearancePane(model: model)
             case .remote: RemotePane(model: model)
             case .advanced: AdvancedPane(model: model)
+            case .powerpack: PowerpackPane(model: model)
             case .usage: UsagePane(model: model)
+            case .help: HelpPane(model: model)
             case .update: UpdatePane(model: model)
             }
         }
@@ -78,7 +75,7 @@ struct PreferencesShell: View {
 struct IconRail: View {
     var model: AppModel
     private var top: [PrefSection] { [.general, .features, .workflows, .appearance, .remote, .advanced] }
-    private var bottom: [PrefSection] { [.usage, .update] }
+    private var bottom: [PrefSection] { [.powerpack, .usage, .help, .update] }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -166,7 +163,9 @@ struct GeneralPane: View {
             form
                 .padding(.top, 44)
             Spacer(minLength: 0)
+            NewsletterBanner(model: model)
         }
+        .background(Color(hex: 0xECECEC))
     }
 
     private var form: some View {
@@ -237,8 +236,49 @@ struct GeneralPane: View {
             HelpNote(text: model.importNote.isEmpty ? "Copies this Mac's launcher settings into Jfred and reads that copy. The original folder is left unchanged. Built-in workflow keywords are reset to match." : model.importNote)
         }
         .frame(maxWidth: 760, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(.trailing, 46)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
+private struct NewsletterBanner: View {
+    var model: AppModel
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 22) {
+            HoodMark()
+                .frame(width: 128, height: 120)
+                .padding(.leading, 38)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Jfred Newsletter")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                HStack(spacing: 8) {
+                    TextField("Your Email", text: model.bindPref(\.newsletterEmail))
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .padding(.horizontal, 8)
+                        .frame(width: 260, height: 24)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.white))
+                    Button(model.preferences.newsletterEmail.isEmpty ? "Subscribe" : "Saved") { model.saveNewsletterEmail() }
+                    .buttonStyle(.bordered)
+                }
+                Text("For Jfred updates, tips and sneak peeks, sign up for our occasional newsletter. The address stays on this Mac; Jfred does not send it anywhere.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .frame(maxWidth: 380, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 18) {
+                    Label("Twitter", systemImage: "bird")
+                    Label("Website", systemImage: "globe")
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.top, 2)
+            }
+            Spacer(minLength: 20)
+        }
+        .frame(height: 132)
+        .background(Color(hex: 0x3B0B5C))
     }
 }
 

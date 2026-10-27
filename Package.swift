@@ -23,6 +23,7 @@ let package = Package(
                 .linkedFramework("CoreServices"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("UserNotifications"),
+                .linkedFramework("Contacts"),
             ]
         ),
         .testTarget(name: "JfredCoreTests", dependencies: ["JfredCore"]),

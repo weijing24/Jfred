@@ -13,8 +13,8 @@ public enum Search {
             return Array(forced.prefix(12))
         }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix(">") {
-            let command = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+        if !context.preferences.terminalPrefix.isEmpty, trimmed.hasPrefix(context.preferences.terminalPrefix) {
+            let command = String(trimmed.dropFirst(context.preferences.terminalPrefix.count)).trimmingCharacters(in: .whitespaces)
             return [make(
                 id: "term:\(command)",
                 title: command.isEmpty ? "Run in Terminal" : command,
@@ -90,7 +90,7 @@ public enum Search {
                 score: 1.75
             ))
         }
-        if context.preferences.dictionaryEnabled, let word = argument(of: "define", in: trimmed) {
+        if context.preferences.dictionaryEnabled, context.preferences.dictionaryDefineEnabled, let word = argument(of: context.preferences.dictionaryDefineKeyword, in: trimmed) {
             let subtitle = context.definition?.replacingOccurrences(of: "\n", with: " ") ?? "Open Dictionary"
             found.append(make(
                 id: "dict:\(word)",
@@ -137,6 +137,65 @@ public enum Search {
                 context: context
             ))
         }
+        if context.preferences.contactsEnabled {
+            for contact in context.contacts {
+                var display = contact.name
+                if context.preferences.contactsInvertName,
+                   let split = contact.name.lastIndex(of: " "),
+                   split != contact.name.startIndex {
+                    display = String(contact.name[contact.name.index(after: split)...]) + ", " + String(contact.name[..<split])
+                }
+                var subtitleParts: [String] = []
+                if context.preferences.contactsShowTitle, let organization = contact.organization, !organization.isEmpty {
+                    subtitleParts.append(organization)
+                }
+                if context.preferences.contactsShowJobTitle, let job = contact.jobTitle, !job.isEmpty {
+                    subtitleParts.append(job)
+                }
+                if !contact.email.isEmpty { subtitleParts.append(contact.email) }
+                if !contact.phone.isEmpty { subtitleParts.append(contact.phone) }
+                if subtitleParts.isEmpty { subtitleParts.append("Contact") }
+                let fields = [contact.name, contact.email, contact.phone, contact.organization ?? "", contact.jobTitle ?? ""]
+                push(scored(
+                    query: needle,
+                    fields: fields,
+                    id: "contact:\(contact.id)",
+                    title: display,
+                    subtitle: subtitleParts.joined(separator: "  ·  "),
+                    icon: "symbol:person.crop.circle",
+                    kind: "contact",
+                    payload: contact.uid ?? contact.id,
+                    category: "contacts",
+                    context: context
+                ))
+            }
+        }
+        if context.preferences.musicEnabled {
+            if trimmed.compare(context.preferences.musicKeyword, options: .caseInsensitive) == .orderedSame {
+                found.append(make(
+                    id: "music:player",
+                    title: "Music Mini Player",
+                    subtitle: "Search and play music from your library",
+                    icon: "symbol:music.note",
+                    kind: "musicplayer",
+                    payload: "",
+                    category: "music",
+                    score: 2
+                ))
+            }
+            if let song = argument(of: context.preferences.musicKeyword, in: trimmed) ?? argument(of: "play", in: trimmed), !song.isEmpty {
+                found.append(make(
+                    id: "music:play:\(song)",
+                    title: "Play \(song)",
+                    subtitle: "Music.app",
+                    icon: "symbol:music.note",
+                    kind: "musicplay",
+                    payload: song,
+                    category: "music",
+                    score: 1.9
+                ))
+            }
+        }
         if context.preferences.systemSettingsEnabled {
             let foldedQuery = fold(needle)
             for setting in context.settings where !foldedQuery.isEmpty && fold(setting.name).contains(foldedQuery) {
@@ -179,7 +238,9 @@ public enum Search {
             ))
         }
         for command in SystemCommand.all {
-            if command.category == "music" { continue }
+            if context.preferences.systemDisabled.contains(command.id) { continue }
+            if command.id == "ejectall", !context.preferences.ejectAllEnabled { continue }
+            if command.category == "music", !context.preferences.musicEnabled { continue }
             let customKeyword = context.preferences.systemKeywords[command.id]
             let commandFields = customKeyword.map { [$0, command.title] } ?? ([command.title] + command.keywords)
             push(scored(
@@ -236,7 +297,49 @@ public enum Search {
                 ))
             }
         }
+        if context.preferences.clipboardEnabled, context.preferences.clipboardClearKeywordEnabled,
+           let cleared = clearKeywordQuery(trimmed, keyword: context.preferences.clipboardClearKeyword) {
+            let title = cleared == nil ? "Clear All Clipboard History" : "Clear Clipboard History (last \(cleared!) minutes)"
+            found.append(make(
+                id: "clipclear:\(cleared.map(String.init) ?? "all")",
+                title: title,
+                subtitle: "Clear Jfred's clipboard history",
+                icon: "symbol:trash",
+                kind: "clipclear",
+                payload: cleared.map(String.init) ?? "all",
+                category: "clipboard",
+                score: 2
+            ))
+        }
         if context.preferences.clipboardEnabled, let clipQuery = argument(of: context.preferences.clipboardViewerKeyword, in: trimmed) ?? argument(of: "clip", in: trimmed) {
+            if context.preferences.clipboardSnippetsAtTop, clipQuery.isEmpty {
+                found.append(make(
+                    id: "snippets:all",
+                    title: "All Snippets",
+                    subtitle: "Browse snippets in the launcher",
+                    icon: "symbol:text.quote",
+                    kind: "snippets",
+                    payload: "",
+                    category: "expansion",
+                    score: 2
+                ))
+            }
+            if context.preferences.clipboardSnippetsWhenSearching {
+                for snippet in context.snippets {
+                    let hay = snippet.name + " " + snippet.keyword + " " + snippet.text
+                    guard clipQuery.isEmpty || fold(hay).contains(fold(clipQuery)) else { continue }
+                    found.append(make(
+                        id: "snippet:\(snippet.id.uuidString):clip",
+                        title: snippet.name,
+                        subtitle: snippet.keyword + "  ·  " + snippet.text.replacingOccurrences(of: "\n", with: " "),
+                        icon: "symbol:text.quote",
+                        kind: "snippet",
+                        payload: snippet.id.uuidString,
+                        category: "expansion",
+                        score: context.preferences.clipboardSnippetsAtTop ? 1.8 : 1.38
+                    ))
+                }
+            }
             let filtered = context.clips.filter { clipQuery.isEmpty || fold($0.text).contains(fold(clipQuery)) }
             for clip in filtered.prefix(8) {
                 let preview = clip.text.replacingOccurrences(of: "\n", with: " ")
@@ -362,7 +465,7 @@ public enum Search {
                 id: "file:\(file.path)",
                 title: file.name,
                 subtitle: file.path,
-                icon: "file:\(file.path)",
+                icon: context.preferences.fileUseTypeIconsForExternal && file.path.hasPrefix("/Volumes/") ? "symbol:doc" : "file:\(file.path)",
                 kind: "file",
                 payload: file.path,
                 category: "navigation",
@@ -516,6 +619,17 @@ public enum Search {
         let keptOthers = Array(others.prefix(room))
         let merged = dedupe(keptOthers + settings, query: query, context: context)
         return Array(merged.prefix(resultLimit))
+    }
+
+    private static func clearKeywordQuery(_ query: String, keyword: String) -> Int?? {
+        let key = keyword.trimmingCharacters(in: .whitespaces)
+        guard !key.isEmpty else { return nil }
+        let folded = fold(query.trimmingCharacters(in: .whitespaces))
+        guard folded == fold(key) || folded.hasPrefix(fold(key) + " ") else { return nil }
+        let rest = query.trimmingCharacters(in: .whitespaces).dropFirst(key.count).trimmingCharacters(in: .whitespaces)
+        if rest.isEmpty { return .some(nil) }
+        if let minutes = Int(rest), minutes == 5 || minutes == 15 { return .some(minutes) }
+        return nil
     }
 
     private static func volumeValue(_ query: String) -> Int? {

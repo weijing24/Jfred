@@ -70,6 +70,34 @@ final class AppModel {
     var apps: [AppRecord] = []
     var links: [LinkRecord] = []
     var contacts: [ContactRecord] = []
+    var musicTrack = ""
+    var musicSearch = ""
+    var musicTracks: [MusicService.Track] = []
+    var musicNowTitle = ""
+    var musicNowArtist = ""
+    var musicNowPlaying = false
+    var musicArtPath: String?
+    var contactsTab = "Contacts"
+    var musicTab = "General"
+    var actionsTab = "General"
+    var showRemoteQR = false
+    var showSnippetExpansionOptions = false
+    var workflowSelection: Int? = nil
+    var workflowDragIndex: Int? = nil
+    private var transientItem: SearchResult?
+    var debuggerVisible = false
+    var debugLines: [String] = []
+    var debugQuery = "test"
+    var debugCursor = 0
+    var debugWorkflowID: UUID?
+    var debugBreakpoints: Set<Int> = []
+    var debugPaused = false
+    var showThemeEditor = false
+    var helpQuery = ""
+    var selectionHotkeyWarning = ""
+    var actionPanelVisible = false
+    var actionIndex = 0
+    var launcherActions: [LauncherAction] = []
     var opItems: [AppRecord] = []
 
     var query = ""
@@ -118,6 +146,8 @@ final class AppModel {
     private var historyCursor: Int?
     private var fromHistory = false
     private var clipChange = 0
+    private var fileBufferLastUsed: Date?
+    private var workflowHotkeyIDs: [UInt32] = []
     private var previousApp: NSRunningApplication?
     private var saveWork: DispatchWorkItem?
     var launcher: LauncherController?
@@ -143,6 +173,7 @@ final class AppModel {
         applyRemote()
         reindex()
         reloadLinks()
+        reloadContacts()
         if preferences.onePasswordEnabled { reloadOnePassword() }
         syncActivationPolicy()
         IndexWatch.shared.start(preferences: preferences) { [weak self] in
@@ -150,11 +181,22 @@ final class AppModel {
         }
         clipChange = NSPasteboard.general.changeCount
         Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.pollClipboard() }
+            Task { @MainActor in
+                self?.pollClipboard()
+                self?.pruneFileBuffer()
+            }
         }
     }
 
     func scheduleSearch() {
+        if let browser = fileBrowserResults(query) {
+            publishResults(browser)
+            return
+        }
+        if transientItem != nil {
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+            transientItem = nil
+        }
         if fromHistory {
             fromHistory = false
         } else {
@@ -205,11 +247,28 @@ final class AppModel {
         }
     }
 
+    private func fileBrowserResults(_ raw: String) -> [SearchResult]? {
+        guard let entries = FileBrowser.entries(for: raw) else { return nil }
+        return entries.map { entry in
+            SearchResult(
+                id: "browse:\(entry.path)",
+                title: entry.name,
+                subtitle: entry.path,
+                icon: entry.isDirectory ? "symbol:folder" : "file:\(entry.path)",
+                kind: entry.isDirectory ? "folder" : "file",
+                payload: entry.path,
+                category: "navigation",
+                score: 2
+            )
+        }
+    }
+
     func toggleLauncher() {
         if launcherVisible { hideLauncher(reactivate: true) } else { showLauncher() }
     }
 
     func showLauncher() {
+        transientItem = nil
         record(category: "hotkeys")
         previousApp = NSWorkspace.shared.frontmostApplication
         if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier { previousApp = nil }
@@ -220,6 +279,7 @@ final class AppModel {
             results = []
         }
         launcherVisible = true
+        actionPanelVisible = false
         focusToken += 1
         SnippetExpander.shared.setSuspended(true)
         if previousApp != nil { sinkPreferencesBehindOtherApps() }
@@ -228,6 +288,7 @@ final class AppModel {
     }
 
     func hideLauncher(reactivate: Bool) {
+        transientItem = nil
         launcherVisible = false
         SnippetExpander.shared.setSuspended(false)
         launcher?.hide()
@@ -279,6 +340,166 @@ final class AppModel {
         run(results[index], forced: "primary")
     }
 
+    func showActions() {
+        guard results.indices.contains(selection) else { return }
+        launcherActions = actions(for: results[selection])
+        if preferences.uaSortByUsage {
+            launcherActions.sort { lhs, rhs in
+                let left = Int(knowledge["ua.\(lhs.kind.rawValue)"] ?? "") ?? 0
+                let right = Int(knowledge["ua.\(rhs.kind.rawValue)"] ?? "") ?? 0
+                return left > right
+            }
+        }
+        guard !launcherActions.isEmpty else { return }
+        actionPanelVisible = true
+        actionIndex = 0
+        launcher?.layout()
+    }
+
+    func closeActions() {
+        guard actionPanelVisible else { return }
+        actionPanelVisible = false
+        actionIndex = 0
+        launcher?.layout()
+    }
+
+    func moveAction(_ delta: Int) {
+        guard actionPanelVisible, !launcherActions.isEmpty else { return }
+        actionIndex = (actionIndex + delta + launcherActions.count) % launcherActions.count
+    }
+
+    func commitAction() {
+        guard actionPanelVisible, launcherActions.indices.contains(actionIndex), results.indices.contains(selection) else { return }
+        let item = results[selection]
+        let action = launcherActions[actionIndex]
+        knowledge["ua.\(action.kind.rawValue)"] = String((Int(knowledge["ua.\(action.kind.rawValue)"] ?? "") ?? 0) + 1)
+        scheduleSave()
+        let value = item.payload.isEmpty ? item.title : item.payload
+        closeActions()
+        switch action.kind {
+        case .open:
+            run(item, forced: "primary")
+        case .reveal:
+            reveal(item)
+            hideLauncher(reactivate: false)
+        case .copyPath:
+            let escaped: String
+            if preferences.fileEscapePathForTerminal {
+                escaped = "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+            } else {
+                escaped = value
+            }
+            writeClipboard(escaped)
+            hideLauncher(reactivate: false)
+        case .copyName:
+            writeClipboard(item.title)
+            hideLauncher(reactivate: false)
+        case .copyValue:
+            writeClipboard(value)
+            hideLauncher(reactivate: false)
+        case .openBrowser:
+            if let url = URL(string: value) { NSWorkspace.shared.open(url) }
+            hideLauncher(reactivate: false)
+        case .quickLook:
+            quickLookSelected()
+        case .largeType:
+            largeTypeSelected()
+        case .pasteClipboard:
+            if let clip = clips.first(where: { $0.id.uuidString == item.payload }) { pasteClipboardItem(clip) }
+        case .pasteValue:
+            pasteToPrevious(value)
+        case .email:
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }), !contact.email.isEmpty {
+                let encoded = contact.email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact.email
+                let target: String
+                switch preferences.contactsEmailMode {
+                case "gmail", "custom":
+                    target = preferences.contactsEmailURL.replacingOccurrences(of: "{query}", with: encoded)
+                default:
+                    target = "mailto:\(encoded)"
+                }
+                if let url = URL(string: target) { NSWorkspace.shared.open(url) }
+            }
+            hideLauncher(reactivate: false)
+        case .call:
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
+                let digits = contact.phone.filter { $0.isNumber || $0 == "+" }
+                if !digits.isEmpty, let url = URL(string: "tel:\(digits)") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            hideLauncher(reactivate: false)
+        case .searchWeb:
+            let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+            if let url = URL(string: "https://www.google.com/search?q=\(encoded)") {
+                NSWorkspace.shared.open(url)
+            }
+            hideLauncher(reactivate: false)
+        case .maps:
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
+                let query = contact.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact.name
+                let template = preferences.contactsMapURL.replacingOccurrences(of: "{query}", with: query)
+                if let url = URL(string: template) { NSWorkspace.shared.open(url) }
+            }
+            hideLauncher(reactivate: false)
+        }
+    }
+
+    private func actions(for item: SearchResult) -> [LauncherAction] {
+        var actions: [LauncherAction] = []
+        switch item.kind {
+        case "app", "file", "place":
+            actions.append(LauncherAction(kind: .open, title: "Open", subtitle: item.title, symbol: "arrow.up.forward.app"))
+            if item.payload.hasPrefix("/") {
+                actions.append(LauncherAction(kind: .reveal, title: "Reveal in Finder", subtitle: item.payload, symbol: "folder"))
+                actions.append(LauncherAction(kind: .copyPath, title: "Copy Path", subtitle: item.payload, symbol: "doc.on.doc"))
+                actions.append(LauncherAction(kind: .quickLook, title: "Quick Look", subtitle: "Preview the selected item", symbol: "eye"))
+            }
+            actions.append(LauncherAction(kind: .copyName, title: "Copy Name", subtitle: item.title, symbol: "textformat"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        case "url":
+            actions.append(LauncherAction(kind: .open, title: "Open URL", subtitle: item.payload, symbol: "safari"))
+            actions.append(LauncherAction(kind: .openBrowser, title: "Open in Default Browser", subtitle: item.payload, symbol: "globe"))
+            actions.append(LauncherAction(kind: .copyValue, title: "Copy URL", subtitle: item.payload, symbol: "doc.on.doc"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        case "contact":
+            actions.append(LauncherAction(kind: .open, title: "Open Contact", subtitle: item.title, symbol: "person.crop.circle"))
+            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
+                if !contact.email.isEmpty {
+                    actions.append(LauncherAction(kind: .email, title: "Email", subtitle: contact.email, symbol: "envelope"))
+                }
+                if !contact.phone.isEmpty {
+                    actions.append(LauncherAction(kind: .call, title: "Call", subtitle: contact.phone, symbol: "phone"))
+                }
+                actions.append(LauncherAction(kind: .maps, title: "Show in Maps", subtitle: contact.name, symbol: "map"))
+            }
+            actions.append(LauncherAction(kind: .copyValue, title: "Copy Email or Phone", subtitle: item.subtitle, symbol: "doc.on.doc"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        case "clipboard":
+            actions.append(LauncherAction(kind: .pasteClipboard, title: "Paste", subtitle: item.title, symbol: "doc.on.clipboard"))
+            actions.append(LauncherAction(kind: .copyName, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        case "text":
+            actions.append(LauncherAction(kind: .copyValue, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+            if let url = URL(string: item.payload), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                actions.append(LauncherAction(kind: .openBrowser, title: "Open as URL", subtitle: item.payload, symbol: "safari"))
+            } else {
+                actions.append(LauncherAction(kind: .searchWeb, title: "Search the Web", subtitle: "Google", symbol: "magnifyingglass"))
+            }
+        default:
+            if item.kind == "calculation" || item.kind == "copy" || item.kind == "snippet" {
+                actions.append(LauncherAction(kind: .pasteValue, title: "Paste", subtitle: item.title, symbol: "doc.on.clipboard"))
+                actions.append(LauncherAction(kind: .copyValue, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
+            } else {
+                actions.append(LauncherAction(kind: .open, title: "Run", subtitle: item.title, symbol: "return"))
+                actions.append(LauncherAction(kind: .copyName, title: "Copy", subtitle: item.title, symbol: "doc.on.doc"))
+            }
+            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
+        }
+        return actions
+    }
+
     func copySelected() {
         guard results.indices.contains(selection) else { return }
         let item = results[selection]
@@ -309,7 +530,18 @@ final class AppModel {
         let item = results[selection]
         guard item.kind == "file" || item.kind == "app" else { return }
         if !fileBuffer.contains(where: { $0.id == item.id }) { fileBuffer.append(item) }
+        fileBufferLastUsed = Date()
         launcher?.layout()
+    }
+
+    func pruneFileBuffer() {
+        guard preferences.fileBufferEnabled, !fileBuffer.isEmpty, let last = fileBufferLastUsed else { return }
+        let timeout = TimeInterval(max(1, preferences.fileBufferTimeoutMinutes) * 60)
+        if Date().timeIntervalSince(last) >= timeout {
+            fileBuffer = []
+            fileBufferLastUsed = nil
+            launcher?.layout()
+        }
     }
 
     func completeSelected() {
@@ -351,14 +583,41 @@ final class AppModel {
         case "app":
             NSWorkspace.shared.open(URL(fileURLWithPath: item.payload))
             hideLauncher(reactivate: false)
+        case "folder":
+            query = item.payload.hasSuffix("/") ? item.payload : item.payload + "/"
+            scheduleSearch()
         case "file":
             let paths = fileBuffer.isEmpty ? [item.payload] : fileBuffer.map(\.payload)
             if preferences.fileOpenWithFinder {
                 NSWorkspace.shared.activateFileViewerSelecting(paths.map { URL(fileURLWithPath: $0) })
             } else {
-                for path in paths { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
+                for path in paths {
+                    var isDirectory: ObjCBool = false
+                    let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+                    if exists, isDirectory.boolValue, preferences.fileOpenFoldersInFinder {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                    } else if exists, !isDirectory.boolValue,
+                              preferences.fileRunAppleScriptsInsteadOfOpening,
+                              (path as NSString).pathExtension.lowercased() == "scpt" {
+                        _ = Shell.run("/usr/bin/osascript", [path], timeout: 30)
+                    } else {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    }
+                    if exists, isDirectory.boolValue, preferences.fileTouchFolders {
+                        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
+                    }
+                    if exists, !isDirectory.boolValue, preferences.fileTouchAliases {
+                        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath()
+                        if resolved.path != path {
+                            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: resolved.path)
+                        }
+                    }
+                }
             }
-            fileBuffer = []
+            if preferences.fileClearBufferAfterAction {
+                fileBuffer = []
+                fileBufferLastUsed = nil
+            }
             hideLauncher(reactivate: false)
         case "url":
             if let url = URL(string: item.payload) {
@@ -376,8 +635,11 @@ final class AppModel {
         case "place":
             openPlace(item.payload)
             hideLauncher(reactivate: false)
+        case "snippets":
+            query = preferences.snippetKeyword.trimmingCharacters(in: .whitespaces) + " "
+            scheduleSearch()
         case "clipclear":
-            clearClipboardHistory()
+            if let minutes = Int(item.payload) { clearClipboardHistory(lastMinutes: minutes) } else { clearClipboardHistory() }
             hideLauncher(reactivate: false)
         case "clipboard":
             if let clip = clips.first(where: { $0.id.uuidString == item.payload }) {
@@ -391,6 +653,34 @@ final class AppModel {
                 text = item.payload.isEmpty ? item.title : item.payload
             }
             pasteToPrevious(text)
+        case "contact":
+            let uid = item.payload
+            let contact = contacts.first { ($0.uid ?? $0.id) == uid }
+            if preferences.contactsOpenInAlfred, let contact {
+                let details = [contact.name, contact.email, contact.phone, contact.jobTitle ?? "", contact.organization ?? ""]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n")
+                hideLauncher(reactivate: false)
+                showLarge(details)
+            } else if preferences.contactsURLHandlerEnabled, !preferences.contactsURLHandler.isEmpty {
+                let encoded = uid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? uid
+                let template = preferences.contactsURLHandler.replacingOccurrences(of: "{uid}", with: encoded)
+                if let url = URL(string: template) { NSWorkspace.shared.open(url) }
+                hideLauncher(reactivate: false)
+            } else {
+                if let url = URL(string: "addressbook://\(uid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? uid)") {
+                    NSWorkspace.shared.open(url)
+                } else if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.AddressBook") {
+                    NSWorkspace.shared.open(app)
+                }
+                hideLauncher(reactivate: false)
+            }
+        case "musicplay":
+            hideLauncher(reactivate: false)
+            Task.detached { _ = MusicService.playSearch(item.payload) }
+        case "musicplayer":
+            hideLauncher(reactivate: false)
+            showMusicPlayer()
         case "dictionary":
             let body = item.subtitle == "Open Dictionary" ? item.title : item.subtitle
             if let url = URL(string: "dict://\(item.payload.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.payload)") {
@@ -484,6 +774,8 @@ final class AppModel {
             IndexWatch.shared.restartFiles(preferences)
         }
         if old.onePasswordEnabled != preferences.onePasswordEnabled && preferences.onePasswordEnabled { reloadOnePassword() }
+        if old.contactsEnabled != preferences.contactsEnabled { reloadContacts() }
+        if !preferences.fileBufferEnabled { fileBuffer = []; fileBufferLastUsed = nil }
         if old.safariBookmarks != preferences.safariBookmarks || old.chromeBookmarks != preferences.chromeBookmarks { reloadLinks() }
     }
 
@@ -722,17 +1014,18 @@ final class AppModel {
         let path = String(parts.first ?? "/")
         let query = parts.count > 1 ? String(parts[1]) : ""
         let params = queryItems(query)
-        guard params["token"] == preferences.remoteToken else {
+        let supplied = params["token"] ?? ""
+        guard secureTokenEquals(supplied, preferences.remoteToken) else {
             return "<p>Token required. Add ?token= from Jfred Preferences → Remote.</p>"
         }
         if path == "/run" {
             let id = params["id"] ?? ""
             performSystem(id)
-            return "<p>Ran \(id). <a href=\"/?token=\(preferences.remoteToken)\">Back</a></p>"
+            return "<p>Ran \(escapeHTML(id)). <a href=\"/?token=\(preferences.remoteToken)\">Back</a></p>"
         }
         if path == "/open" {
             let value = params["path"] ?? ""
-            if value.hasPrefix("http"), let url = URL(string: value) {
+            if let url = URL(string: value), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
                 NSWorkspace.shared.open(url)
             } else if value.hasPrefix("/") {
                 NSWorkspace.shared.open(URL(fileURLWithPath: value))
@@ -741,7 +1034,7 @@ final class AppModel {
         }
         let q = params["q"] ?? ""
         var body = """
-        <!doctype html><meta charset="utf-8"><title>Jfred Remote</title>
+        <!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Jfred Remote</title>
         <style>body{font:15px -apple-system,sans-serif;background:#1b1b1b;color:#f2f2f2;margin:28px}a{color:#d7b4ff;text-decoration:none}input,button{font:inherit;padding:6px 8px}li{margin:6px 0}</style>
         <h1>Jfred Remote</h1>
         <form><input type="hidden" name="token" value="\(preferences.remoteToken)"><input name="q" value="\(escapeHTML(q))" placeholder="Search" autofocus><button>Search</button></form>
@@ -763,11 +1056,11 @@ final class AppModel {
             }
             body += "</ul>"
         } else {
-            body += "<h2>\(remoteCategory.title)</h2><ul>"
+            body += "<h2>\(escapeHTML(remoteCategory.title))</h2><ul>"
             switch remoteCategory {
             case .system:
                 for command in SystemCommand.all {
-                    body += "<li><a href=\"/run?token=\(preferences.remoteToken)&id=\(command.id)\">\(command.title)</a></li>"
+                    body += "<li><a href=\"/run?token=\(preferences.remoteToken)&id=\(escapeHTML(command.id))\">\(escapeHTML(command.title))</a></li>"
                 }
             case .applications:
                 for app in apps.prefix(40) {
@@ -777,7 +1070,7 @@ final class AppModel {
             case .preferences:
                 for setting in SettingsCatalog.all {
                     let value = setting.url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(value)\">\(setting.name)</a></li>"
+                    body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(value)\">\(escapeHTML(setting.name))</a></li>"
                 }
             case .folders:
                 body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(NSHomeDirectory())\">Home</a></li>"
@@ -804,7 +1097,20 @@ final class AppModel {
     }
 
     private func escapeHTML(_ text: String) -> String {
-        text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+        text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
+    }
+
+    private func secureTokenEquals(_ a: String, _ b: String) -> Bool {
+        let x = Array(a.utf8), y = Array(b.utf8)
+        guard x.count == y.count else { return false }
+        var diff: UInt8 = 0
+        for i in x.indices { diff |= x[i] ^ y[i] }
+        return diff == 0
     }
 
     private func modifierAction(_ flags: NSEvent.ModifierFlags) -> String {
@@ -861,6 +1167,131 @@ final class AppModel {
         section = .workflows
         showPreferences()
         importNote = "Imported \(url.lastPathComponent)."
+    }
+
+    func moveWorkflowAction(from source: Int, to target: Int) {
+        guard let id = editingWorkflowID ?? selectedWorkflow,
+              let wf = workflows.firstIndex(where: { $0.id == id }),
+              workflows[wf].actions.indices.contains(source),
+              workflows[wf].actions.indices.contains(target),
+              source != target else { return }
+        let item = workflows[wf].actions.remove(at: source)
+        workflows[wf].actions.insert(item, at: target)
+        workflowSelection = target
+    }
+
+    func runWorkflowDebug(_ id: UUID) {
+        guard let workflow = workflows.first(where: { $0.id == id }) else { return }
+        let resuming = debugPaused && debugWorkflowID == id
+        if !resuming {
+            debuggerVisible = true
+            debugLines = ["Running \(workflow.name) with query ‘\(debugQuery)’"]
+            debugCursor = 0
+            debugWorkflowID = id
+        }
+        debugPaused = false
+        let query = debugQuery
+        let actions = workflow.actions
+        let start = resuming ? debugCursor : 0
+        let resumeFrom = start
+        Task {
+            var index = start
+            while index < actions.count {
+                if self.debugBreakpoints.contains(index) && !(resuming && index == resumeFrom) {
+                    await MainActor.run {
+                        self.debugCursor = index
+                        self.debugPaused = true
+                        self.debugLines.append("Paused at breakpoint before action \(index + 1).")
+                    }
+                    return
+                }
+                await MainActor.run { self.debugCursor = index }
+                await executeDebugAction(actions[index], query: query, index: index)
+                index += 1
+                await MainActor.run { self.debugCursor = index }
+            }
+            await MainActor.run {
+                self.debugCursor = actions.count
+                self.debugPaused = false
+                self.debugLines.append("Finished.")
+            }
+        }
+    }
+
+    func setWorkflowHotkey(_ id: UUID, keyCode: UInt16, modifiers: UInt) {
+        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
+        workflows[index].hotkey = Hotkey(keyCode: keyCode, modifiers: modifiers)
+        workflowsChanged()
+    }
+
+    func clearWorkflowHotkey(_ id: UUID) {
+        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
+        workflows[index].hotkey = nil
+        workflowsChanged()
+    }
+
+    func duplicateWorkflowAction(_ index: Int) {
+        guard let id = editingWorkflowID ?? selectedWorkflow,
+              let wf = workflows.firstIndex(where: { $0.id == id }),
+              workflows[wf].actions.indices.contains(index) else { return }
+        let action = workflows[wf].actions[index]
+        workflows[wf].actions.insert(WorkflowAction(kind: action.kind, value: action.value), at: index + 1)
+        workflowSelection = index + 1
+    }
+
+    func setBreakpoint(_ index: Int, _ enabled: Bool) {
+        if enabled { debugBreakpoints.insert(index) } else { debugBreakpoints.remove(index) }
+    }
+
+    func stepWorkflowDebug(_ id: UUID) {
+        guard let workflow = workflows.first(where: { $0.id == id }) else { return }
+        if debugWorkflowID != id {
+            debugWorkflowID = id
+            debugCursor = 0
+            debugLines = ["Stepping \(workflow.name) with query ‘\(debugQuery)’"]
+        }
+        debuggerVisible = true
+        guard debugCursor < workflow.actions.count else {
+            debugLines.append("Finished.")
+            return
+        }
+        let index = debugCursor
+        let action = workflow.actions[index]
+        let query = debugQuery
+        Task {
+            await executeDebugAction(action, query: query, index: index)
+            await MainActor.run {
+                self.debugCursor = index + 1
+                self.debugPaused = false
+                if self.debugCursor >= workflow.actions.count { self.debugLines.append("Finished.") }
+            }
+        }
+    }
+
+    private func executeDebugAction(_ action: WorkflowAction, query: String, index: Int) async {
+        let value = action.value.replacingOccurrences(of: "{query}", with: query)
+        await MainActor.run { self.debugLines.append("\(index + 1). \(action.kind.rawValue): \(value)") }
+        switch action.kind {
+        case .openURL:
+            if let url = URL(string: value) { await MainActor.run { NSWorkspace.shared.open(url) } }
+        case .openApp:
+            await MainActor.run {
+                let url = value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(fileURLWithPath: "/Applications/\(value).app")
+                NSWorkspace.shared.open(url)
+            }
+        case .copy:
+            await MainActor.run { self.writeClipboard(value) }
+        case .largeType:
+            await MainActor.run { self.showLarge(value) }
+        case .terminal:
+            await MainActor.run { self.runInTerminal(value) }
+        case .shell:
+            let output = await Task.detached { Shell.run("/bin/zsh", ["-lc", value], timeout: 12) }.value
+            await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
+        case .appleScript:
+            let output = await Task.detached { Shell.osascript(value, timeout: 12) }.value
+            await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
+        }
     }
 
     func reloadWorkflowsFromAlfred() {
@@ -986,6 +1417,11 @@ final class AppModel {
     }
 
     private func pasteClipboardItem(_ clip: ClipItem) {
+        if preferences.clipboardMoveToTopOnUse, let index = clips.firstIndex(where: { $0.id == clip.id }), index > 0 {
+            let item = clips.remove(at: index)
+            clips.insert(item, at: 0)
+            scheduleSave()
+        }
         let board = NSPasteboard.general
         board.clearContents()
         switch clip.kind {
@@ -1001,6 +1437,7 @@ final class AppModel {
             board.setString(clip.text, forType: .string)
         }
         hideLauncher(reactivate: true)
+        guard preferences.clipboardAutoPaste else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
             postKey(9, flags: .maskCommand)
         }
@@ -1035,8 +1472,9 @@ final class AppModel {
     }
 
     private func performSystem(_ id: String) {
+        if preferences.systemDisabled.contains(id) { return }
         if id.hasPrefix("volume:") {
-            let value = id.dropFirst("volume:".count)
+            guard let value = Int(id.dropFirst("volume:".count)), (0...100).contains(value) else { return }
             _ = Shell.osascript("set volume output volume \(value)")
             return
         }
@@ -1056,7 +1494,9 @@ final class AppModel {
         case "lock": _ = Shell.osascript("tell application \"System Events\" to keystroke \"q\" using {command down, control down}")
         case "screensaver": _ = Shell.run("/usr/bin/open", ["-a", "ScreenSaverEngine"])
         case "emptetrash": _ = Shell.osascript("tell application \"Finder\" to empty trash")
-        case "eject": _ = Shell.osascript("tell application \"Finder\" to eject (every disk whose ejectable is true)")
+        case "trash": _ = Shell.run("/usr/bin/open", [NSHomeDirectory() + "/.Trash"])
+        case "eject", "ejectall":
+            ejectDisks(all: id == "ejectall" || preferences.ejectScope == "all")
         case "quitall":
             for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
                 app.terminate()
@@ -1079,8 +1519,27 @@ final class AppModel {
         case "mute": _ = Shell.osascript("set volume with output muted")
         case "volumeup": changeVolume(10)
         case "volumedown": changeVolume(-10)
+        case "musicplaypause": _ = MusicService.playPause()
+        case "musicnext": _ = MusicService.next()
+        case "musicprevious": _ = MusicService.previous()
+        case "musiccurrent":
+            let track = MusicService.currentTrack()
+            debugLine = track.isEmpty ? "Music is not playing" : track
         default:
             debugLine = "Unknown command \(id)"
+        }
+    }
+
+    private func ejectDisks(all: Bool) {
+        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsEjectableKey, .volumeIsLocalKey]
+        let urls = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
+        for url in urls {
+            guard let values = try? url.resourceValues(forKeys: Set(keys)),
+                  values.volumeIsEjectable == true else { continue }
+            if !all, values.volumeIsLocal == false { continue }
+            let name = values.volumeName ?? url.lastPathComponent
+            if preferences.ejectExclusions.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { continue }
+            try? NSWorkspace.shared.unmountAndEjectDevice(at: url)
         }
     }
 
@@ -1100,7 +1559,10 @@ final class AppModel {
     }
 
     private func runInTerminal(_ command: String) {
-        let escaped = command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let escaped = command
+            .replacingOccurrences(of: "\0", with: "")
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
         switch preferences.terminalApp {
         case "iTerm":
             _ = Shell.osascript("""
@@ -1128,6 +1590,12 @@ final class AppModel {
         let ok = HotkeyCenter.shared.register(id: 1, keyCode: UInt32(preferences.hotkey.keyCode), modifiers: preferences.hotkey.carbonModifiers) { [weak self] in
             Task { @MainActor in self?.toggleLauncher() }
         }
+        let selectionHotkeyOK = HotkeyCenter.shared.register(id: 2, keyCode: 42, modifiers: Hotkey(keyCode: 42, modifiers: Hotkey.option | Hotkey.command).carbonModifiers) { [weak self] in
+            Task { @MainActor in self?.showSelectionActions() }
+        }
+        selectionHotkeyWarning = selectionHotkeyOK ? "" : "⌥⌘\\ is already used by another app. Pick a different Universal Actions shortcut or free it up."
+        for id in workflowHotkeyIDs { HotkeyCenter.shared.unregister(id: id) }
+        workflowHotkeyIDs.removeAll()
         if ok {
             hotkeyWarning = ""
         } else {
@@ -1144,11 +1612,13 @@ final class AppModel {
                 continue
             }
             let keyword = workflow.keyword
-            _ = HotkeyCenter.shared.register(id: id, keyCode: UInt32(hotkey.keyCode), modifiers: hotkey.carbonModifiers) { [weak self] in
+            if HotkeyCenter.shared.register(id: id, keyCode: UInt32(hotkey.keyCode), modifiers: hotkey.carbonModifiers) { [weak self] in
                 Task { @MainActor in
                     self?.query = keyword + " "
                     self?.showLauncher()
                 }
+            } {
+                workflowHotkeyIDs.append(id)
             }
         }
     }
@@ -1166,10 +1636,140 @@ final class AppModel {
     }
 
     func applyExpander() {
-        SnippetExpander.shared.update(enabled: preferences.snippetsEnabled, snippets: snippets, wordBased: preferences.snippetWordBased)
+        SnippetExpander.shared.update(
+            enabled: preferences.snippetsEnabled,
+            snippets: snippets,
+            wordBased: preferences.snippetWordBased,
+            playSound: preferences.snippetExpandPlaySound,
+            restoreClipboard: preferences.snippetExpandRestoreClipboard
+        )
+    }
+
+    func refreshMusicTrack() {
+        Task.detached {
+            let track = MusicService.currentTrack()
+            await MainActor.run { self.musicTrack = track }
+        }
+    }
+
+    func refreshMusicPanel() {
+        Task.detached {
+            let info = MusicService.info()
+            await MainActor.run {
+                self.musicNowTitle = info.title
+                self.musicNowArtist = info.artist
+                self.musicNowPlaying = info.playing
+                self.musicArtPath = MusicService.artworkURL()
+                self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
+            }
+        }
+    }
+
+    func searchMusic() {
+        let query = musicSearch
+        let includePlaylists = preferences.musicIncludePlaylists
+        Task.detached {
+            let tracks = MusicService.searchTracks(query, includePlaylists: includePlaylists)
+            await MainActor.run { self.musicTracks = tracks }
+        }
+    }
+
+    func playMusic(_ track: MusicService.Track) {
+        Task.detached {
+            if track.isPlaylist {
+                _ = MusicService.playPlaylist(track.title)
+            } else {
+                _ = MusicService.playSearch(track.title)
+            }
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            let info = MusicService.info()
+            await MainActor.run {
+                self.musicNowTitle = info.title
+                self.musicNowArtist = info.artist
+                self.musicNowPlaying = info.playing
+                self.musicArtPath = MusicService.artworkURL()
+                self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
+                if self.preferences.musicHideMiniPlayerAfterSong { self.launcher?.hideMusicPlayer() }
+            }
+        }
+    }
+
+    func showMusicPlayer() {
+        refreshMusicPanel()
+        launcher?.showMusicPlayer()
+    }
+
+    func showSelectionActions() {
+        if let text = Accessibility.selectedText() {
+            let title = String(text.split(separator: "\n").first ?? Substring(text)).trimmingCharacters(in: .whitespaces)
+            presentTransient(SearchResult(
+                id: "selection:text", title: title.isEmpty ? "Selected Text" : String(title.prefix(120)),
+                subtitle: "Universal Action", icon: "symbol:text.cursor", kind: "text",
+                payload: text, category: "action", score: 2
+            ))
+            return
+        }
+        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.finder" else { return }
+        let files = Accessibility.finderSelection()
+        guard let first = files.first else { return }
+        let title = (first as NSString).lastPathComponent
+        presentTransient(SearchResult(
+            id: "selection:file:\(first)", title: title, subtitle: files.count > 1 ? "\(files.count) selected files" : first,
+            icon: "file:\(first)", kind: "file", payload: first, category: "action", score: 2
+        ))
+    }
+
+    private func presentTransient(_ item: SearchResult) {
+        previousApp = NSWorkspace.shared.frontmostApplication
+        if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier { previousApp = nil }
+        transientItem = item
+        query = ""
+        results = [item]
+        selection = 0
+        launcherVisible = true
+        focusToken += 1
+        SnippetExpander.shared.setSuspended(true)
+        launcher?.show()
+        launcher?.layout()
+        showActions()
+    }
+
+    func reloadContacts() {
+        guard preferences.contactsEnabled else {
+            if !contacts.isEmpty { contacts = [] }
+            return
+        }
+        Task.detached {
+            let list = await ContactsIndex.load()
+            await MainActor.run {
+                guard self.preferences.contactsEnabled else { return }
+                self.contacts = list
+                self.scheduleSave()
+            }
+        }
+    }
+
+    func requestContactsAccess() {
+        Task.detached {
+            let list = await ContactsIndex.load(requestAccess: true)
+            await MainActor.run {
+                self.contacts = list
+                self.scheduleSave()
+            }
+        }
+    }
+
+    func regenerateRemoteToken() {
+        preferences.remoteToken = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        scheduleSave()
+        applyRemote()
     }
 
     func applyRemote() {
+        if preferences.remoteToken.count < 24 {
+            preferences.remoteToken = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+            scheduleSave()
+        }
         remote.handle = { [weak self] target in
             self?.handleRemote(target) ?? "Unavailable"
         }
@@ -1183,6 +1783,14 @@ final class AppModel {
 
     private var clipboardStableChange = -1
 
+    /// Password managers and system credential UIs intentionally copy secrets;
+    /// never add those to the history even when an app forgets to mark the
+    /// pasteboard as concealed.
+    private let privateClipboardApps: Set<String> = [
+        "1Password", "1Password 7", "Keychain Access", "Passwords", "Wallet",
+        "SecurityAgent", "System Settings", "System Preferences",
+    ]
+
     private func pollClipboard() {
         let board = NSPasteboard.general
         guard preferences.clipboardEnabled, board.changeCount != clipChange else { return }
@@ -1194,12 +1802,15 @@ final class AppModel {
         }
         clipChange = board.changeCount
         pruneClipboard()
+        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+        if privateClipboardApps.contains(sourceApp) { return }
+        if preferences.clipboardIgnoreApps.contains(where: { $0.caseInsensitiveCompare(sourceApp) == .orderedSame }) { return }
         let types = Set(board.types ?? [])
-        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
-            || types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
-            || types.contains(NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")) {
-            return
-        }
+        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType")) { return }
+        if preferences.clipboardIgnoreConcealed,
+           types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) { return }
+        if preferences.clipboardIgnoreAutoGenerated,
+           types.contains(NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")) { return }
         let remote = types.contains(NSPasteboard.PasteboardType("com.apple.is-remote-clipboard"))
         if preferences.clipboardKeepFiles,
            !(remote && preferences.clipboardIgnoreUniversalFiles),
@@ -1223,8 +1834,9 @@ final class AppModel {
         guard preferences.clipboardKeepText,
               !(remote && preferences.clipboardIgnoreUniversalText) else { return }
         guard let text = board.string(forType: .string), !text.isEmpty else { return }
+        guard text.count <= max(4_096, preferences.clipboardMaxSize) else { return }
         if clips.first?.text == text { return }
-        clips.insert(ClipItem(text: String(text.prefix(20_000)), date: Date()), at: 0)
+        clips.insert(ClipItem(text: text, date: Date()), at: 0)
         if clips.count > preferences.clipboardLimit { clips = Array(clips.prefix(preferences.clipboardLimit)) }
         scheduleSave()
     }
@@ -1237,7 +1849,7 @@ final class AppModel {
     private func saveClipboardImage(_ board: NSPasteboard) -> String? {
         guard let data = board.data(forType: .png) ?? board.data(forType: .tiff) else { return nil }
         let dir = supportDirectory().appendingPathComponent("ClipImages", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let url = dir.appendingPathComponent("\(UUID().uuidString).png")
         if let rep = NSBitmapImageRep(data: data), let png = rep.representation(using: .png, properties: [:]) {
             try? png.write(to: url)
@@ -1246,6 +1858,7 @@ final class AppModel {
         } else {
             return nil
         }
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         return url.path
     }
 
@@ -1271,13 +1884,26 @@ final class AppModel {
         scheduleSave()
     }
 
+    func clearUsageData() {
+        usage = []
+        scheduleSave()
+    }
+
+    func clearClipboardHistory(lastMinutes minutes: Int) {
+        let cutoff = Date().addingTimeInterval(-TimeInterval(minutes * 60))
+        clips.removeAll { $0.date >= cutoff }
+        scheduleSave()
+    }
+
     private func supportDirectory() -> URL {
         let url = SupportPaths.directory(syncFolder: preferences.syncFolder)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
         return url
     }
 
     private func load() {
+        hardenSupportFolder()
         let url = supportDirectory().appendingPathComponent("state.json")
         guard let data = try? Data(contentsOf: url), let state = try? JSONDecoder().decode(DiskState.self, from: data) else {
             preferences = Preferences()
@@ -1328,6 +1954,26 @@ final class AppModel {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
+    private func hardenSupportFolder() {
+        let dir = supportDirectory()
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        let state = dir.appendingPathComponent("state.json")
+        if FileManager.default.fileExists(atPath: state.path) {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: state.path)
+        }
+        let images = dir.appendingPathComponent("ClipImages", isDirectory: true)
+        if let files = try? FileManager.default.contentsOfDirectory(at: images, includingPropertiesForKeys: nil) {
+            for file in files {
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            }
+        }
+    }
+
+    func saveNewsletterEmail() {
+        preferences.newsletterEmail = preferences.newsletterEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        scheduleSave()
+    }
+
     private func save() {
         let state = DiskState(preferences: preferences, workflows: workflows, snippets: snippets, clips: clips, usage: usage, knowledge: knowledge, selections: selections)
         let encoder = JSONEncoder()
@@ -1368,7 +2014,7 @@ final class AppModel {
 }
 
 enum PrefSection: String, CaseIterable, Identifiable {
-    case general, features, workflows, appearance, remote, advanced, usage, update
+    case general, features, workflows, appearance, remote, advanced, powerpack, usage, help, update
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -1378,7 +2024,9 @@ enum PrefSection: String, CaseIterable, Identifiable {
         case .appearance: "Appearance"
         case .remote: "Remote"
         case .advanced: "Advanced"
+        case .powerpack: "Powerpack"
         case .usage: "Usage"
+        case .help: "Help"
         case .update: "Update"
         }
     }
@@ -1390,7 +2038,9 @@ enum PrefSection: String, CaseIterable, Identifiable {
         case .appearance: "paintbrush.fill"
         case .remote: "antenna.radiowaves.left.and.right"
         case .advanced: "slider.horizontal.3"
+        case .powerpack: "bolt.fill"
         case .usage: "chart.xyaxis.line"
+        case .help: "lifepreserver"
         case .update: "square.and.arrow.down"
         }
     }
@@ -1405,7 +2055,7 @@ enum AppRelease {
 }
 
 enum FeatureID: String, CaseIterable, Identifiable {
-    case defaultResults, fileSearch, universalActions, webSearch, bookmarks, clipboard, snippets, calculator, dictionary, onePassword, system, terminal, largeType, previews
+    case defaultResults, fileSearch, universalActions, webSearch, bookmarks, clipboard, snippets, calculator, dictionary, contacts, music, onePassword, system, terminal, largeType, previews
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -1418,6 +2068,8 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "Snippets"
         case .calculator: "Calculator"
         case .dictionary: "Dictionary"
+        case .contacts: "Contacts"
+        case .music: "Music"
         case .onePassword: "1Password"
         case .system: "System"
         case .terminal: "Terminal"
@@ -1436,6 +2088,8 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "Snippets, Clippings"
         case .calculator: "Standard, Advanced"
         case .dictionary: "Spelling, Definitions"
+        case .contacts: "Viewer, Emailing"
+        case .music: "Mini Player"
         case .onePassword: "1Click Bookmarks"
         case .system: "Commands, Quitting, Ejecting"
         case .terminal: "Prefix, Custom Integration"
@@ -1454,6 +2108,8 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "note.text"
         case .calculator: "plus.slash.minus"
         case .dictionary: "character.book.closed.fill"
+        case .contacts: "person.crop.circle"
+        case .music: "music.note"
         case .onePassword: "key.fill"
         case .system: "power"
         case .terminal: "terminal.fill"
@@ -1516,8 +2172,15 @@ enum PreferenceIndex {
             PreferenceHit(id: "learning", title: "Top Result Keyword Latching", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "sync", title: "Syncing folder", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "usage", title: "Usage", detail: "Stats", section: .usage, feature: nil),
-            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Jfred Modern and others", section: .appearance, feature: nil),
-            PreferenceHit(id: "remote", title: "Remote server", detail: "Local command page", section: .remote, feature: nil),
+            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Alfred themes, custom themes and live preview", section: .appearance, feature: nil),
+            PreferenceHit(id: "remote", title: "Remote server", detail: "Local command page, QR pairing and token rotation", section: .remote, feature: nil),
+            PreferenceHit(id: "theme-files", title: "Import or export themes", detail: "Appearance .alfredappearance files", section: .appearance, feature: nil),
+            PreferenceHit(id: "clipboard-ignore", title: "Clipboard Ignore Apps", detail: "Privacy and excluded applications", section: .features, feature: .clipboard),
+            PreferenceHit(id: "snippet-expansion", title: "Auto Expansion Options", detail: "Snippets, sound and clipboard restore", section: .features, feature: .snippets),
+            PreferenceHit(id: "workflow-debugger", title: "Workflow Debugger", detail: "Test query, Run, Step and breakpoints", section: .workflows, feature: nil),
+            PreferenceHit(id: "universal-actions", title: "Universal Actions", detail: "Selection hotkey and action ordering", section: .features, feature: .universalActions),
+            PreferenceHit(id: "help", title: "Help and diagnostics", detail: "Troubleshooting, permissions, Copy Diagnostics", section: .help, feature: nil),
+            PreferenceHit(id: "powerpack", title: "Powerpack features", detail: "Locally included feature set", section: .powerpack, feature: nil),
         ]
         for feature in FeatureID.allCases {
             rows.append(PreferenceHit(id: feature.id, title: feature.title, detail: feature.subtitle, section: .features, feature: feature))
