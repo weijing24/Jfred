@@ -102,9 +102,17 @@ struct IconRail: View {
                 if section == .general {
                     HoodMark().frame(width: 30, height: 28)
                 } else {
-                    Image(systemName: section.symbol)
-                        .font(.system(size: 22, weight: .regular))
-                        .frame(height: 28)
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: section.symbol)
+                            .font(.system(size: 22, weight: .regular))
+                            .frame(height: 28)
+                        if section == .update, model.updateReady {
+                            Circle()
+                                .fill(Color(hex: 0xFF5A5A))
+                                .frame(width: 7, height: 7)
+                                .offset(x: 3, y: 0)
+                        }
+                    }
                 }
                 Text(section.title)
                     .font(.system(size: 11))

@@ -621,27 +621,31 @@ func usageColor(_ category: String) -> Color {
 
 struct UpdatePane: View {
     var model: AppModel
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("You are using Jfred \(AppRelease.version)")
+                Text(headerText)
                 Spacer()
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
-            .background(Color(white: 0.94))
+            .background(model.updateReady ? Color(hex: 0xF4E8C8) : Color(white: 0.94))
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Change Log").font(.system(size: 28, weight: .bold))
-                    Text("This is a local build matching the Jfred preferences layout. It does not download updates from jfredapp.com.")
+                    Text("Checks public GitHub releases for weijing24/Jfred and can replace this copy in place. The request includes only the app version.")
                         .foregroundStyle(.secondary)
+                    if case .failed(let message) = model.updatePhase {
+                        Text(message)
+                            .foregroundStyle(Color(hex: 0xB42318))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Divider()
-                    Text("Jfred \(AppRelease.version)").font(.system(size: 22, weight: .bold))
-                    Text("Local build")
-                    bullet("Hotkey launcher with themes, file search, applications, and system settings")
-                    bullet("Keywords for workflows, web search, clipboard, snippets, calculator, and dictionary")
-                    bullet("Built-in actions for windows, processes, Chrome profiles, browser tabs, and system commands")
-                    bullet("Preferences for scope, fallbacks, snippets, usage, and a token-gated remote page")
+                    Text(changelog)
+                        .font(.system(size: 13))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -655,21 +659,75 @@ struct UpdatePane: View {
                     }
                     .labelsHidden()
                     .frame(width: 140)
+                    .disabled(model.updatePhase == .downloading || model.updatePhase == .installing)
                 }
                 Spacer()
-                Button("Up to date") {}
-                    .disabled(true)
+                Button(buttonTitle) { buttonTapped() }
+                    .disabled(buttonDisabled)
             }
             .padding(12)
             .background(Color(white: 0.95))
         }
         .background(Color.white)
+        .onAppear { model.checkForUpdates(userInitiated: false) }
     }
 
-    private func bullet(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("•")
-            Text(text)
+    private var headerText: String {
+        switch model.updatePhase {
+        case .checking:
+            return "Checking for updates…"
+        case .available, .downloading, .installing, .failed:
+            if let version = model.pendingUpdate?.version {
+                return "Jfred \(version) is available — you have \(AppRelease.version)"
+            }
+            return "You are using Jfred \(AppRelease.version)"
+        case .idle, .current:
+            return "You are using Jfred \(AppRelease.version)"
+        }
+    }
+
+    private var changelog: String {
+        switch model.updatePhase {
+        case .idle, .checking:
+            return "Checking GitHub releases…"
+        case .available, .downloading, .installing:
+            let version = model.pendingUpdate?.version ?? ""
+            if model.updateNotes.isEmpty { return "Jfred \(version) is ready to install." }
+            return "Jfred \(version)\n\n\(model.updateNotes)"
+        case .current:
+            return model.updateNotes.isEmpty ? "You're on the latest release." : model.updateNotes
+        case .failed:
+            return model.updateNotes
+        }
+    }
+
+    private var buttonTitle: String {
+        switch model.updatePhase {
+        case .checking: "Checking…"
+        case .downloading: "Downloading…"
+        case .installing: "Installing…"
+        case .available: "Install and Relaunch"
+        case .failed where model.pendingUpdate != nil: "Install and Relaunch"
+        case .failed: "Check Again"
+        case .idle, .current: "Check Now"
+        }
+    }
+
+    private var buttonDisabled: Bool {
+        switch model.updatePhase {
+        case .checking, .downloading, .installing: true
+        default: false
+        }
+    }
+
+    private func buttonTapped() {
+        switch model.updatePhase {
+        case .available:
+            model.installAvailableUpdate()
+        case .failed where model.pendingUpdate != nil:
+            model.installAvailableUpdate()
+        default:
+            model.checkForUpdates(userInitiated: true)
         }
     }
 }
@@ -743,6 +801,7 @@ struct HelpPane: View {
     }
 
     private let topics: [Topic] = [
+        Topic(title: "Updating Jfred", detail: "The Update page checks public GitHub releases and replaces this Jfred.app in place, then relaunches. Move the app to the Applications folder first. Pre-releases are included only when Automatically check for pre-releases is selected. The check does not send usage data."),
         Topic(title: "Permissions", detail: "Accessibility is needed for snippets, window commands and global hotkeys. Automation is needed for Finder, Terminal, browsers and Music. Contacts is only requested when you press Grant Access. Full Disk Access improves file search completeness."),
         Topic(title: "Hotkey does not open the launcher", detail: "Another app may already own the shortcut. Open General, click the hotkey field and press a different combination. Jfred keeps running as a menu bar accessory even when the settings window closes."),
         Topic(title: "Clipboard history is empty", detail: "Check that Clipboard History is enabled, that the source app is not in Ignore Apps, and that the item was not marked Concealed or Auto Generated. Password managers are deliberately excluded."),
@@ -817,6 +876,7 @@ struct HelpPane: View {
     private func copyDiagnostics() {
         let lines = [
             "Jfred \(AppRelease.version)",
+            "Update: \(model.updateStatusLine)",
             "Support folder: \(SupportPaths.directory(syncFolder: model.preferences.syncFolder).path)",
             "Contacts: \(model.contacts.count)",
             "Workflows: \(model.workflows.count)",

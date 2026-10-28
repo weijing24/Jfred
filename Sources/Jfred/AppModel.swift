@@ -99,6 +99,32 @@ final class AppModel {
     var actionIndex = 0
     var launcherActions: [LauncherAction] = []
     var opItems: [AppRecord] = []
+    private(set) var updatePhase: UpdatePhase = .idle
+    private(set) var pendingUpdate: UpdateRelease?
+    private(set) var updateNotes = ""
+    private var updateCatalog = UpdateCatalog(releases: [], publishedCount: 0)
+    private var updateCatalogReady = false
+    private var updateGeneration = 0
+
+    var updateReady: Bool {
+        switch updatePhase {
+        case .available, .downloading, .installing: return true
+        case .failed: return pendingUpdate != nil
+        default: return false
+        }
+    }
+
+    var updateStatusLine: String {
+        switch updatePhase {
+        case .idle: "not checked"
+        case .checking: "checking"
+        case .current: "up to date"
+        case .available: "available \(pendingUpdate?.version ?? "")"
+        case .downloading: "downloading"
+        case .installing: "installing"
+        case .failed(let message): "failed: \(message)"
+        }
+    }
 
     var query = ""
     var results: [SearchResult] = []
@@ -184,6 +210,12 @@ final class AppModel {
             Task { @MainActor in
                 self?.pollClipboard()
                 self?.pruneFileBuffer()
+            }
+        }
+        if !suppressPrompts {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                self?.checkForUpdates(userInitiated: false)
             }
         }
     }
@@ -777,6 +809,9 @@ final class AppModel {
         if old.contactsEnabled != preferences.contactsEnabled { reloadContacts() }
         if !preferences.fileBufferEnabled { fileBuffer = []; fileBufferLastUsed = nil }
         if old.safariBookmarks != preferences.safariBookmarks || old.chromeBookmarks != preferences.chromeBookmarks { reloadLinks() }
+        if old.autoUpdateCheck != preferences.autoUpdateCheck {
+            retargetUpdateChannel()
+        }
     }
 
     func workflowsChanged() {
@@ -1006,6 +1041,119 @@ final class AppModel {
         }
         AppRuntime.explicitQuit = true
         NSApp.terminate(nil)
+    }
+
+    func checkForUpdates(userInitiated: Bool) {
+        if updatePhase == .downloading || updatePhase == .installing { return }
+        if !userInitiated, updatePhase != .idle { return }
+        updateGeneration += 1
+        let generation = updateGeneration
+        setUpdatePhase(.checking)
+        Task { @MainActor in
+            await self.runUpdateCheck(generation: generation)
+        }
+    }
+
+    func installAvailableUpdate() {
+        guard let release = pendingUpdate else { return }
+        switch updatePhase {
+        case .available, .failed:
+            break
+        default:
+            return
+        }
+        setUpdatePhase(.downloading)
+        Task { @MainActor in
+            await self.runInstall(release)
+        }
+    }
+
+    private func runUpdateCheck(generation: Int) async {
+        do {
+            let data = try await AppUpdater.fetchReleaseFeed(version: AppRelease.version)
+            let catalog = try AppUpdateFeed.parse(data, architecture: AppUpdateFeed.currentArchitecture)
+            guard generation == updateGeneration else { return }
+            updateCatalog = catalog
+            updateCatalogReady = true
+            apply(AppUpdateFeed.offer(
+                in: catalog,
+                channel: UpdateChannel(preference: preferences.autoUpdateCheck),
+                current: AppRelease.version
+            ))
+        } catch {
+            guard generation == updateGeneration else { return }
+            UpdateLog.append("check failed")
+            let message = error is UpdateFeedError
+                ? "The update feed was not valid."
+                : "Couldn't check for updates. Check the network and try again."
+            setUpdatePhase(.failed(message))
+        }
+    }
+
+    private func runInstall(_ release: UpdateRelease) async {
+        UpdateLog.append("install \(release.version)")
+        do {
+            let dmg = try await AppUpdater.download(
+                release.asset,
+                version: release.version,
+                architecture: AppUpdateFeed.currentArchitecture
+            )
+            do {
+                guard updatePhase == .downloading else {
+                    try? FileManager.default.removeItem(at: dmg.deletingLastPathComponent())
+                    return
+                }
+                setUpdatePhase(.installing)
+                let bundle = try UpdateInstaller.runningBundle()
+                try await Task.detached {
+                    try UpdateInstaller.apply(dmg: dmg, release: release, bundle: bundle)
+                }.value
+                quit()
+            } catch {
+                try? FileManager.default.removeItem(at: dmg.deletingLastPathComponent())
+                throw error
+            }
+        } catch {
+            UpdateLog.append("install failed")
+            setUpdatePhase(.failed(UpdateInstallError.text(error)))
+        }
+    }
+
+    private func retargetUpdateChannel() {
+        guard updateCatalogReady else { return }
+        switch updatePhase {
+        case .downloading, .installing, .checking:
+            return
+        default:
+            break
+        }
+        apply(AppUpdateFeed.offer(
+            in: updateCatalog,
+            channel: UpdateChannel(preference: preferences.autoUpdateCheck),
+            current: AppRelease.version
+        ))
+    }
+
+    private func apply(_ offer: UpdateOffer) {
+        switch offer {
+        case .upToDate(_, let notes):
+            pendingUpdate = nil
+            updateNotes = notes
+            setUpdatePhase(.current)
+        case .available(let release):
+            pendingUpdate = release
+            updateNotes = release.notes
+            setUpdatePhase(.available)
+        case .unavailable(let message):
+            pendingUpdate = nil
+            updateNotes = message
+            setUpdatePhase(.current)
+        }
+    }
+
+    private func setUpdatePhase(_ phase: UpdatePhase) {
+        updatePhase = phase
+        rebuildStatusMenu()
     }
 
     func handleRemote(_ target: String) -> String {
@@ -1996,20 +2144,33 @@ final class AppModel {
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = menuHatImage()
+        statusItem = item
+        rebuildStatusMenu()
+    }
+
+    private func rebuildStatusMenu() {
+        guard let statusItem else { return }
         let menu = NSMenu()
         menu.addItem(withTitle: "Show Jfred", action: #selector(statusShow), keyEquivalent: "")
         menu.addItem(withTitle: "Preferences", action: #selector(statusPrefs), keyEquivalent: ",")
+        if let version = pendingUpdate?.version {
+            menu.addItem(.separator())
+            menu.addItem(withTitle: "Update to \(version)…", action: #selector(statusUpdate), keyEquivalent: "")
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Jfred", action: #selector(statusQuit), keyEquivalent: "q")
         for entry in menu.items { entry.target = self }
-        item.menu = menu
-        statusItem = item
+        statusItem.menu = menu
     }
 
     private var statusItem: NSStatusItem?
 
     @objc private func statusShow() { showLauncher() }
     @objc private func statusPrefs() { showPreferences() }
+    @objc private func statusUpdate() {
+        section = .update
+        showPreferences()
+    }
     @objc private func statusQuit() { quit() }
 }
 
@@ -2181,6 +2342,7 @@ enum PreferenceIndex {
             PreferenceHit(id: "universal-actions", title: "Universal Actions", detail: "Selection hotkey and action ordering", section: .features, feature: .universalActions),
             PreferenceHit(id: "help", title: "Help and diagnostics", detail: "Troubleshooting, permissions, Copy Diagnostics", section: .help, feature: nil),
             PreferenceHit(id: "powerpack", title: "Powerpack features", detail: "Locally included feature set", section: .powerpack, feature: nil),
+            PreferenceHit(id: "update", title: "Check for Updates", detail: "Download a GitHub release and relaunch in place", section: .update, feature: nil),
         ]
         for feature in FeatureID.allCases {
             rows.append(PreferenceHit(id: feature.id, title: feature.title, detail: feature.subtitle, section: .features, feature: feature))

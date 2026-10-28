@@ -304,3 +304,122 @@ struct CoreTests {
         #expect(decoded.customThemes.first?.name == "Test Theme")
         #expect(decoded.customThemes.first?.width == 600)
     }
+
+@Test func updateVersionsAndOfficialURLs() {
+    #expect(AppVersion.compare("0.9.0", "0.10.0") == .orderedAscending)
+    #expect(AppVersion.compare("v0.14.0", "0.14.0") == .orderedSame)
+    #expect(AppVersion.compare("0.14.0", "0.14.0-beta") == .orderedDescending)
+    #expect(AppVersion.compare("nope", "1.0.0") == nil)
+    #expect(AppUpdateFeed.version(fromTag: "v0.14.0") == "0.14.0")
+    #expect(AppUpdateFeed.version(fromTag: "0.14.0-beta") == nil)
+    let url = URL(string: "https://github.com/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!
+    #expect(AppUpdateFeed.isOfficialAssetURL(url, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(url, version: "0.14.0", architecture: "x86_64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "http://github.com/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://github.com.evil/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://evilgithub.com/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://github.com/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg.evil")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://github.com/other/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isAllowedAssetHost("release-assets.githubusercontent.com.evil"))
+    #expect(AppUpdateFeed.isAllowedAssetHost("release-assets.githubusercontent.com"))
+    #expect(!AppUpdateFeed.isAllowedAPIHost("github.com"))
+    #expect(UpdatePaths.isInstallableBundlePath("/Applications/Jfred.app"))
+    #expect(!UpdatePaths.isInstallableBundlePath("/Volumes/Jfred/Jfred.app"))
+    #expect(!UpdatePaths.isInstallableBundlePath("/private/var/folders/xx/AppTranslocation/ABC/d/Jfred.app"))
+    #expect(!UpdatePaths.isInstallableBundlePath("/Applications/Other.app"))
+    #expect(!UpdatePaths.isInstallableBundlePath("/tmp/Jfred.app\n/Applications/Jfred.app"))
+}
+
+@Test func updateFeedSelectsTheMatchingRelease() throws {
+    let sha = String(repeating: "ab", count: 32)
+    let feed = """
+    [
+      {"tag_name":"v0.15.0","draft":true,"prerelease":false,"body":"draft","assets":[\(asset("0.15.0", sha, 10))]},
+      {"tag_name":"v0.14.0-beta","prerelease":true,"body":"skip tag","assets":[\(asset("0.14.0-beta", sha, 10))]},
+      {"tag_name":"v0.16.0","prerelease":true,"body":"pre","assets":[\(asset("0.16.0", sha, 10)),{"name":"notes.txt","browser_download_url":"https://evil.example/x","size":4,"digest":"sha256:\(sha)"}]},
+      {"tag_name":"v0.13.0","prerelease":false,"body":"old","assets":[\(asset("0.13.0", sha, 10))]},
+      {"tag_name":"v0.12.0","prerelease":false,"body":"bad","assets":[{"name":"Jfred-0.12.0-arm64.dmg","browser_download_url":"https://github.com/weijing24/Jfred/releases/download/v0.12.0/Jfred-0.12.0-arm64.dmg","size":10,"digest":"md5:\(sha)"}]},
+      {"tag_name":"v0.11.0","prerelease":false,"body":"huge","assets":[{"name":"Jfred-0.11.0-arm64.dmg","browser_download_url":"https://github.com/weijing24/Jfred/releases/download/v0.11.0/Jfred-0.11.0-arm64.dmg","size":\(AppUpdateFeed.maxAssetBytes + 1),"digest":"sha256:\(sha)"}]},
+      {"tag_name":"v0.14.0","prerelease":false,"body":"stable notes","assets":[\(asset("0.14.0", sha, 20, architecture: "x86_64")),\(asset("0.14.0", sha, 30))]}
+    ]
+    """
+    let catalog = try AppUpdateFeed.parse(Data(feed.utf8), architecture: "arm64")
+    #expect(catalog.publishedCount == 5)
+    #expect(catalog.releases.map(\.version) == ["0.16.0", "0.13.0", "0.14.0"])
+    #expect(catalog.releases.first { $0.version == "0.14.0" }?.asset.byteCount == 30)
+    #expect(catalog.releases.first { $0.version == "0.14.0" }?.asset.sha256 == sha)
+    let stable = AppUpdateFeed.offer(in: catalog, channel: .updates, current: "0.14.0")
+    guard case .upToDate(_, let notes) = stable else {
+        Issue.record("expected the installed stable release")
+        return
+    }
+    #expect(notes == "stable notes")
+    let behind = AppUpdateFeed.offer(in: catalog, channel: .updates, current: "0.13.0")
+    guard case .available(let release) = behind else {
+        Issue.record("expected 0.14.0")
+        return
+    }
+    #expect(release.version == "0.14.0")
+    let pre = AppUpdateFeed.offer(in: catalog, channel: .prereleases, current: "0.14.0")
+    guard case .available(let preview) = pre else {
+        Issue.record("expected the pre-release")
+        return
+    }
+    #expect(preview.version == "0.16.0")
+    #expect(preview.prerelease)
+    let ahead = AppUpdateFeed.offer(in: catalog, channel: .updates, current: "9.0.0")
+    guard case .upToDate = ahead else {
+        Issue.record("a newer local build is up to date")
+        return
+    }
+    let empty = try AppUpdateFeed.parse(Data("[]".utf8), architecture: "arm64")
+    guard case .unavailable = AppUpdateFeed.offer(in: empty, channel: .updates, current: "0.14.0") else {
+        Issue.record("expected no releases")
+        return
+    }
+    #expect(throws: UpdateFeedError.self) {
+        try AppUpdateFeed.parse(Data("{}".utf8), architecture: "arm64")
+    }
+    let long = String(repeating: "n", count: AppUpdateFeed.notesLimit + 5)
+    let clipped = try AppUpdateFeed.parse(Data("""
+    [{"tag_name":"v1.0.0","body":"\(long)","assets":[\(asset("1.0.0", sha, 10))]}]
+    """.utf8), architecture: "arm64")
+    #expect(clipped.releases[0].notes.hasSuffix("\n…"))
+    #expect(clipped.releases[0].notes.count == AppUpdateFeed.notesLimit + 2)
+}
+
+@Test func updateChecksumMatchesFileBytes() throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("jfred-hash-\(UUID().uuidString)")
+    try Data("hello".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    #expect(try UpdateChecksum.sha256Hex(file: url) == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+    #expect(UpdateChecksum.matches(file: url, sha256: "2CF24DBA5FB0A30E26E83B2AC5B9E29E1B161E5C1FA7425E73043362938B9824"))
+    #expect(!UpdateChecksum.matches(file: url, sha256: String(repeating: "ab", count: 32)))
+}
+
+@Test func liveGitHubFeedParsesWhenRequested() async throws {
+    guard ProcessInfo.processInfo.environment["JFRED_UPDATE_LIVE"] == "1" else { return }
+    var request = URLRequest(url: AppUpdateFeed.releasesURL())
+    request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+    request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+    request.setValue("Jfred-test", forHTTPHeaderField: "User-Agent")
+    let (data, response) = try await URLSession.shared.data(for: request)
+    let status = (response as? HTTPURLResponse)?.statusCode
+    #expect(status == 200)
+    let catalog = try AppUpdateFeed.parse(data, architecture: "arm64")
+    #expect(!catalog.releases.isEmpty)
+    guard case .available(let release) = AppUpdateFeed.offer(in: catalog, channel: .updates, current: "0.0.0") else {
+        Issue.record("expected a published update")
+        return
+    }
+    #expect(AppUpdateFeed.isOfficialAssetURL(release.asset.downloadURL, version: release.version, architecture: "arm64"))
+    guard case .upToDate = AppUpdateFeed.offer(in: catalog, channel: .updates, current: "999.0.0") else {
+        Issue.record("a future version should be current")
+        return
+    }
+}
+
+private func asset(_ version: String, _ sha: String, _ size: Int64, architecture: String = "arm64") -> String {
+    let name = AppUpdateFeed.assetName(version: version, architecture: architecture)
+    return #"{"name":"\#(name)","browser_download_url":"https://github.com/weijing24/Jfred/releases/download/v\#(version)/\#(name)","size":\#(size),"digest":"sha256:\#(sha)"}"#
+}
