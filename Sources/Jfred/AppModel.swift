@@ -169,6 +169,8 @@ final class AppModel {
     }
 
     private var generation = 0
+    /// Query string last written into `results`. Selection resets only when it changes.
+    private var renderedQuery = ""
     private var historyCursor: Int?
     private var fromHistory = false
     private var clipChange = 0
@@ -221,6 +223,8 @@ final class AppModel {
     }
 
     func scheduleSearch() {
+        generation += 1
+        let token = generation
         if let browser = fileBrowserResults(query) {
             publishResults(browser)
             return
@@ -234,49 +238,91 @@ final class AppModel {
         } else {
             historyCursor = nil
         }
-        generation += 1
-        let token = generation
         let raw = query
         let catalog = scriptCatalog
         let disabledGroups = Set(workflows.compactMap { workflow -> String? in
             guard let builtin = workflow.builtin, !workflow.enabled else { return nil }
             return builtin
         })
-        let base = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil, forced: nil)
-        Task {
-            var forced: [SearchResult]?
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            let useCatalog = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
-            if useCatalog, let hit = catalog.hit(in: trimmed, disabledGroups: disabledGroups) {
-                let ran = await Task.detached {
-                    if hit.node.keyword.hasPrefix("gh ") {
-                        try? await Task.sleep(nanoseconds: 250_000_000)
-                    }
-                    return ScriptRunner.results(catalog: catalog, node: hit.node, argument: hit.argument)
-                }.value
-                if let ran {
-                    forced = ran.isEmpty
-                        ? [SearchResult(id: "run:empty", title: "No matches", subtitle: hit.node.keyword, icon: hit.node.icon, kind: "text", payload: "", category: "action", score: 1)]
-                        : ran
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let context = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil, forced: nil)
+        let useCatalog = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
+        if useCatalog, let hit = catalog.hit(in: trimmed, disabledGroups: disabledGroups) {
+            publishResults([statusRow(id: "run:pending", title: "Running…", subtitle: hit.node.keyword, icon: hit.node.icon, category: "action")])
+            let node = hit.node
+            let argument = hit.argument
+            let job = Task.detached {
+                if node.keyword.hasPrefix("gh ") {
+                    try? await Task.sleep(nanoseconds: 250_000_000)
                 }
+                return ScriptRunner.results(catalog: catalog, node: node, argument: argument)
             }
-            var context = base
-            if Search.wantsFiles(raw: raw, preferences: context.preferences) {
-                let fileQuery = raw.trimmingCharacters(in: .whitespaces)
-                let filePreferences = context.preferences
-                let files = await Task.detached { FileSearch.files(query: fileQuery, preferences: filePreferences) }.value
-                context.files = files
-            }
-            if let word = Search.wantsDefinition(raw: raw), context.preferences.dictionaryEnabled {
-                context.definition = DictionaryLookup.define(word)
-            }
-            context.forcedResults = forced
-            let rows = Search.results(for: raw, context: context)
-            await MainActor.run {
+            Task {
+                let ran = await job.value
                 guard token == self.generation else { return }
-                self.publishResults(rows)
+                if let ran {
+                    let rows = ran.isEmpty
+                        ? [self.statusRow(id: "run:empty", title: "No matches", subtitle: node.keyword, icon: node.icon, category: "action")]
+                        : ran
+                    self.publishResults(rows)
+                    return
+                }
+                var plain = context
+                plain.spotlight = nil
+                self.publishResults(Search.results(for: raw, context: plain))
+            }
+            return
+        }
+
+        if !Search.exclusiveSlowQuery(raw: raw, preferences: context.preferences) {
+            var instant = context
+            instant.spotlight = nil
+            publishResults(Search.results(for: raw, context: instant))
+            guard let word = Search.wantsDefinition(raw: raw), context.preferences.dictionaryEnabled else { return }
+            let job = Task.detached { DictionaryLookup.define(word) }
+            Task {
+                let definition = await job.value
+                guard token == self.generation, let definition else { return }
+                var enriched = context
+                enriched.spotlight = nil
+                enriched.definition = definition
+                self.publishResults(Search.results(for: raw, context: enriched))
+            }
+            return
+        }
+
+        let needsFiles = Search.wantsFiles(raw: raw, preferences: context.preferences)
+        if needsFiles {
+            var preview = context
+            preview.spotlight = nil
+            let hint = Search.results(for: raw, context: preview)
+            if hint.contains(where: { $0.id == "file:hint" }) {
+                publishResults(hint)
+                return
             }
         }
+        if !results.contains(where: { $0.kind == "file" || $0.id == "file:hint" || $0.id == "search:pending" }) {
+            let subtitle = trimmed.isEmpty ? "Files" : trimmed
+            publishResults([statusRow(id: "search:pending", title: "Searching…", subtitle: subtitle, icon: "symbol:magnifyingglass", category: "navigation")])
+        }
+        let job = Task.detached {
+            var working = context
+            if needsFiles {
+                let fileQuery = raw.trimmingCharacters(in: .whitespaces)
+                working.files = FileSearch.files(query: fileQuery, preferences: working.preferences)
+                working.spotlight = nil
+            }
+            return Search.results(for: raw, context: working)
+        }
+        Task {
+            let rows = await job.value
+            guard token == self.generation else { return }
+            self.publishResults(rows)
+        }
+    }
+
+    private func statusRow(id: String, title: String, subtitle: String, icon: String, category: String) -> SearchResult {
+        SearchResult(id: id, title: title, subtitle: subtitle, icon: icon, kind: "text", payload: "", category: category, score: 1)
     }
 
     private func fileBrowserResults(_ raw: String) -> [SearchResult]? {
@@ -315,8 +361,8 @@ final class AppModel {
         focusToken += 1
         SnippetExpander.shared.setSuspended(true)
         if previousApp != nil { sinkPreferencesBehindOtherApps() }
-        launcher?.show()
         scheduleSearch()
+        launcher?.show()
     }
 
     func hideLauncher(reactivate: Bool) {
@@ -843,11 +889,19 @@ final class AppModel {
     }
 
     private func publishResults(_ rows: [SearchResult]) {
-        for item in rows.prefix(LauncherMetrics.visibleRows) where item.icon.hasPrefix("file:") {
-            _ = IconCache.shared.image(for: String(item.icon.dropFirst("file:".count)))
-        }
+        let queryChanged = renderedQuery != query
+        renderedQuery = query
         results = rows
-        if selection >= rows.count { selection = 0 }
+        if queryChanged || !rows.indices.contains(selection) {
+            selection = 0
+        }
+        let paths = rows.prefix(LauncherMetrics.visibleRows).compactMap { item -> String? in
+            guard item.icon.hasPrefix("file:") else { return nil }
+            return String(item.icon.dropFirst("file:".count))
+        }
+        if !paths.isEmpty {
+            IconCache.shared.prefetch(paths)
+        }
         launcher?.layout()
     }
 

@@ -417,6 +417,25 @@ public enum Search {
         return extras && trimmed.count >= 3
     }
 
+    /// File-name and Spotlight queries. Their rows replace the app ranking, so the
+    /// launcher must not publish that ranking while the lookup is still running.
+    public static func exclusiveSlowQuery(raw: String, preferences: Preferences) -> Bool {
+        if raw.hasPrefix(" "), preferences.quickSearchEnabled { return true }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keywords = [
+            (preferences.fileOpenKeyword, preferences.fileOpenEnabled),
+            (preferences.fileFindKeyword, preferences.fileFindEnabled),
+            (preferences.fileInsideKeyword, preferences.fileInsideEnabled),
+            (preferences.fileTagsKeyword, preferences.fileTagsEnabled),
+        ]
+        for (keyword, enabled) in keywords {
+            let key = keyword.trimmingCharacters(in: .whitespaces)
+            guard enabled, !key.isEmpty else { continue }
+            if argument(of: key, in: trimmed) != nil { return true }
+        }
+        return false
+    }
+
     public static func wantsDefinition(raw: String) -> String? {
         argument(of: "define", in: raw.trimmingCharacters(in: .whitespacesAndNewlines))
     }

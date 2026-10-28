@@ -1,5 +1,6 @@
 import AppKit
 import JfredCore
+import QuartzCore
 import SwiftUI
 
 final class LauncherPanel: NSPanel {
@@ -16,6 +17,8 @@ final class LauncherController {
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var pinnedTop: CGFloat?
+    private var ignoreMove = false
+    private var layoutToken = 0
     private var outsideDrag: (mouse: NSPoint, origin: NSPoint)?
     private var localDrag: (mouse: NSPoint, origin: NSPoint)?
 
@@ -39,12 +42,14 @@ final class LauncherController {
         let host = NSHostingView(rootView: LauncherRoot(model: model))
         host.frame = panel.contentView?.bounds ?? .zero
         host.autoresizingMask = [.width, .height]
+        host.sizingOptions = []
         panel.contentView = host
         self.panel = panel
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self] note in
             let maxY = (note.object as? NSWindow)?.frame.maxY
             MainActor.assumeIsolated {
-                if let maxY { self?.pinnedTop = maxY }
+                guard self?.ignoreMove != true, let maxY else { return }
+                self?.pinnedTop = maxY
             }
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -62,7 +67,7 @@ final class LauncherController {
     func show() {
         guard let panel else { return }
         if pinnedTop == nil { placeInitially() }
-        layout()
+        layout(animated: false)
         // A nonactivating panel can take keystrokes without pulling other
         // Jfred windows, such as Preferences, in front of Finder.
         panel.orderFrontRegardless()
@@ -71,18 +76,47 @@ final class LauncherController {
 
     func hide() { panel?.orderOut(nil) }
 
-    func layout() {
+    /// `animated` only eases a panel that is already on screen. The hotkey
+    /// path passes false so the window appears at its final height.
+    func layout(animated: Bool = true) {
         guard let panel else { return }
+        let frame = panelFrame(for: panel)
+        let heightDelta = abs(frame.height - panel.frame.height)
+        layoutToken += 1
+        let token = layoutToken
+        ignoreMove = true
+        if animated && panel.isVisible && heightDelta > 0.5 {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.08
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().setFrame(frame, display: true)
+            } completionHandler: { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.layoutToken == token else { return }
+                    self.ignoreMove = false
+                    self.pinnedTop = self.panel?.frame.maxY ?? frame.maxY
+                }
+            }
+            pinnedTop = frame.maxY
+            return
+        }
+        if frame != panel.frame {
+            panel.setFrame(frame, display: true)
+        }
+        pinnedTop = panel.frame.maxY
+        ignoreMove = false
+    }
+
+    private func panelFrame(for panel: NSPanel) -> NSRect {
         let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
-        let filled = model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : max(model.results.count, 1)
-        let rows = CGFloat(min(filled, LauncherMetrics.visibleRows))
+        let rows = min(listRowCount(), LauncherMetrics.visibleRows)
+        let listHeight = LauncherMetrics.listHeight(rows: rows, rowHeight: theme.rowHeight)
         let buffer: CGFloat = model.fileBuffer.isEmpty ? 0 : 34
-        let header: CGFloat = theme.paddingV + theme.queryBoxHeight + (rows > 0 ? 6 : theme.paddingV)
-        let height = header + buffer + rows * theme.rowHeight + (rows > 0 ? theme.paddingV : 0)
-        let width: CGFloat = theme.width
+        let header = theme.paddingV + theme.queryBoxHeight + (rows > 0 ? 6 : theme.paddingV)
+        let height = header + buffer + listHeight + (rows > 0 ? theme.paddingV : 0)
         var frame = panel.frame
         let top = pinnedTop ?? frame.maxY
-        frame.size = NSSize(width: width, height: height)
+        frame.size = NSSize(width: theme.width, height: height)
         frame.origin.y = top - height
         if let screen = panel.screen ?? NSScreen.main {
             let visible = screen.visibleFrame
@@ -90,8 +124,17 @@ final class LauncherController {
                 frame.origin.y = max(visible.minY, visible.maxY - frame.height)
             }
         }
-        panel.setFrame(frame, display: true)
-        pinnedTop = panel.frame.maxY
+        return frame
+    }
+
+    private func listRowCount() -> Int {
+        if model.actionPanelVisible {
+            return max(model.launcherActions.count, 1)
+        }
+        if model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return 0
+        }
+        return max(model.results.count, 1)
     }
 
     func hideMusicPlayer() {
@@ -327,6 +370,7 @@ struct LauncherRoot: View {
                     .padding(.bottom, theme.paddingV)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background {
             panel
                 .fill(theme.background)
@@ -348,53 +392,87 @@ struct LauncherRoot: View {
     }
 
     private func actionList(_ theme: LauncherTheme) -> some View {
-        let shown = min(max(model.launcherActions.count, 1), LauncherMetrics.visibleRows)
-        return ScrollView {
-            VStack(spacing: 2) {
-                ForEach(Array(model.launcherActions.enumerated()), id: \.element.id) { index, action in
-                    LauncherActionRow(action: action, selected: index == model.actionIndex, theme: theme)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            model.actionIndex = index
-                            model.commitAction()
-                        }
-                }
-            }
-        }
-        .frame(height: CGFloat(shown) * theme.rowHeight - 2)
-    }
-
-    private func resultList(_ theme: LauncherTheme) -> some View {
-        let shown = min(max(model.results.count, 1), LauncherMetrics.visibleRows)
-        return ScrollViewReader { proxy in
-            ScrollView(.vertical) {
-                VStack(spacing: 2) {
-                    if model.results.isEmpty {
-                        Text("No matches")
-                            .font(.system(size: 14))
-                            .foregroundStyle(theme.subtitle)
-                            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
-                            .padding(.horizontal, 14)
-                    } else {
-                        ForEach(Array(model.results.enumerated()), id: \.element.id) { index, item in
-                            LauncherRow(item: item, index: index, selected: index == model.selection, theme: theme)
-                                .id(index)
-                                .contentShape(Rectangle())
-                                .onTapGesture { model.commitIndex(index) }
-                        }
+        let count = model.launcherActions.count
+        let shown = min(max(count, 1), LauncherMetrics.visibleRows)
+        let height = LauncherMetrics.listHeight(rows: shown, rowHeight: theme.rowHeight)
+        return Group {
+            if count <= LauncherMetrics.visibleRows {
+                actionRows(theme)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        actionRows(theme)
+                    }
+                    .scrollIndicators(.visible)
+                    .onChange(of: model.actionIndex) { _, newValue in
+                        guard model.launcherActions.indices.contains(newValue) else { return }
+                        proxy.scrollTo(model.launcherActions[newValue].id)
                     }
                 }
             }
-            .scrollIndicators(model.results.count > LauncherMetrics.visibleRows ? .visible : .hidden)
-            .frame(height: CGFloat(shown) * theme.rowHeight - 2)
-            .onChange(of: model.selection) { _, newValue in
-                proxy.scrollTo(newValue)
-            }
-            .onChange(of: model.results.map(\.id)) { _, _ in
-                let index = model.results.isEmpty ? 0 : min(model.selection, model.results.count - 1)
-                proxy.scrollTo(index, anchor: .top)
+        }
+        .frame(height: height)
+        .transaction { $0.animation = nil }
+    }
+
+    private func actionRows(_ theme: LauncherTheme) -> some View {
+        VStack(spacing: LauncherMetrics.rowGap) {
+            ForEach(Array(model.launcherActions.enumerated()), id: \.element.id) { index, action in
+                LauncherActionRow(action: action, selected: index == model.actionIndex, theme: theme)
+                    .id(action.id)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        model.actionIndex = index
+                        model.commitAction()
+                    }
             }
         }
+        .animation(.none, value: model.actionIndex)
+    }
+
+    private func resultList(_ theme: LauncherTheme) -> some View {
+        let count = model.results.count
+        let shown = min(max(count, 1), LauncherMetrics.visibleRows)
+        let height = LauncherMetrics.listHeight(rows: shown, rowHeight: theme.rowHeight)
+        return Group {
+            if count <= LauncherMetrics.visibleRows {
+                resultRows(theme)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        resultRows(theme)
+                    }
+                    .scrollIndicators(.visible)
+                    .onChange(of: model.selection) { _, newValue in
+                        guard model.results.indices.contains(newValue) else { return }
+                        proxy.scrollTo(model.results[newValue].id)
+                    }
+                }
+            }
+        }
+        .frame(height: height)
+        .transaction { $0.animation = nil }
+    }
+
+    private func resultRows(_ theme: LauncherTheme) -> some View {
+        VStack(spacing: LauncherMetrics.rowGap) {
+            if model.results.isEmpty {
+                Text("No matches")
+                    .font(.system(size: 14))
+                    .foregroundStyle(theme.subtitle)
+                    .frame(maxWidth: .infinity, minHeight: theme.rowHeight, maxHeight: theme.rowHeight, alignment: .leading)
+                    .padding(.horizontal, 14)
+            } else {
+                ForEach(Array(model.results.enumerated()), id: \.element.id) { index, item in
+                    LauncherRow(item: item, index: index, selected: index == model.selection, theme: theme)
+                        .id(item.id)
+                        .contentShape(Rectangle())
+                        .onTapGesture { model.commitIndex(index) }
+                }
+            }
+        }
+        .animation(.none, value: model.selection)
+        .animation(.none, value: model.results.map(\.id))
     }
 }
 
@@ -466,6 +544,12 @@ struct QueryField: NSViewRepresentable {
 
 enum LauncherMetrics {
     static let visibleRows = 9
+    static let rowGap: CGFloat = 2
+
+    static func listHeight(rows: Int, rowHeight: CGFloat) -> CGFloat {
+        guard rows > 0 else { return 0 }
+        return CGFloat(rows) * rowHeight + CGFloat(rows - 1) * rowGap
+    }
 }
 
 /// Alfred-style field: a flat, slightly recessed rounded rectangle that sits

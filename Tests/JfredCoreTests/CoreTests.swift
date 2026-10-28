@@ -419,6 +419,17 @@ struct CoreTests {
     }
 }
 
+@Test func ordinaryTypingIsNotASlowFileQuery() {
+    let prefs = Preferences()
+    #expect(!Search.exclusiveSlowQuery(raw: "cal", preferences: prefs))
+    #expect(!Search.wantsFiles(raw: "cal", preferences: prefs))
+    #expect(Search.exclusiveSlowQuery(raw: "open report", preferences: prefs))
+    #expect(Search.exclusiveSlowQuery(raw: " report", preferences: prefs))
+    #expect(Search.exclusiveSlowQuery(raw: "find report", preferences: prefs))
+    #expect(Search.exclusiveSlowQuery(raw: "in notes", preferences: prefs))
+    #expect(!Search.wantsFiles(raw: "in notes", preferences: prefs))
+}
+
 private func asset(_ version: String, _ sha: String, _ size: Int64, architecture: String = "arm64") -> String {
     let name = AppUpdateFeed.assetName(version: version, architecture: architecture)
     return #"{"name":"\#(name)","browser_download_url":"https://github.com/weijing24/Jfred/releases/download/v\#(version)/\#(name)","size":\#(size),"digest":"sha256:\#(sha)"}"#
