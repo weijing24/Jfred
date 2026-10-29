@@ -49,6 +49,9 @@ jobs:
           swift --version | grep -E 'Swift version 6\.([2-9]|[1-9][0-9])' >/dev/null
           echo "Using $xcode"
 
+      - name: Test
+        run: ./scripts/test.sh
+
       - name: Next version
         id: version
         run: |

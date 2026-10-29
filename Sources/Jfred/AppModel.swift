@@ -69,16 +69,6 @@ final class AppModel {
     var selections: [String: SelectionStat] = [:]
     var apps: [AppRecord] = []
     var links: [LinkRecord] = []
-    var contacts: [ContactRecord] = []
-    var musicTrack = ""
-    var musicSearch = ""
-    var musicTracks: [MusicService.Track] = []
-    var musicNowTitle = ""
-    var musicNowArtist = ""
-    var musicNowPlaying = false
-    var musicArtPath: String?
-    var contactsTab = "Contacts"
-    var musicTab = "General"
     var actionsTab = "General"
     var showRemoteQR = false
     var showSnippetExpansionOptions = false
@@ -201,7 +191,6 @@ final class AppModel {
         applyRemote()
         reindex()
         reloadLinks()
-        reloadContacts()
         if preferences.onePasswordEnabled { reloadOnePassword() }
         syncActivationPolicy()
         IndexWatch.shared.start(preferences: preferences) { [weak self] in
@@ -371,7 +360,7 @@ final class AppModel {
         SnippetExpander.shared.setSuspended(false)
         launcher?.hide()
         if reactivate, let previousApp {
-            previousApp.activate(options: [.activateIgnoringOtherApps])
+            previousApp.activate()
             DispatchQueue.main.async { self.restorePreferencesLevel() }
         } else {
             restorePreferencesLevel()
@@ -486,38 +475,10 @@ final class AppModel {
             if let clip = clips.first(where: { $0.id.uuidString == item.payload }) { pasteClipboardItem(clip) }
         case .pasteValue:
             pasteToPrevious(value)
-        case .email:
-            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }), !contact.email.isEmpty {
-                let encoded = contact.email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact.email
-                let target: String
-                switch preferences.contactsEmailMode {
-                case "gmail", "custom":
-                    target = preferences.contactsEmailURL.replacingOccurrences(of: "{query}", with: encoded)
-                default:
-                    target = "mailto:\(encoded)"
-                }
-                if let url = URL(string: target) { NSWorkspace.shared.open(url) }
-            }
-            hideLauncher(reactivate: false)
-        case .call:
-            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
-                let digits = contact.phone.filter { $0.isNumber || $0 == "+" }
-                if !digits.isEmpty, let url = URL(string: "tel:\(digits)") {
-                    NSWorkspace.shared.open(url)
-                }
-            }
-            hideLauncher(reactivate: false)
         case .searchWeb:
             let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
             if let url = URL(string: "https://www.google.com/search?q=\(encoded)") {
                 NSWorkspace.shared.open(url)
-            }
-            hideLauncher(reactivate: false)
-        case .maps:
-            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
-                let query = contact.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact.name
-                let template = preferences.contactsMapURL.replacingOccurrences(of: "{query}", with: query)
-                if let url = URL(string: template) { NSWorkspace.shared.open(url) }
             }
             hideLauncher(reactivate: false)
         }
@@ -539,19 +500,6 @@ final class AppModel {
             actions.append(LauncherAction(kind: .open, title: "Open URL", subtitle: item.payload, symbol: "safari"))
             actions.append(LauncherAction(kind: .openBrowser, title: "Open in Default Browser", subtitle: item.payload, symbol: "globe"))
             actions.append(LauncherAction(kind: .copyValue, title: "Copy URL", subtitle: item.payload, symbol: "doc.on.doc"))
-            actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
-        case "contact":
-            actions.append(LauncherAction(kind: .open, title: "Open Contact", subtitle: item.title, symbol: "person.crop.circle"))
-            if let contact = contacts.first(where: { ($0.uid ?? $0.id) == item.payload }) {
-                if !contact.email.isEmpty {
-                    actions.append(LauncherAction(kind: .email, title: "Email", subtitle: contact.email, symbol: "envelope"))
-                }
-                if !contact.phone.isEmpty {
-                    actions.append(LauncherAction(kind: .call, title: "Call", subtitle: contact.phone, symbol: "phone"))
-                }
-                actions.append(LauncherAction(kind: .maps, title: "Show in Maps", subtitle: contact.name, symbol: "map"))
-            }
-            actions.append(LauncherAction(kind: .copyValue, title: "Copy Email or Phone", subtitle: item.subtitle, symbol: "doc.on.doc"))
             actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
         case "clipboard":
             actions.append(LauncherAction(kind: .pasteClipboard, title: "Paste", subtitle: item.title, symbol: "doc.on.clipboard"))
@@ -666,28 +614,32 @@ final class AppModel {
             scheduleSearch()
         case "file":
             let paths = fileBuffer.isEmpty ? [item.payload] : fileBuffer.map(\.payload)
-            if preferences.fileOpenWithFinder {
+            let policy = FileOpenPolicy(preferences: preferences)
+            if policy.revealInsteadOfOpening {
                 NSWorkspace.shared.activateFileViewerSelecting(paths.map { URL(fileURLWithPath: $0) })
             } else {
                 for path in paths {
                     var isDirectory: ObjCBool = false
                     let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
-                    if exists, isDirectory.boolValue, preferences.fileOpenFoldersInFinder {
-                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
-                    } else if exists, !isDirectory.boolValue,
-                              preferences.fileRunAppleScriptsInsteadOfOpening,
-                              (path as NSString).pathExtension.lowercased() == "scpt" {
-                        _ = Shell.run("/usr/bin/osascript", [path], timeout: 30)
-                    } else {
-                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
-                    }
-                    if exists, isDirectory.boolValue, preferences.fileTouchFolders {
-                        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
-                    }
-                    if exists, !isDirectory.boolValue, preferences.fileTouchAliases {
-                        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath()
-                        if resolved.path != path {
-                            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: resolved.path)
+                    let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+                    let steps = policy.steps(
+                        exists: exists,
+                        isDirectory: isDirectory.boolValue,
+                        isAppleScript: (path as NSString).pathExtension.lowercased() == "scpt",
+                        resolvesElsewhere: resolved != path
+                    )
+                    for step in steps {
+                        switch step {
+                        case .reveal:
+                            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                        case .runAppleScript:
+                            _ = Shell.run("/usr/bin/osascript", [path], timeout: 30)
+                        case .open:
+                            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                        case .touch:
+                            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
+                        case .touchResolvedTarget:
+                            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: resolved)
                         }
                     }
                 }
@@ -731,41 +683,17 @@ final class AppModel {
                 text = item.payload.isEmpty ? item.title : item.payload
             }
             pasteToPrevious(text)
-        case "contact":
-            let uid = item.payload
-            let contact = contacts.first { ($0.uid ?? $0.id) == uid }
-            if preferences.contactsOpenInAlfred, let contact {
-                let details = [contact.name, contact.email, contact.phone, contact.jobTitle ?? "", contact.organization ?? ""]
-                    .filter { !$0.isEmpty }
-                    .joined(separator: "\n")
-                hideLauncher(reactivate: false)
-                showLarge(details)
-            } else if preferences.contactsURLHandlerEnabled, !preferences.contactsURLHandler.isEmpty {
-                let encoded = uid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? uid
-                let template = preferences.contactsURLHandler.replacingOccurrences(of: "{uid}", with: encoded)
-                if let url = URL(string: template) { NSWorkspace.shared.open(url) }
-                hideLauncher(reactivate: false)
-            } else {
-                if let url = URL(string: "addressbook://\(uid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? uid)") {
-                    NSWorkspace.shared.open(url)
-                } else if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.AddressBook") {
-                    NSWorkspace.shared.open(app)
-                }
-                hideLauncher(reactivate: false)
-            }
-        case "musicplay":
-            hideLauncher(reactivate: false)
-            Task.detached { _ = MusicService.playSearch(item.payload) }
-        case "musicplayer":
-            hideLauncher(reactivate: false)
-            showMusicPlayer()
         case "dictionary":
             let body = item.subtitle == "Open Dictionary" ? item.title : item.subtitle
             if let url = URL(string: "dict://\(item.payload.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.payload)") {
                 NSWorkspace.shared.open(url)
             }
             hideLauncher(reactivate: false)
-            showLarge(body)
+            if preferences.dictionaryPasteOnAction {
+                pasteToPrevious(item.payload.isEmpty ? item.title : item.payload)
+            } else {
+                showLarge(body)
+            }
         case "system":
             performSystem(item.payload)
             hideLauncher(reactivate: false)
@@ -852,7 +780,6 @@ final class AppModel {
             IndexWatch.shared.restartFiles(preferences)
         }
         if old.onePasswordEnabled != preferences.onePasswordEnabled && preferences.onePasswordEnabled { reloadOnePassword() }
-        if old.contactsEnabled != preferences.contactsEnabled { reloadContacts() }
         if !preferences.fileBufferEnabled { fileBuffer = []; fileBufferLastUsed = nil }
         if old.safariBookmarks != preferences.safariBookmarks || old.chromeBookmarks != preferences.chromeBookmarks { reloadLinks() }
         if old.autoUpdateCheck != preferences.autoUpdateCheck {
@@ -1475,7 +1402,7 @@ final class AppModel {
         await MainActor.run { self.debugLines.append("\(index + 1). \(action.kind.rawValue): \(value)") }
         switch action.kind {
         case .openURL:
-            if let url = URL(string: value) { await MainActor.run { NSWorkspace.shared.open(url) } }
+            if let url = URL(string: value) { _ = await MainActor.run { NSWorkspace.shared.open(url) } }
         case .openApp:
             await MainActor.run {
                 let url = value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(fileURLWithPath: "/Applications/\(value).app")
@@ -1533,7 +1460,6 @@ final class AppModel {
             places: places(),
             settings: SettingsCatalog.all,
             links: links,
-            contacts: contacts,
             clips: clips,
             files: files,
             windows: windows,
@@ -1674,9 +1600,8 @@ final class AppModel {
     }
 
     private func performSystem(_ id: String) {
-        if preferences.systemDisabled.contains(id) { return }
-        if id.hasPrefix("volume:") {
-            guard let value = Int(id.dropFirst("volume:".count)), (0...100).contains(value) else { return }
+        guard let effect = ActionExecutor.systemEffect(id: id, disabled: preferences.systemDisabled, ejectScope: preferences.ejectScope) else { return }
+        if case .setOutputVolume(let value) = effect {
             _ = Shell.osascript("set volume output volume \(value)")
             return
         }
@@ -1688,47 +1613,43 @@ final class AppModel {
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
-        switch id {
-        case "sleep": _ = Shell.osascript("tell application \"System Events\" to sleep")
-        case "restart": _ = Shell.osascript("tell application \"System Events\" to restart")
-        case "shutdown": _ = Shell.osascript("tell application \"System Events\" to shut down")
-        case "logout": _ = Shell.osascript("tell application \"System Events\" to log out")
-        case "lock": _ = Shell.osascript("tell application \"System Events\" to keystroke \"q\" using {command down, control down}")
-        case "screensaver": _ = Shell.run("/usr/bin/open", ["-a", "ScreenSaverEngine"])
-        case "emptetrash": _ = Shell.osascript("tell application \"Finder\" to empty trash")
-        case "trash": _ = Shell.run("/usr/bin/open", [NSHomeDirectory() + "/.Trash"])
-        case "eject", "ejectall":
-            ejectDisks(all: id == "ejectall" || preferences.ejectScope == "all")
-        case "quitall":
+        switch effect {
+        case .setOutputVolume(let value):
+            _ = Shell.osascript("set volume output volume \(value)")
+        case .sleep: _ = Shell.osascript("tell application \"System Events\" to sleep")
+        case .restart: _ = Shell.osascript("tell application \"System Events\" to restart")
+        case .shutdown: _ = Shell.osascript("tell application \"System Events\" to shut down")
+        case .logout: _ = Shell.osascript("tell application \"System Events\" to log out")
+        case .lock: _ = Shell.osascript("tell application \"System Events\" to keystroke \"q\" using {command down, control down}")
+        case .screensaver: _ = Shell.run("/usr/bin/open", ["-a", "ScreenSaverEngine"])
+        case .emptyTrash: _ = Shell.osascript("tell application \"Finder\" to empty trash")
+        case .showTrash: _ = Shell.run("/usr/bin/open", [NSHomeDirectory() + "/.Trash"])
+        case .eject(let all):
+            ejectDisks(all: all)
+        case .quitAll:
             for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
                 app.terminate()
             }
-        case "darkmode":
+        case .toggleDarkMode:
             _ = Shell.osascript("tell application \"System Events\" to tell appearance preferences to set dark mode to not dark mode")
-        case "hidden":
+        case .toggleHiddenFiles:
             let current = Shell.run("/usr/bin/defaults", ["read", "com.apple.finder", "AppleShowAllFiles"])
             let next = current.trimmingCharacters(in: .whitespacesAndNewlines) == "1" ? "false" : "true"
             _ = Shell.run("/usr/bin/defaults", ["write", "com.apple.finder", "AppleShowAllFiles", "-bool", next])
             _ = Shell.run("/usr/bin/killall", ["Finder"])
-        case "desktop": postKey(103)
-        case "mission": NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Mission Control.app"))
-        case "launchpad":
+        case .showDesktop: postKey(103)
+        case .missionControl: NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Mission Control.app"))
+        case .launchpad:
             if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.launchpad.launcher") {
                 NSWorkspace.shared.open(url)
             }
-        case "screenshot":
+        case .screenshot:
             Task.detached { _ = Shell.run("/usr/sbin/screencapture", ["-i"], timeout: 60) }
-        case "mute": _ = Shell.osascript("set volume with output muted")
-        case "volumeup": changeVolume(10)
-        case "volumedown": changeVolume(-10)
-        case "musicplaypause": _ = MusicService.playPause()
-        case "musicnext": _ = MusicService.next()
-        case "musicprevious": _ = MusicService.previous()
-        case "musiccurrent":
-            let track = MusicService.currentTrack()
-            debugLine = track.isEmpty ? "Music is not playing" : track
-        default:
-            debugLine = "Unknown command \(id)"
+        case .mute: _ = Shell.osascript("set volume with output muted")
+        case .volumeUp: changeVolume(10)
+        case .volumeDown: changeVolume(-10)
+        case .unknown(let name):
+            debugLine = "Unknown command \(name)"
         }
     }
 
@@ -1778,6 +1699,18 @@ final class AppModel {
             _ = Shell.run("/usr/bin/open", ["-na", "Ghostty", "--args", "-e", "/bin/zsh", "-lc", command])
         case "Alacritty":
             _ = Shell.run("/usr/bin/open", ["-na", "Alacritty", "--args", "-e", "/bin/zsh", "-lc", command])
+        case "Custom":
+            let script = preferences.terminalCustomScript.replacingOccurrences(of: "{query}", with: escaped)
+            if script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                _ = Shell.osascript("""
+                tell application "Terminal"
+                  activate
+                  do script "\(escaped)"
+                end tell
+                """)
+            } else {
+                _ = Shell.osascript(script)
+            }
         default:
             _ = Shell.osascript("""
             tell application "Terminal"
@@ -1795,7 +1728,7 @@ final class AppModel {
         let selectionHotkeyOK = HotkeyCenter.shared.register(id: 2, keyCode: 42, modifiers: Hotkey(keyCode: 42, modifiers: Hotkey.option | Hotkey.command).carbonModifiers) { [weak self] in
             Task { @MainActor in self?.showSelectionActions() }
         }
-        selectionHotkeyWarning = selectionHotkeyOK ? "" : "⌥⌘\\ is already used by another app. Pick a different Universal Actions shortcut or free it up."
+        selectionHotkeyWarning = selectionHotkeyOK ? "" : "⌥⌘\\ is already used by another app."
         for id in workflowHotkeyIDs { HotkeyCenter.shared.unregister(id: id) }
         workflowHotkeyIDs.removeAll()
         if ok {
@@ -1814,12 +1747,13 @@ final class AppModel {
                 continue
             }
             let keyword = workflow.keyword
-            if HotkeyCenter.shared.register(id: id, keyCode: UInt32(hotkey.keyCode), modifiers: hotkey.carbonModifiers) { [weak self] in
+            let registered = HotkeyCenter.shared.register(id: id, keyCode: UInt32(hotkey.keyCode), modifiers: hotkey.carbonModifiers, handler: { [weak self] in
                 Task { @MainActor in
                     self?.query = keyword + " "
                     self?.showLauncher()
                 }
-            } {
+            })
+            if registered {
                 workflowHotkeyIDs.append(id)
             }
         }
@@ -1845,60 +1779,6 @@ final class AppModel {
             playSound: preferences.snippetExpandPlaySound,
             restoreClipboard: preferences.snippetExpandRestoreClipboard
         )
-    }
-
-    func refreshMusicTrack() {
-        Task.detached {
-            let track = MusicService.currentTrack()
-            await MainActor.run { self.musicTrack = track }
-        }
-    }
-
-    func refreshMusicPanel() {
-        Task.detached {
-            let info = MusicService.info()
-            await MainActor.run {
-                self.musicNowTitle = info.title
-                self.musicNowArtist = info.artist
-                self.musicNowPlaying = info.playing
-                self.musicArtPath = MusicService.artworkURL()
-                self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
-            }
-        }
-    }
-
-    func searchMusic() {
-        let query = musicSearch
-        let includePlaylists = preferences.musicIncludePlaylists
-        Task.detached {
-            let tracks = MusicService.searchTracks(query, includePlaylists: includePlaylists)
-            await MainActor.run { self.musicTracks = tracks }
-        }
-    }
-
-    func playMusic(_ track: MusicService.Track) {
-        Task.detached {
-            if track.isPlaylist {
-                _ = MusicService.playPlaylist(track.title)
-            } else {
-                _ = MusicService.playSearch(track.title)
-            }
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            let info = MusicService.info()
-            await MainActor.run {
-                self.musicNowTitle = info.title
-                self.musicNowArtist = info.artist
-                self.musicNowPlaying = info.playing
-                self.musicArtPath = MusicService.artworkURL()
-                self.musicTrack = info.title.isEmpty ? "" : "\(info.title) — \(info.artist)"
-                if self.preferences.musicHideMiniPlayerAfterSong { self.launcher?.hideMusicPlayer() }
-            }
-        }
-    }
-
-    func showMusicPlayer() {
-        refreshMusicPanel()
-        launcher?.showMusicPlayer()
     }
 
     func showSelectionActions() {
@@ -1934,31 +1814,6 @@ final class AppModel {
         launcher?.show()
         launcher?.layout()
         showActions()
-    }
-
-    func reloadContacts() {
-        guard preferences.contactsEnabled else {
-            if !contacts.isEmpty { contacts = [] }
-            return
-        }
-        Task.detached {
-            let list = await ContactsIndex.load()
-            await MainActor.run {
-                guard self.preferences.contactsEnabled else { return }
-                self.contacts = list
-                self.scheduleSave()
-            }
-        }
-    }
-
-    func requestContactsAccess() {
-        Task.detached {
-            let list = await ContactsIndex.load(requestAccess: true)
-            await MainActor.run {
-                self.contacts = list
-                self.scheduleSave()
-            }
-        }
     }
 
     func regenerateRemoteToken() {
@@ -2018,7 +1873,7 @@ final class AppModel {
            !(remote && preferences.clipboardIgnoreUniversalFiles),
            let urls = clipboardFileURLs(board), !urls.isEmpty {
             let paths = urls.map(\.path)
-            if clips.first?.filePaths == paths { return }
+            if preferences.clipboardIgnoreDuplicates, clips.first?.filePaths == paths { return }
             clips.insert(ClipItem(text: urls.map(\.lastPathComponent).joined(separator: ", "), date: Date(), kind: "file", filePaths: paths), at: 0)
             if clips.count > preferences.clipboardLimit { clips = Array(clips.prefix(preferences.clipboardLimit)) }
             scheduleSave()
@@ -2027,7 +1882,7 @@ final class AppModel {
         if preferences.clipboardKeepImages,
            !(remote && preferences.clipboardIgnoreUniversalText),
            let path = saveClipboardImage(board) {
-            if clips.first?.imageFile == path { return }
+            if preferences.clipboardIgnoreDuplicates, clips.first?.imageFile == path { return }
             clips.insert(ClipItem(text: "Image", date: Date(), kind: "image", imageFile: path), at: 0)
             if clips.count > preferences.clipboardLimit { clips = Array(clips.prefix(preferences.clipboardLimit)) }
             scheduleSave()
@@ -2037,7 +1892,7 @@ final class AppModel {
               !(remote && preferences.clipboardIgnoreUniversalText) else { return }
         guard let text = board.string(forType: .string), !text.isEmpty else { return }
         guard text.count <= max(4_096, preferences.clipboardMaxSize) else { return }
-        if clips.first?.text == text { return }
+        if preferences.clipboardIgnoreDuplicates, clips.first?.text == text { return }
         clips.insert(ClipItem(text: text, date: Date()), at: 0)
         if clips.count > preferences.clipboardLimit { clips = Array(clips.prefix(preferences.clipboardLimit)) }
         scheduleSave()
@@ -2064,21 +1919,14 @@ final class AppModel {
         return url.path
     }
 
-    private var clipRetentionInterval: TimeInterval? {
-        switch preferences.clipboardRetention {
-        case "1 day": return 86_400
-        case "1 week": return 7 * 86_400
-        case "1 month": return 30 * 86_400
-        case "3 months": return 90 * 86_400
-        case "1 year": return 365 * 86_400
-        default: return nil
-        }
-    }
-
     private func pruneClipboard() {
-        guard let interval = clipRetentionInterval, !clips.isEmpty else { return }
-        let cutoff = Date().addingTimeInterval(-interval)
-        clips.removeAll { $0.date < cutoff }
+        guard !clips.isEmpty else { return }
+        let now = Date()
+        clips.removeAll { clip in
+            let label = ClipboardRetention.label(forKind: clip.kind ?? "text", preferences: preferences)
+            guard let interval = ClipboardRetention.interval(for: label) else { return false }
+            return clip.date < now.addingTimeInterval(-interval)
+        }
     }
 
     func clearClipboardHistory() {
@@ -2270,7 +2118,7 @@ enum AppRelease {
 }
 
 enum FeatureID: String, CaseIterable, Identifiable {
-    case defaultResults, fileSearch, universalActions, webSearch, bookmarks, clipboard, snippets, calculator, dictionary, contacts, music, onePassword, system, terminal, largeType, previews
+    case defaultResults, fileSearch, universalActions, webSearch, bookmarks, clipboard, snippets, calculator, dictionary, onePassword, system, terminal, largeType, previews
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -2283,8 +2131,6 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "Snippets"
         case .calculator: "Calculator"
         case .dictionary: "Dictionary"
-        case .contacts: "Contacts"
-        case .music: "Music"
         case .onePassword: "1Password"
         case .system: "System"
         case .terminal: "Terminal"
@@ -2303,8 +2149,6 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "Snippets, Clippings"
         case .calculator: "Standard, Advanced"
         case .dictionary: "Spelling, Definitions"
-        case .contacts: "Viewer, Emailing"
-        case .music: "Mini Player"
         case .onePassword: "1Click Bookmarks"
         case .system: "Commands, Quitting, Ejecting"
         case .terminal: "Prefix, Custom Integration"
@@ -2323,8 +2167,6 @@ enum FeatureID: String, CaseIterable, Identifiable {
         case .snippets: "note.text"
         case .calculator: "plus.slash.minus"
         case .dictionary: "character.book.closed.fill"
-        case .contacts: "person.crop.circle"
-        case .music: "music.note"
         case .onePassword: "key.fill"
         case .system: "power"
         case .terminal: "terminal.fill"

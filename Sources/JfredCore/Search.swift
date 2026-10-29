@@ -65,7 +65,7 @@ public enum Search {
         }
 
         var found: [SearchResult] = []
-        if context.preferences.calculatorEnabled, let value = Calculator.evaluate(trimmed) {
+        if context.preferences.calculatorEnabled, Calculator.allows(trimmed, advanced: context.preferences.calculatorAdvanced), let value = Calculator.evaluate(trimmed) {
             let text = Calculator.format(value)
             found.append(make(
                 id: "calc:\(text)",
@@ -137,65 +137,6 @@ public enum Search {
                 context: context
             ))
         }
-        if context.preferences.contactsEnabled {
-            for contact in context.contacts {
-                var display = contact.name
-                if context.preferences.contactsInvertName,
-                   let split = contact.name.lastIndex(of: " "),
-                   split != contact.name.startIndex {
-                    display = String(contact.name[contact.name.index(after: split)...]) + ", " + String(contact.name[..<split])
-                }
-                var subtitleParts: [String] = []
-                if context.preferences.contactsShowTitle, let organization = contact.organization, !organization.isEmpty {
-                    subtitleParts.append(organization)
-                }
-                if context.preferences.contactsShowJobTitle, let job = contact.jobTitle, !job.isEmpty {
-                    subtitleParts.append(job)
-                }
-                if !contact.email.isEmpty { subtitleParts.append(contact.email) }
-                if !contact.phone.isEmpty { subtitleParts.append(contact.phone) }
-                if subtitleParts.isEmpty { subtitleParts.append("Contact") }
-                let fields = [contact.name, contact.email, contact.phone, contact.organization ?? "", contact.jobTitle ?? ""]
-                push(scored(
-                    query: needle,
-                    fields: fields,
-                    id: "contact:\(contact.id)",
-                    title: display,
-                    subtitle: subtitleParts.joined(separator: "  ·  "),
-                    icon: "symbol:person.crop.circle",
-                    kind: "contact",
-                    payload: contact.uid ?? contact.id,
-                    category: "contacts",
-                    context: context
-                ))
-            }
-        }
-        if context.preferences.musicEnabled {
-            if trimmed.compare(context.preferences.musicKeyword, options: .caseInsensitive) == .orderedSame {
-                found.append(make(
-                    id: "music:player",
-                    title: "Music Mini Player",
-                    subtitle: "Search and play music from your library",
-                    icon: "symbol:music.note",
-                    kind: "musicplayer",
-                    payload: "",
-                    category: "music",
-                    score: 2
-                ))
-            }
-            if let song = argument(of: context.preferences.musicKeyword, in: trimmed) ?? argument(of: "play", in: trimmed), !song.isEmpty {
-                found.append(make(
-                    id: "music:play:\(song)",
-                    title: "Play \(song)",
-                    subtitle: "Music.app",
-                    icon: "symbol:music.note",
-                    kind: "musicplay",
-                    payload: song,
-                    category: "music",
-                    score: 1.9
-                ))
-            }
-        }
         if context.preferences.systemSettingsEnabled {
             let foldedQuery = fold(needle)
             for setting in context.settings where !foldedQuery.isEmpty && fold(setting.name).contains(foldedQuery) {
@@ -240,7 +181,6 @@ public enum Search {
         for command in SystemCommand.all {
             if context.preferences.systemDisabled.contains(command.id) { continue }
             if command.id == "ejectall", !context.preferences.ejectAllEnabled { continue }
-            if command.category == "music", !context.preferences.musicEnabled { continue }
             let customKeyword = context.preferences.systemKeywords[command.id]
             let commandFields = customKeyword.map { [$0, command.title] } ?? ([command.title] + command.keywords)
             push(scored(

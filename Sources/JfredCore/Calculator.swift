@@ -1,6 +1,13 @@
 import Foundation
 
 public enum Calculator {
+    /// A leading "=" is the advanced calculator. Standard expressions stay available either way.
+    public static func allows(_ raw: String, advanced: Bool) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("=") { return advanced }
+        return true
+    }
+
     public static func evaluate(_ raw: String) -> Double? {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.hasPrefix("=") { text.removeFirst() }

@@ -427,15 +427,6 @@ struct AdvancedPane: View {
                                 Button("Clear Knowledge") { model.clearKnowledge() }
                             }
                         }
-                        labeled("Notifications:") {
-                            VStack(alignment: .leading) {
-                                Toggle("Remove when clicked", isOn: model.bindPref(\.removeNotificationWhenClicked))
-                                Toggle("Show notification icons", isOn: model.bindPref(\.showNotificationIcons))
-                            }
-                        }
-                        labeled("Network:") {
-                            Toggle("Use macOS http proxy settings for scripts", isOn: model.bindPref(\.useHTTPProxy))
-                        }
                         labeled("Selection Hotkeys:") {
                             Picker("", selection: model.bindPref(\.selectionHotkeyMode)) {
                                 Text("Leave selected item in clipboard").tag("leave")
@@ -448,12 +439,6 @@ struct AdvancedPane: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     VStack(alignment: .leading, spacing: 16) {
-                        labeled("Force Keyboard:") {
-                            TextField("Leave blank", text: model.bindPref(\.forceKeyboard))
-                                .textFieldStyle(.roundedBorder)
-                                .frame(maxWidth: 220)
-                        }
-                        note("This will force Jfred to use the specified keyboard locale. Leave blank (default) and Jfred won't switch keyboards.")
                         labeled("Action Modifier:") {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("⌘ + number to action result items").font(.system(size: 12))
@@ -613,7 +598,6 @@ func usageColor(_ category: String) -> Color {
     case "clipboard": Color(hex: 0xC47A4A)
     case "navigation": Color(hex: 0xD15BA0)
     case "action": Color(hex: 0xC6C14A)
-    case "music": Color(hex: 0xD24B4B)
     case "remote": Color(hex: 0x3A74D8)
     default: Color(hex: 0x8FCE4A)
     }
@@ -748,7 +732,7 @@ struct PowerpackPane: View {
                     VStack(alignment: .leading, spacing: 18) {
                         Text("Jfred includes the Powerpack feature set locally")
                             .font(.system(size: 18, weight: .semibold))
-                        Text("Clipboard History, Snippets, File Search, Universal Actions, Workflows, Contacts, Music, Themes, Remote and Large Type are available without a separate purchase. Jfred is an independent, local project and is not affiliated with Running with Crayons.")
+                        Text("Clipboard History, Snippets, File Search, Universal Actions, Workflows, Themes, Remote and Large Type are available without a separate purchase. Jfred is an independent, local project and is not affiliated with Running with Crayons.")
                             .font(.system(size: 13))
                             .foregroundStyle(JfredColor.sub)
                             .fixedSize(horizontal: false, vertical: true)
@@ -759,8 +743,6 @@ struct PowerpackPane: View {
                             powerItem("File Search", "doc.text.magnifyingglass")
                             powerItem("Universal Actions", "arrow.right.square")
                             powerItem("Workflows", "square.grid.2x2")
-                            powerItem("Contacts", "person.crop.circle")
-                            powerItem("Music", "music.note")
                             powerItem("Themes", "paintbrush.fill")
                             powerItem("Remote", "antenna.radiowaves.left.and.right")
                             powerItem("Large Type", "textformat.size")
@@ -802,7 +784,7 @@ struct HelpPane: View {
 
     private let topics: [Topic] = [
         Topic(title: "Updating Jfred", detail: "The Update page checks public GitHub releases and replaces this Jfred.app in place, then relaunches. Move the app to the Applications folder first. Pre-releases are included only when Automatically check for pre-releases is selected. The check does not send usage data."),
-        Topic(title: "Permissions", detail: "Accessibility is needed for snippets, window commands and global hotkeys. Automation is needed for Finder, Terminal, browsers and Music. Contacts is only requested when you press Grant Access. Full Disk Access improves file search completeness."),
+        Topic(title: "Permissions", detail: "Accessibility is needed for snippets, window commands and global hotkeys. Automation is needed for Finder, Terminal and browsers. Full Disk Access improves file search completeness."),
         Topic(title: "Hotkey does not open the launcher", detail: "Another app may already own the shortcut. Open General, click the hotkey field and press a different combination. Jfred keeps running as a menu bar accessory even when the settings window closes."),
         Topic(title: "Clipboard history is empty", detail: "Check that Clipboard History is enabled, that the source app is not in Ignore Apps, and that the item was not marked Concealed or Auto Generated. Password managers are deliberately excluded."),
         Topic(title: "Snippets do not expand", detail: "Auto expansion needs Accessibility permission. Keep the snippet keyword unique and make sure the snippet is enabled and its collection is not filtered out."),
@@ -841,7 +823,6 @@ struct HelpPane: View {
                         Divider()
                         VStack(alignment: .leading, spacing: 8) {
                             helpRow("Support folder", SupportPaths.directory(syncFolder: model.preferences.syncFolder).path)
-                            helpRow("Contacts indexed", "\(model.contacts.count)")
                             helpRow("Workflows", "\(model.workflows.count)")
                             helpRow("Snippets", "\(model.snippets.count)")
                             helpRow("Clipboard items", "\(model.clips.count)")
@@ -878,7 +859,6 @@ struct HelpPane: View {
             "Jfred \(AppRelease.version)",
             "Update: \(model.updateStatusLine)",
             "Support folder: \(SupportPaths.directory(syncFolder: model.preferences.syncFolder).path)",
-            "Contacts: \(model.contacts.count)",
             "Workflows: \(model.workflows.count)",
             "Snippets: \(model.snippets.count)",
             "Clipboard items: \(model.clips.count)",

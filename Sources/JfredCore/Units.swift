@@ -144,10 +144,6 @@ public struct SystemCommand: Sendable, Equatable {
         SystemCommand(id: "mute", title: "Mute Volume", subtitle: "Toggle mute", symbol: "speaker.slash", keywords: ["mute", "volume"]),
         SystemCommand(id: "volumeup", title: "Volume Up", subtitle: "Raise the output volume", symbol: "speaker.plus", keywords: ["volume up", "louder"]),
         SystemCommand(id: "volumedown", title: "Volume Down", subtitle: "Lower the output volume", symbol: "speaker.minus", keywords: ["volume down", "quieter"]),
-        SystemCommand(id: "musicplaypause", title: "Play/Pause Music", subtitle: "Toggle Music.app playback", symbol: "playpause", keywords: ["play", "pause", "music"], category: "music"),
-        SystemCommand(id: "musicnext", title: "Next Track", subtitle: "Skip to the next song", symbol: "forward.end", keywords: ["next track", "next song"], category: "music"),
-        SystemCommand(id: "musicprevious", title: "Previous Track", subtitle: "Go back to the previous song", symbol: "backward.end", keywords: ["previous track", "previous song"], category: "music"),
-        SystemCommand(id: "musiccurrent", title: "Current Track", subtitle: "Show what Music.app is playing", symbol: "music.note", keywords: ["current track", "now playing"], category: "music"),
     ]
 }
 

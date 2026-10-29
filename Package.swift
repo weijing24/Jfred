@@ -8,12 +8,17 @@ let package = Package(
         .executable(name: "Jfred", targets: ["Jfred"])
     ],
     targets: [
-        .target(name: "JfredCore"),
+        .target(
+            name: "JfredCore",
+            swiftSettings: [
+                .unsafeFlags(["-warnings-as-errors"])
+            ]
+        ),
         .executableTarget(
             name: "Jfred",
             dependencies: ["JfredCore"],
             swiftSettings: [
-                .unsafeFlags(["-parse-as-library"])
+                .unsafeFlags(["-parse-as-library", "-warnings-as-errors"])
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
@@ -23,9 +28,14 @@ let package = Package(
                 .linkedFramework("CoreServices"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("UserNotifications"),
-                .linkedFramework("Contacts"),
             ]
         ),
-        .testTarget(name: "JfredCoreTests", dependencies: ["JfredCore"]),
+        .testTarget(
+            name: "JfredCoreTests",
+            dependencies: ["JfredCore"],
+            swiftSettings: [
+                .unsafeFlags(["-warnings-as-errors"])
+            ]
+        ),
     ]
 )

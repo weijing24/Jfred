@@ -212,6 +212,23 @@ enum PreferencePaneNames {
     }
 }
 
+private final class AppRecordBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [AppRecord] = []
+
+    func append(_ rows: [AppRecord]) {
+        lock.lock()
+        items.append(contentsOf: rows)
+        lock.unlock()
+    }
+
+    var values: [AppRecord] {
+        lock.lock()
+        defer { lock.unlock() }
+        return items
+    }
+}
+
 enum FileSearch {
     static func files(query: String, preferences: Preferences) -> [AppRecord] {
         let safe = query.replacingOccurrences(of: "\"", with: "").trimmingCharacters(in: .whitespaces)
@@ -225,8 +242,7 @@ enum FileSearch {
     private static func spotlight(query: String, preferences: Preferences) -> [AppRecord] {
         let predicate = "kMDItemDisplayName == \"*\(query)*\"c"
         let roots = scopeRoots(preferences)
-        let lock = NSLock()
-        var found: [AppRecord] = []
+        let found = AppRecordBox()
         let group = DispatchGroup()
         for root in roots.prefix(8) {
             group.enter()
@@ -236,15 +252,13 @@ enum FileSearch {
                     let path = String(line)
                     return AppRecord(id: path, name: FileManager.default.displayName(atPath: path), path: path)
                 }
-                lock.lock()
-                found.append(contentsOf: rows)
-                lock.unlock()
+                found.append(rows)
                 group.leave()
             }
         }
         _ = group.wait(timeout: .now() + 1.5)
         var seen = Set<String>()
-        return found.filter { seen.insert($0.path).inserted }.prefix(preferences.fileSearchMax).map { $0 }
+        return found.values.filter { seen.insert($0.path).inserted }.prefix(preferences.fileSearchMax).map { $0 }
     }
 
     static func scopeRoots(_ preferences: Preferences) -> [String] {

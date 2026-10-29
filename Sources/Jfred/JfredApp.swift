@@ -97,8 +97,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if url.host == "search" || url.host == nil {
                 model.query = query
                 model.showLauncher()
-            } else if url.host == "music" {
-                model.showMusicPlayer()
             } else if url.host == "selection" {
                 model.showSelectionActions()
             } else if url.host == "actions" {

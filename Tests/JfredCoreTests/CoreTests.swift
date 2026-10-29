@@ -176,24 +176,6 @@ struct CoreTests {
     }
 }
 
-    @Test func contactsAndMusicResults() {
-        var context = SearchContext()
-        context.preferences.contactsEnabled = true
-        context.contacts = [
-            ContactRecord(id: "ada", name: "Ada Lovelace", email: "ada@example.com", phone: "", uid: "ada"),
-        ]
-        let people = Search.results(for: "lovelace", context: context)
-        #expect(people.contains { $0.kind == "contact" && $0.title == "Ada Lovelace" })
-
-        context.preferences.contactsEnabled = false
-        #expect(!Search.results(for: "lovelace", context: context).contains { $0.kind == "contact" })
-
-        context.preferences.musicEnabled = true
-        let playback = Search.results(for: "play daft punk", context: context)
-        #expect(playback.contains { $0.kind == "musicplay" && $0.payload == "daft punk" })
-        #expect(Search.results(for: "music", context: context).contains { $0.id == "sys:musicplaypause" })
-    }
-
     @Test func disabledSystemCommandIsHidden() {
         var context = SearchContext()
         context.preferences.systemDisabled = ["sleep"]
@@ -212,19 +194,6 @@ struct CoreTests {
         #expect(five.contains { $0.kind == "clipclear" && $0.payload == "5" })
         context.preferences.clipboardClearKeywordEnabled = false
         #expect(!Search.results(for: "clear", context: context).contains { $0.kind == "clipclear" })
-    }
-
-    @Test func contactDisplayOptions() {
-        var context = SearchContext()
-        context.preferences.contactsEnabled = true
-        context.preferences.contactsInvertName = true
-        context.preferences.contactsShowJobTitle = true
-        context.contacts = [
-            ContactRecord(id: "ada", name: "Ada Lovelace", email: "ada@example.com", phone: "", uid: "ada", jobTitle: "Mathematician"),
-        ]
-        let row = Search.results(for: "ada", context: context).first { $0.kind == "contact" }
-        #expect(row?.title == "Lovelace, Ada")
-        #expect(row?.subtitle.contains("Mathematician") == true)
     }
 
     @Test func ejectAllRespectsEnableSwitch() {
@@ -272,35 +241,29 @@ struct CoreTests {
 
     @Test func newPreferencesRoundTrip() throws {
         var prefs = Preferences()
-        prefs.contactsEnabled = false
-        prefs.musicKeyword = "tunes"
         prefs.clipboardAutoPaste = false
         prefs.fileBufferTimeoutMinutes = 9
-        prefs.calculatorOutputThousands = false
+        prefs.calculatorAdvanced = false
         prefs.dictionaryDefineKeyword = "lookup"
         prefs.terminalPrefix = "!"
         prefs.uaShowRightArrow = false
-        prefs.uaSelectionHotkey = "⌥⌘K"
+        prefs.dictionaryPasteOnAction = true
         prefs.snippetExpandPlaySound = false
         prefs.clipboardIgnoreApps = ["Keychain Access", "CustomApp"]
         prefs.clipboardRetentionImages = "1 week"
-        prefs.contactsEmailMode = "gmail"
         prefs.customThemes = [CustomTheme(name: "Test Theme", width: 600)]
         let data = try JSONEncoder().encode(prefs)
         let decoded = try JSONDecoder().decode(Preferences.self, from: data)
-        #expect(decoded.contactsEnabled == false)
-        #expect(decoded.musicKeyword == "tunes")
         #expect(decoded.clipboardAutoPaste == false)
         #expect(decoded.fileBufferTimeoutMinutes == 9)
-        #expect(decoded.calculatorOutputThousands == false)
+        #expect(decoded.calculatorAdvanced == false)
         #expect(decoded.dictionaryDefineKeyword == "lookup")
         #expect(decoded.terminalPrefix == "!")
         #expect(decoded.uaShowRightArrow == false)
-        #expect(decoded.uaSelectionHotkey == "⌥⌘K")
+        #expect(decoded.dictionaryPasteOnAction == true)
         #expect(decoded.snippetExpandPlaySound == false)
         #expect(decoded.clipboardIgnoreApps == ["Keychain Access", "CustomApp"])
         #expect(decoded.clipboardRetentionImages == "1 week")
-        #expect(decoded.contactsEmailMode == "gmail")
         #expect(decoded.customThemes.first?.name == "Test Theme")
         #expect(decoded.customThemes.first?.width == 600)
     }
@@ -434,3 +397,41 @@ private func asset(_ version: String, _ sha: String, _ size: Int64, architecture
     let name = AppUpdateFeed.assetName(version: version, architecture: architecture)
     return #"{"name":"\#(name)","browser_download_url":"https://github.com/weijing24/Jfred/releases/download/v\#(version)/\#(name)","size":\#(size),"digest":"sha256:\#(sha)"}"#
 }
+
+
+    @Test func fileOpenPolicy() {
+        let policy = FileOpenPolicy(
+            revealInsteadOfOpening: false,
+            openFoldersInFinder: true,
+            runAppleScripts: true,
+            touchFolders: true,
+            touchAliases: true
+        )
+        #expect(policy.steps(exists: true, isDirectory: true, isAppleScript: false, resolvesElsewhere: false) == [.reveal, .touch])
+        #expect(policy.steps(exists: true, isDirectory: false, isAppleScript: true, resolvesElsewhere: false) == [.runAppleScript])
+        #expect(policy.steps(exists: true, isDirectory: false, isAppleScript: false, resolvesElsewhere: true) == [.open, .touchResolvedTarget])
+        let reveal = FileOpenPolicy(revealInsteadOfOpening: true, openFoldersInFinder: true, runAppleScripts: true, touchFolders: true, touchAliases: true)
+        #expect(reveal.steps(exists: true, isDirectory: true, isAppleScript: false, resolvesElsewhere: false) == [.reveal])
+    }
+
+    @Test func systemEffectsIgnoreDisabledCommandsAndParseVolume() {
+        #expect(ActionExecutor.systemEffect(id: "sleep", disabled: ["sleep"], ejectScope: "local") == nil)
+        #expect(ActionExecutor.systemEffect(id: "volume:40", disabled: [], ejectScope: "local") == .setOutputVolume(40))
+        #expect(ActionExecutor.systemEffect(id: "volume:140", disabled: [], ejectScope: "local") == nil)
+        #expect(ActionExecutor.systemEffect(id: "eject", disabled: [], ejectScope: "all") == .eject(all: true))
+        #expect(ActionExecutor.systemEffect(id: "ejectall", disabled: [], ejectScope: "local") == .eject(all: true))
+        #expect(ActionExecutor.systemEffect(id: "nope", disabled: [], ejectScope: "local") == .unknown("nope"))
+    }
+
+    @Test func clipboardRetentionFollowsClipKind() {
+        var preferences = Preferences()
+        preferences.clipboardRetentionText = "1 day"
+        preferences.clipboardRetentionImages = "1 week"
+        preferences.clipboardRetentionFiles = "never"
+        #expect(ClipboardRetention.label(forKind: "text", preferences: preferences) == "1 day")
+        #expect(ClipboardRetention.interval(for: "1 week") == 604_800.0)
+        #expect(ClipboardRetention.interval(for: "never") == nil)
+        #expect(Calculator.allows("=sqrt(9)", advanced: false) == false)
+        #expect(Calculator.allows("2+2", advanced: false) == true)
+        #expect(Calculator.allows("=10/4", advanced: true) == true)
+    }

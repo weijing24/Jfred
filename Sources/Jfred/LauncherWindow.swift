@@ -13,7 +13,6 @@ final class LauncherController {
     let model: AppModel
     private var panel: LauncherPanel?
     private var largePanel: NSPanel?
-    private var musicPanel: NSPanel?
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var pinnedTop: CGFloat?
@@ -46,10 +45,14 @@ final class LauncherController {
         panel.contentView = host
         self.panel = panel
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self] note in
-            let maxY = (note.object as? NSWindow)?.frame.maxY
+            // The observer runs on the main queue. The block itself is not main-actor
+            // isolated, so take the window out of the sending check and read its frame there.
+            nonisolated(unsafe) let object = note.object
             MainActor.assumeIsolated {
-                guard self?.ignoreMove != true, let maxY else { return }
-                self?.pinnedTop = maxY
+                guard self?.ignoreMove != true else { return }
+                if let maxY = (object as? NSWindow)?.frame.maxY {
+                    self?.pinnedTop = maxY
+                }
             }
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -135,43 +138,6 @@ final class LauncherController {
             return 0
         }
         return max(model.results.count, 1)
-    }
-
-    func hideMusicPlayer() {
-        musicPanel?.orderOut(nil)
-        musicPanel = nil
-    }
-
-    func showMusicPlayer() {
-        if let musicPanel {
-            model.refreshMusicPanel()
-            musicPanel.makeKeyAndOrderFront(nil)
-            return
-        }
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 560),
-            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        panel.level = .floating
-        panel.isFloatingPanel = true
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.isMovableByWindowBackground = true
-        let host = NSHostingView(rootView: MusicMiniPlayer(model: model) { [weak self] in
-            self?.musicPanel?.orderOut(nil)
-            self?.musicPanel = nil
-        })
-        host.frame = panel.contentView?.bounds ?? .zero
-        host.autoresizingMask = [.width, .height]
-        panel.contentView = host
-        panel.center()
-        panel.makeKeyAndOrderFront(nil)
-        musicPanel = panel
-        model.refreshMusicPanel()
     }
 
     func showLarge(_ text: String, size: Double, font: String) {
@@ -305,7 +271,22 @@ final class LauncherController {
             model.completeSelected()
             return nil
         case 124:
-            if model.preferences.uaShowRightArrow { model.showActions() }
+            if showsActions(flags) { model.showActions() }
+            return nil
+        case 63 where model.preferences.uaShowFunction:
+            model.showActions()
+            return nil
+        case 59 where model.preferences.uaShowControl:
+            model.showActions()
+            return nil
+        case 62 where model.preferences.uaShowControl:
+            model.showActions()
+            return nil
+        case 54 where model.preferences.uaShowCommand:
+            model.showActions()
+            return nil
+        case 55 where model.preferences.uaShowCommand:
+            model.showActions()
             return nil
         default:
             break
@@ -321,6 +302,14 @@ final class LauncherController {
             if chars == "k" { model.showActions(); return nil }
         }
         return event
+    }
+
+    private func showsActions(_ flags: NSEvent.ModifierFlags) -> Bool {
+        if model.preferences.uaShowRightArrow { return true }
+        if flags.contains(.function), model.preferences.uaShowFunction { return true }
+        if flags.contains(.control), model.preferences.uaShowControl { return true }
+        if flags.contains(.command), model.preferences.uaShowCommand { return true }
+        return false
     }
 }
 
