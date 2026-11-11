@@ -123,6 +123,9 @@ final class AppModel {
     private var actionRoot: [LauncherAction] = []
     private var actionDrilled = false
     var opItems: [AppRecord] = []
+    /// Prepared match keys for apps, links, snippets and the other searchable
+    /// records. Refreshed before each search; only changed sections rebuild.
+    @ObservationIgnored private var searchIndex = SearchIndex()
     private(set) var updatePhase: UpdatePhase = .idle
     private(set) var pendingUpdate: UpdateRelease?
     private(set) var updateNotes = ""
@@ -280,7 +283,9 @@ final class AppModel {
             return builtin
         })
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let context = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil, forced: nil)
+        var context = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil, forced: nil)
+        searchIndex.refresh(for: context)
+        context.index = searchIndex
         let useWorkflows = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
         if useWorkflows, let match = WorkflowRuntime.match(in: workflows, query: trimmed, disabledBuiltins: disabledBuiltins) {
             if match.input.kind == .scriptFilter || match.input.kind == .listFilter {
@@ -1251,6 +1256,7 @@ final class AppModel {
             await MainActor.run {
                 self.apps = apps
                 IconCache.shared.prefetch(apps.map(\.path))
+                self.warmSearchIndex()
             }
         }
     }
@@ -1259,14 +1265,38 @@ final class AppModel {
         let prefs = preferences
         Task.detached {
             let links = BookmarkIndex.load(preferences: prefs)
-            await MainActor.run { self.links = links }
+            await MainActor.run {
+                self.links = links
+                self.warmSearchIndex()
+            }
         }
     }
 
     func reloadOnePassword() {
         Task.detached {
             let items = OnePassword.items()
-            await MainActor.run { self.opItems = items }
+            await MainActor.run {
+                self.opItems = items
+                self.warmSearchIndex()
+            }
+        }
+    }
+
+    /// Builds match keys for changed records off the main thread, so the first
+    /// keystroke after apps or bookmarks reload does not pay for them.
+    private func warmSearchIndex() {
+        let context = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil)
+        let current = searchIndex
+        Task {
+            let warmed = await Task.detached(priority: .userInitiated) {
+                var index = current
+                index.refresh(for: context)
+                return index
+            }.value
+            // Records may have changed again, or a keystroke may already have
+            // refreshed the index. Keep the warmed copy only if it still matches.
+            let latest = self.makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil)
+            if warmed.isCurrent(for: latest) { self.searchIndex = warmed }
         }
     }
 

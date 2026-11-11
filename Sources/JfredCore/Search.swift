@@ -107,14 +107,14 @@ public enum Search {
         }
 
         let needle = trimmed
-        func push(_ item: SearchResult?) {
-            if let item { found.append(item) }
-        }
+        // Match against prepared keys first and build a row only for a hit.
+        var index = context.index ?? SearchIndex()
+        index.refresh(for: context)
+        let query = MatchQuery(needle)
 
-        for app in context.apps where includeApp(path: app.path) {
-            push(scored(
-                query: needle,
-                fields: matchFields(forName: app.name, aliases: app.aliases),
+        for (app, entry) in zip(index.apps.records, index.apps.entries) where entry.included {
+            guard let match = keptMatch(query, entry.keys) else { continue }
+            found.append(make(
                 id: "app:\(app.path)",
                 title: app.name,
                 subtitle: app.path,
@@ -122,13 +122,13 @@ public enum Search {
                 kind: "app",
                 payload: app.path,
                 category: "general",
-                context: context
+                score: match.score,
+                tier: match.tier
             ))
         }
-        for place in context.places {
-            push(scored(
-                query: needle,
-                fields: [place.name],
+        for (place, key) in zip(index.places.records, index.places.entries) {
+            guard let match = keptMatch(query, [key]) else { continue }
+            found.append(make(
                 id: "place:\(place.id)",
                 title: place.name,
                 subtitle: place.id == "computer" ? "Open Computer in Finder" : place.path,
@@ -136,15 +136,14 @@ public enum Search {
                 kind: "place",
                 payload: place.id,
                 category: "navigation",
-                context: context
+                score: match.score,
+                tier: match.tier
             ))
         }
-        if context.preferences.systemSettingsEnabled {
-            let foldedQuery = fold(needle)
-            for setting in context.settings where !foldedQuery.isEmpty && fold(setting.name).contains(foldedQuery) {
-                push(scored(
-                    query: needle,
-                    fields: [setting.name],
+        if context.preferences.systemSettingsEnabled, !query.folded.isEmpty {
+            for (setting, key) in zip(index.settings.records, index.settings.entries) where key.folded.contains(query.folded) {
+                guard let match = keptMatch(query, [key]) else { continue }
+                found.append(make(
                     id: "set:\(setting.id)",
                     title: setting.name,
                     subtitle: "System Settings",
@@ -152,42 +151,48 @@ public enum Search {
                     kind: "settings",
                     payload: setting.url,
                     category: "general",
-                    context: context
+                    score: match.score,
+                    tier: match.tier
                 ))
             }
         }
-        for snippet in context.snippets where context.preferences.snippetsEnabled {
-            let snippetFields: [String]
-            switch context.preferences.snippetMatching {
-            case "name": snippetFields = [snippet.name]
-            case "keyword": snippetFields = [snippet.keyword]
-            default: snippetFields = [snippet.name, snippet.keyword]
+        if context.preferences.snippetsEnabled {
+            for (snippet, entry) in zip(index.snippets.records, index.snippets.entries) {
+                let snippetKeys: [MatchKey]
+                switch context.preferences.snippetMatching {
+                case "name": snippetKeys = [entry.name]
+                case "keyword": snippetKeys = [entry.keyword]
+                default: snippetKeys = [entry.name, entry.keyword]
+                }
+                let floor: Double? = query.folded == entry.keyword.folded ? 1.55 : nil
+                guard let match = keptMatch(query, snippetKeys, floor: floor) else { continue }
+                let snippetSubtitle = context.preferences.snippetShowKeywordInResult
+                    ? snippet.keyword + "  ·  " + snippet.text.replacingOccurrences(of: "\n", with: " ")
+                    : snippet.text.replacingOccurrences(of: "\n", with: " ")
+                found.append(make(
+                    id: "snip:\(snippet.id.uuidString)",
+                    title: snippet.name,
+                    subtitle: snippetSubtitle,
+                    icon: "symbol:text.quote",
+                    kind: "snippet",
+                    payload: snippet.id.uuidString,
+                    category: "expansion",
+                    score: match.score,
+                    tier: match.tier
+                ))
             }
-            let snippetSubtitle = context.preferences.snippetShowKeywordInResult
-                ? snippet.keyword + "  ·  " + snippet.text.replacingOccurrences(of: "\n", with: " ")
-                : snippet.text.replacingOccurrences(of: "\n", with: " ")
-            push(scored(
-                query: needle,
-                fields: snippetFields,
-                id: "snip:\(snippet.id.uuidString)",
-                title: snippet.name,
-                subtitle: snippetSubtitle,
-                icon: "symbol:text.quote",
-                kind: "snippet",
-                payload: snippet.id.uuidString,
-                category: "expansion",
-                context: context,
-                floor: fold(needle) == fold(snippet.keyword) ? 1.55 : nil
-            ))
         }
-        for command in SystemCommand.all {
+        for (command, entry) in zip(SystemCommand.all, SearchIndex.commands) {
             if context.preferences.systemDisabled.contains(command.id) { continue }
             if command.id == "ejectall", !context.preferences.ejectAllEnabled { continue }
-            let customKeyword = context.preferences.systemKeywords[command.id]
-            let commandFields = customKeyword.map { [$0, command.title] } ?? ([command.title] + command.keywords)
-            push(scored(
-                query: needle,
-                fields: commandFields,
+            let commandKeys: [MatchKey]
+            if let custom = context.preferences.systemKeywords[command.id] {
+                commandKeys = [index.systemKeywords[command.id] ?? MatchKey(custom), entry.title]
+            } else {
+                commandKeys = entry.titleAndKeywords
+            }
+            guard let match = keptMatch(query, commandKeys) else { continue }
+            found.append(make(
                 id: "sys:\(command.id)",
                 title: command.title,
                 subtitle: command.subtitle,
@@ -195,21 +200,23 @@ public enum Search {
                 kind: "system",
                 payload: command.id,
                 category: command.category,
-                context: context
+                score: match.score,
+                tier: match.tier
             ))
         }
-        for workflow in context.workflows where workflow.enabled {
-            push(scored(
-                query: needle,
-                fields: [workflow.name, workflow.keyword],
+        for (workflow, entry) in zip(index.workflows.records, index.workflows.entries) where workflow.enabled {
+            guard let match = keptMatch(query, entry.keys) else { continue }
+            // Icon lookup checks the disk; do it only for rows that match.
+            found.append(make(
                 id: "complete:\(workflow.id.uuidString)",
                 title: workflow.name,
-                subtitle: workflow.keyword,
+                subtitle: entry.keyword,
                 icon: workflow.resolvedIcon().resource,
                 kind: "complete",
-                payload: workflow.keyword + " ",
+                payload: entry.keyword + " ",
                 category: "action",
-                context: context
+                score: match.score,
+                tier: match.tier
             ))
         }
         let bookmarkMode = context.preferences.bookmarkResultMode
@@ -223,10 +230,10 @@ public enum Search {
             }
         }
         if showBookmarks, bookmarkNeedle.count >= 2 {
-            for link in context.links {
-                push(scored(
-                    query: bookmarkNeedle,
-                    fields: [link.title, link.url],
+            let bookmarkQuery = bookmarkNeedle == needle ? query : MatchQuery(bookmarkNeedle)
+            for (link, keys) in zip(index.links.records, index.links.entries) {
+                guard let match = keptMatch(bookmarkQuery, keys, dampen: 0.88) else { continue }
+                found.append(make(
                     id: "link:\(link.id)",
                     title: link.title.isEmpty ? link.url : link.title,
                     subtitle: link.source + "  ·  " + link.url,
@@ -234,8 +241,8 @@ public enum Search {
                     kind: "url",
                     payload: link.url,
                     category: "navigation",
-                    context: context,
-                    dampen: 0.88
+                    score: match.score,
+                    tier: match.tier
                 ))
             }
         }
@@ -254,10 +261,9 @@ public enum Search {
             ))
         }
         if context.preferences.onePasswordEnabled {
-            for item in context.opItems {
-                push(scored(
-                    query: needle,
-                    fields: [item.name],
+            for (item, key) in zip(index.opItems.records, index.opItems.entries) {
+                guard let match = keptMatch(query, [key]) else { continue }
+                found.append(make(
                     id: "op:\(item.id)",
                     title: item.name,
                     subtitle: "1Password",
@@ -265,20 +271,21 @@ public enum Search {
                     kind: "copy",
                     payload: item.path,
                     category: "action",
-                    context: context
+                    score: match.score,
+                    tier: match.tier
                 ))
             }
         }
 
-        let ranked = dedupe(found, query: needle, context: context)
+        let ranked = sortRows(rankRows(found, query: needle, context: context))
         if context.preferences.fallbackMode == "always" {
-            let head = Array(ranked.prefix(resultLimit))
+            let head = ranked.prefix(resultLimit).map(\.row)
             return Array((head + fallbacks(for: trimmed, context: context, score: 0.2)).prefix(resultLimit + 3))
         }
         if ranked.isEmpty && context.preferences.fallbackMode != "never" {
             return cap(fallbacks(for: trimmed, context: context, score: 1), query: needle, context: context)
         }
-        return cap(ranked, query: needle, context: context)
+        return cap(ranked: ranked)
     }
 
     public static func wantsFiles(raw: String, preferences: Preferences) -> Bool {
@@ -324,10 +331,11 @@ public enum Search {
             return [make(id: "file:hint", title: "File search", subtitle: "Type a file name", icon: "symbol:doc", kind: "text", payload: "", category: "navigation", score: 1)]
         }
         let hidden = Set(context.preferences.hiddenFileTypes)
+        let prepared = MatchQuery(query)
         return context.files.filter { !isHiddenFile($0.path, hiddenTypes: hidden) }.compactMap { file in
-            scored(
-                query: query,
-                fields: [file.name, URL(fileURLWithPath: file.path).lastPathComponent],
+            let keys = [MatchKey(file.name), MatchKey(URL(fileURLWithPath: file.path).lastPathComponent)]
+            guard let match = keptMatch(prepared, keys) else { return nil }
+            return make(
                 id: "file:\(file.path)",
                 title: file.name,
                 subtitle: file.path,
@@ -335,7 +343,8 @@ public enum Search {
                 kind: "file",
                 payload: file.path,
                 category: "navigation",
-                context: context
+                score: match.score,
+                tier: match.tier
             )
         }
     }
@@ -390,21 +399,12 @@ public enum Search {
         }
     }
 
-    private static func scored(
-        query: String,
-        fields: [String],
-        id: String,
-        title: String,
-        subtitle: String,
-        icon: String,
-        kind: String,
-        payload: String,
-        category: String,
-        context: SearchContext,
-        dampen: Double = 1,
-        floor: Double? = nil
-    ) -> SearchResult? {
-        var match = bestFieldMatch(query: query, fields: fields)
+    /// Best match across the keys, kept only when the launcher shows it.
+    private static func keptMatch(_ query: MatchQuery, _ keys: [MatchKey], dampen: Double = 1, floor: Double? = nil) -> FieldMatch? {
+        // Rows keep tiers 0-2, so the matcher can skip the substring and fuzzy
+        // steps. With a floor, any match (even tier 3 or 4) must still block the
+        // floor, so match every tier.
+        var match = bestFieldMatch(query: query, keys: keys, maxTier: floor == nil ? 2 : 4)
         if var found = match {
             found.score *= dampen
             match = found
@@ -414,7 +414,7 @@ public enum Search {
         // Alfred keeps a query to a name or word prefix. A mid-word
         // substring ("Sharing" for "ha") or a fuzzy hit ("Hostpane") stays out.
         guard let match, match.tier <= 2 else { return nil }
-        return make(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: match.score, tier: match.tier)
+        return match
     }
 
     private static func make(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double, tier: Int = 0, badge: String = "", badgeName: String = "") -> SearchResult {
@@ -423,7 +423,7 @@ public enum Search {
 
     /// Background helpers under CoreServices are not launcher apps.
     /// `/System/Library/CoreServices/Applications` and Finder stay.
-    private static func includeApp(path: String) -> Bool {
+    static func includeApp(path: String) -> Bool {
         let folded = fold(path)
         let marker = "/system/library/coreservices/"
         guard let range = folded.range(of: marker) else { return true }
@@ -435,48 +435,55 @@ public enum Search {
 
     /// `/Applications` apps whose names contain the query, then other apps that contain it,
     /// then System Settings panes, then remaining matches.
-    private static func rankBand(_ item: SearchResult, query: String) -> Int {
-        let folded = fold(query)
-        let nameHit = !folded.isEmpty && fold(item.title).contains(folded)
-        let applications = item.kind == "app" && item.payload.range(of: "/Applications/", options: [.anchored, .caseInsensitive]) != nil
+    private static func rankBand(_ item: SearchResult, foldedQuery: String) -> Int {
+        guard item.kind == "app" else { return item.kind == "settings" ? 2 : 5 }
+        let nameHit = !foldedQuery.isEmpty && fold(item.title).contains(foldedQuery)
+        let applications = item.payload.range(of: "/Applications/", options: [.anchored, .caseInsensitive]) != nil
         if applications && nameHit { return 0 }
-        if item.kind == "app" && nameHit { return 1 }
-        if item.kind == "settings" { return 2 }
+        if nameHit { return 1 }
         if applications { return 3 }
-        if item.kind == "app" { return 4 }
-        return 5
+        return 4
     }
 
-    private static func dedupe(_ items: [SearchResult], query: String = "", context: SearchContext? = nil) -> [SearchResult] {
+    /// A row with its sort keys, computed once instead of in every comparison.
+    private struct RankedRow {
+        let row: SearchResult
+        let band: Int
+        let latched: Bool
+        let frecency: Double
+        let total: Double
+    }
+
+    private static func rankRows(_ items: [SearchResult], query: String, context: SearchContext?) -> [RankedRow] {
         let folded = fold(query)
-        let shortQuery = folded.count > 0 && folded.count <= 3
         let latched = context?.preferences.topResultLatching == true ? context?.knowledge[folded] : nil
         let now = context?.now ?? Date()
-        let sorted = items.sorted { lhs, rhs in
-            let lhsBand = rankBand(lhs, query: query)
-            let rhsBand = rankBand(rhs, query: query)
-            if lhsBand != rhsBand { return lhsBand < rhsBand }
-            let lhsLatch = lhs.id == latched
-            let rhsLatch = rhs.id == latched
-            if lhsLatch != rhsLatch {
-                // Short queries lean harder on the latched top result.
-                if shortQuery { return lhsLatch }
-                return lhsLatch
-            }
-            if lhs.tier != rhs.tier { return lhs.tier < rhs.tier }
-            let lhsStat = context?.selections[lhs.id]
-            let rhsStat = context?.selections[rhs.id]
-            let lhsFreq = selectionFrecency(count: lhsStat?.count ?? 0, lastSelected: lhsStat?.lastSelected ?? .distantPast, now: now)
-            let rhsFreq = selectionFrecency(count: rhsStat?.count ?? 0, lastSelected: rhsStat?.lastSelected ?? .distantPast, now: now)
-            let lhsTotal = lhs.score + min(0.45, lhsFreq * 0.08)
-            let rhsTotal = rhs.score + min(0.45, rhsFreq * 0.08)
-            if shortQuery && lhsLatch != rhsLatch { return lhsLatch }
-            if abs(lhsTotal - rhsTotal) > 0.0001 { return lhsTotal > rhsTotal }
-            if lhsFreq != rhsFreq { return lhsFreq > rhsFreq }
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        return items.map { item in
+            let stat = context?.selections[item.id]
+            let frecency = selectionFrecency(count: stat?.count ?? 0, lastSelected: stat?.lastSelected ?? .distantPast, now: now)
+            return RankedRow(
+                row: item,
+                band: rankBand(item, foldedQuery: folded),
+                latched: item.id == latched,
+                frecency: frecency,
+                total: item.score + min(0.45, frecency * 0.08)
+            )
+        }
+    }
+
+    /// Band, the latched top result, match tier, score plus frecency, frecency,
+    /// then title. Drops repeated ids after sorting.
+    private static func sortRows(_ rows: [RankedRow]) -> [RankedRow] {
+        let sorted = rows.sorted { lhs, rhs in
+            if lhs.band != rhs.band { return lhs.band < rhs.band }
+            if lhs.latched != rhs.latched { return lhs.latched }
+            if lhs.row.tier != rhs.row.tier { return lhs.row.tier < rhs.row.tier }
+            if abs(lhs.total - rhs.total) > 0.0001 { return lhs.total > rhs.total }
+            if lhs.frecency != rhs.frecency { return lhs.frecency > rhs.frecency }
+            return lhs.row.title.localizedCaseInsensitiveCompare(rhs.row.title) == .orderedAscending
         }
         var seen = Set<String>()
-        return sorted.filter { seen.insert($0.id).inserted }
+        return sorted.filter { seen.insert($0.row.id).inserted }
     }
 
     /// Recent apps, clipboard clips and usage-backed rows shown for an empty query.
@@ -549,16 +556,20 @@ public enum Search {
     }
 
     private static func cap(_ items: [SearchResult], query: String = "", context: SearchContext? = nil) -> [SearchResult] {
-        let ranked = dedupe(items, query: query, context: context)
-        let settings = ranked.filter { $0.kind == "settings" }
+        cap(ranked: rankRows(items, query: query, context: context))
+    }
+
+    private static func cap(ranked rows: [RankedRow]) -> [SearchResult] {
+        let ranked = sortRows(rows)
+        let settings = ranked.filter { $0.row.kind == "settings" }
         guard ranked.count > resultLimit, !settings.isEmpty else {
-            return Array(ranked.prefix(resultLimit))
+            return ranked.prefix(resultLimit).map(\.row)
         }
-        let others = ranked.filter { $0.kind != "settings" }
+        let others = ranked.filter { $0.row.kind != "settings" }
         let room = max(0, resultLimit - settings.count)
         let keptOthers = Array(others.prefix(room))
-        let merged = dedupe(keptOthers + settings, query: query, context: context)
-        return Array(merged.prefix(resultLimit))
+        let merged = sortRows(keptOthers + settings)
+        return merged.prefix(resultLimit).map(\.row)
     }
 
     /// Clipboard viewer is its own result list. Newest clips stay first.
@@ -669,9 +680,10 @@ public enum Search {
         return nil
     }
 
+    private static let volumePattern = try? NSRegularExpression(pattern: #"^(?:vol|volume)\s+([0-9]{1,3})$"#, options: [.caseInsensitive])
+
     private static func volumeValue(_ query: String) -> Int? {
-        let pattern = #"^(?:vol|volume)\s+([0-9]{1,3})$"#
-        guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+        guard let expression = volumePattern else { return nil }
         let range = NSRange(query.startIndex..., in: query)
         guard let match = expression.firstMatch(in: query, range: range),
               let valueRange = Range(match.range(at: 1), in: query),

@@ -76,9 +76,45 @@ public func matchFields(forName name: String, aliases: [String] = []) -> [String
     return fields
 }
 
+/// A query folded once per keystroke instead of once per candidate.
+public struct MatchQuery: Sendable {
+    public let folded: String
+    let length: Int
+
+    public init(_ query: String) {
+        folded = fold(query.trimmingCharacters(in: .whitespacesAndNewlines))
+        length = folded.count
+    }
+}
+
+/// Match keys for one target string. Folding, word splitting and camel initials
+/// cost far more than the comparisons, so build keys when the data changes and
+/// reuse them for every keystroke.
+public struct MatchKey: Sendable {
+    public let folded: String
+    let words: [Substring]
+    /// Folded camel / word initials; nil when the target has none.
+    let initials: String?
+    let length: Int
+
+    public init(_ target: String) {
+        folded = fold(target)
+        words = folded.split { !$0.isLetter && !$0.isNumber }
+        let raw = camelInitials(target)
+        initials = raw.isEmpty ? nil : fold(raw)
+        length = folded.count
+    }
+}
+
 public func fieldMatch(query: String, target: String) -> FieldMatch? {
-    let q = fold(query.trimmingCharacters(in: .whitespacesAndNewlines))
-    let t = fold(target)
+    fieldMatch(query: MatchQuery(query), key: MatchKey(target))
+}
+
+/// Same result as `fieldMatch(query:target:)`, or nil when the tier is above
+/// `maxTier`. A low `maxTier` skips the work that cannot produce a kept match.
+public func fieldMatch(query: MatchQuery, key: MatchKey, maxTier: Int = 4) -> FieldMatch? {
+    let q = query.folded
+    let t = key.folded
     if q.isEmpty || t.isEmpty { return nil }
     if t == q { return FieldMatch(tier: 0, score: 1) }
 
@@ -88,20 +124,26 @@ public func fieldMatch(query: String, target: String) -> FieldMatch? {
         tier = 1
         score = 0.97
     }
-    let words = t.split { !$0.isLetter && !$0.isNumber }
-    if words.contains(where: { $0.hasPrefix(q) }) {
+    if key.words.contains(where: { $0.hasPrefix(q) }) {
         if tier == nil { tier = 2 }
         score = max(score, 0.93)
     }
-    let initials = camelInitials(target)
-    if !initials.isEmpty, fold(initials).hasPrefix(q), q.count >= 2 {
+    if query.length >= 2, let initials = key.initials, initials.hasPrefix(q) {
         if tier == nil { tier = 2 }
         score = max(score, 0.91)
+    }
+    if maxTier <= 2 {
+        // Tiers 1 and 2 score at least 0.91. The substring step adds 0.84 and the
+        // fuzzy step at most 0.9, so neither can change a tier 1 or 2 result.
+        guard let tier, tier <= maxTier else { return nil }
+        return FieldMatch(tier: tier, score: score - Double(key.length) * 0.0015)
     }
     if t.contains(q) {
         if tier == nil { tier = 3 }
         score = max(score, 0.84)
     }
+    // Only the fuzzy step below produces tier 4.
+    if tier == nil, maxTier <= 3 { return nil }
 
     var index = t.startIndex
     var streak = 0
@@ -119,7 +161,7 @@ public func fieldMatch(query: String, target: String) -> FieldMatch? {
         index = t.index(after: found)
     }
     if fuzzy {
-        let subsequence = min(0.9, raw / (Double(q.count) * 2.1))
+        let subsequence = min(0.9, raw / (Double(query.length) * 2.1))
         if tier == nil {
             guard subsequence > 0 else { return nil }
             tier = 4
@@ -128,8 +170,23 @@ public func fieldMatch(query: String, target: String) -> FieldMatch? {
             score = max(score, subsequence)
         }
     }
-    guard let tier, score > 0 else { return nil }
-    return FieldMatch(tier: tier, score: score - Double(t.count) * 0.0015)
+    guard let tier, tier <= maxTier, score > 0 else { return nil }
+    return FieldMatch(tier: tier, score: score - Double(key.length) * 0.0015)
+}
+
+/// Lowest tier, then highest score; the first field wins a tie.
+public func bestFieldMatch(query: MatchQuery, keys: [MatchKey], maxTier: Int = 4) -> FieldMatch? {
+    var best: FieldMatch?
+    for key in keys {
+        guard let match = fieldMatch(query: query, key: key, maxTier: maxTier) else { continue }
+        if let current = best {
+            let better = match.tier != current.tier ? match.tier < current.tier : match.score > current.score
+            if better { best = match }
+        } else {
+            best = match
+        }
+    }
+    return best
 }
 
 public func bestFieldMatch(query: String, fields: [String]) -> FieldMatch? {

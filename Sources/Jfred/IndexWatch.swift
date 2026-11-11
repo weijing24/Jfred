@@ -50,9 +50,10 @@ final class FileIndex: @unchecked Sendable {
         lock.lock()
         let snapshot = Array(files.values)
         lock.unlock()
+        let prepared = MatchQuery(query)
         var hits: [(AppRecord, FieldMatch)] = []
         for file in snapshot {
-            guard let match = fieldMatch(query: query, target: file.name), match.tier <= 3 else { continue }
+            guard let match = fieldMatch(query: prepared, key: MatchKey(file.name), maxTier: 3) else { continue }
             hits.append((AppRecord(id: file.path, name: file.name, path: file.path), match))
         }
         hits.sort { lhs, rhs in
