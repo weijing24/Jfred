@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.1.3
+## 1.1.5
+
+### Preferences
+
+On macOS 26 and later the Preferences search field is a single capsule in the trailing toolbar. The extra rounded frame that sat around the field is gone. Placement is unchanged: the field does not overlap the window controls or the sidebar. Earlier systems are unchanged.
+
+## 1.1.4
 
 ### Preferences
 

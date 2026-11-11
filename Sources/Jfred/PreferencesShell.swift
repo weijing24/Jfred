@@ -24,7 +24,7 @@ struct PreferencesShell: View {
                 window.styleMask.insert(.fullSizeContentView)
             }
             window.setContentSize(NSSize(width: 1180, height: 766))
-            if let screen = window.screen ?? NSScreen.main {
+            if !AppRuntime.renderPreferencesOnly, let screen = window.screen ?? NSScreen.main {
                 let visible = screen.visibleFrame
                 var frame = window.frame
                 frame.origin.x = max(visible.minX, min(frame.origin.x, visible.maxX - frame.width))
@@ -34,12 +34,10 @@ struct PreferencesShell: View {
             model.notePreferencesWindow(window)
         })
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                PreferencesSearchField(
-                    text: model.bind(\.prefsQuery),
-                    width: PreferencesShell.searchFieldWidth
-                )
-            }
+            PreferencesSearchToolbarItem(
+                text: model.bind(\.prefsQuery),
+                width: PreferencesShell.searchFieldWidth
+            )
         }
         .modifier(PreferencesToolbarChrome())
         .onChange(of: model.preferences) { old, _ in model.preferencesChanged(from: old) }
@@ -275,15 +273,23 @@ struct GeneralPane: View {
 
 
 
-/// Glass capsule for the preferences search field.
-private struct ToolbarSearchBackground: ViewModifier {
-    func body(content: Content) -> some View {
+/// Trailing search field. On macOS 26+ the system would also draw a glass
+/// bezel around a toolbar item, so the item's shared background is hidden
+/// and only the field's own capsule is visible.
+private struct PreferencesSearchToolbarItem: ToolbarContent {
+    @Binding var text: String
+    var width: CGFloat
+
+    var body: some ToolbarContent {
         if #available(macOS 26.0, *) {
-            content.glassEffect(.regular.interactive(), in: Capsule())
+            ToolbarItem(placement: .primaryAction) {
+                PreferencesSearchField(text: $text, width: width)
+            }
+            .sharedBackgroundVisibility(.hidden)
         } else {
-            content
-                .background(Capsule().fill(Color(hex: 0xE3E3E3)))
-                .overlay(Capsule().stroke(Color.black.opacity(0.10), lineWidth: 1))
+            ToolbarItem(placement: .primaryAction) {
+                PreferencesSearchField(text: $text, width: width)
+            }
         }
     }
 }
