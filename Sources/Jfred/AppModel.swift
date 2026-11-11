@@ -9,6 +9,8 @@ enum AppRuntime {
     @MainActor static var openPreferences: (() -> Void)?
     /// Quit Jfred, the status menu, and killing this process. Dock Quit stays resident.
     @MainActor static var explicitQuit = false
+    /// macOS is logging out, restarting or shutting down; let it quit Jfred.
+    @MainActor static var systemPoweringOff = false
     /// True when macOS started Jfred as a login item; don't steal focus then.
     @MainActor static var launchedAsLoginItem = false
     /// Offscreen Preferences render used for visual checks. Never installs
@@ -1478,12 +1480,24 @@ final class AppModel {
     }
 
     func quit() {
-        if preferences.clipboardClearOnQuit {
-            clips = []
-            save()
-        }
+        prepareForTermination()
         AppRuntime.explicitQuit = true
         NSApp.terminate(nil)
+    }
+
+    /// Write what would otherwise be lost when the process exits: the
+    /// debounced save and, when enabled, the cleared clipboard history. Runs
+    /// for Quit Jfred and again from `applicationWillTerminate`, which also
+    /// covers log out, restart and shut down.
+    func prepareForTermination() {
+        if preferences.clipboardClearOnQuit, !clips.isEmpty {
+            clips = []
+            scheduleSave()
+        }
+        guard let work = saveWork else { return }
+        work.cancel()
+        saveWork = nil
+        save()
     }
 
     func checkForUpdates(userInitiated: Bool) {
