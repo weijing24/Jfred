@@ -2,8 +2,9 @@ import Foundation
 import JfredCore
 
 // Update checks read public GitHub releases for weijing24/Jfred and send only
-// the app version. A download is installed only after the checksum, bundle id,
-// version and code signature match that release.
+// the app version. A download is installed only after the checksum, bundle id
+// and version match that release and the code signature satisfies the release
+// certificate's designated requirement (UpdateSignature.requirement).
 
 enum UpdatePhase: Equatable {
     case idle
@@ -219,9 +220,7 @@ enum UpdateInstaller {
         }
         _ = run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staged.path], timeout: 20)
         try validateApp(staged, version: release.version)
-        guard run("/usr/bin/codesign", ["--verify", "--deep", "--strict", staged.path], timeout: 30) == 0 else {
-            throw UpdateInstallError.message("The downloaded app failed signature verification.")
-        }
+        try verifySignature(staged)
         _ = run("/usr/sbin/diskutil", ["eject", "force", mount.path], timeout: 30)
         mounted = false
         try launchSwap(staged: staged, bundle: bundle)
@@ -261,6 +260,20 @@ enum UpdateInstaller {
         }
     }
 
+    /// A valid signature alone is not enough: an ad-hoc signature is valid too.
+    /// The app has to satisfy the release certificate's designated requirement.
+    private static func verifySignature(_ app: URL) throws {
+        let status = run("/usr/bin/codesign", UpdateSignature.verifyArguments(appPath: app.path), timeout: 30)
+        if status == UpdateSignature.requirementNotSatisfiedStatus {
+            UpdateLog.append("signature check: \(app.path) does not satisfy the release requirement")
+            throw UpdateInstallError.message("The downloaded app is not signed by the Jfred release certificate.")
+        }
+        guard status == 0 else {
+            UpdateLog.append("signature check: codesign exited \(status) for \(app.path)")
+            throw UpdateInstallError.message("The downloaded app failed signature verification.")
+        }
+    }
+
     private static func launchSwap(staged: URL, bundle: URL) throws {
         guard staged.lastPathComponent == "Jfred.app", bundle.lastPathComponent == "Jfred.app" else {
             throw UpdateInstallError.message("This copy isn't a Jfred.app bundle. Move Jfred into the Applications folder, then update.")
@@ -280,7 +293,14 @@ enum UpdateInstaller {
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: scriptURL.path)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [scriptURL.path, String(ProcessInfo.processInfo.processIdentifier), staged.path, bundle.path, log.path]
+        process.arguments = [
+            scriptURL.path,
+            String(ProcessInfo.processInfo.processIdentifier),
+            staged.path,
+            bundle.path,
+            log.path,
+            UpdateSignature.requirement,
+        ]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         do {
@@ -325,9 +345,14 @@ enum UpdateInstaller {
     src="$2"
     dest="$3"
     log="$4"
+    requirement="${5:-}"
     mkdir -p "$(dirname "$log")"
     exec >>"$log" 2>&1
     echo "start $(date)"
+    if [ -z "$requirement" ]; then
+      echo "refusing empty signing requirement"
+      exit 1
+    fi
     case "$dest" in
       */Jfred.app) ;;
       *) echo "refusing destination"; exit 1 ;;
@@ -367,20 +392,29 @@ enum UpdateInstaller {
       echo "could not move the current app aside"
       exit 1
     fi
-    if /usr/bin/ditto "$src" "$dest"; then
-      /usr/bin/xattr -dr com.apple.quarantine "$dest" || true
-      if ! /usr/bin/open "$dest"; then
-        echo "open failed"
-      fi
-      /bin/rm -rf "$backup"
-      /bin/rm -rf "$stage"
-      echo "updated"
-    else
-      echo "copy failed, restoring"
+    restore() {
       /bin/rm -rf "$dest"
       /bin/mv "$backup" "$dest" || true
       /usr/bin/open "$dest" || true
+    }
+    if ! /usr/bin/ditto "$src" "$dest"; then
+      echo "copy failed, restoring"
+      restore
       exit 1
     fi
+    # Same check the app ran on the staged copy, repeated on the bundle that
+    # will actually launch.
+    if ! /usr/bin/codesign --verify --deep --strict --test-requirement "=$requirement" "$dest"; then
+      echo "signature check failed, restoring"
+      restore
+      exit 1
+    fi
+    /usr/bin/xattr -dr com.apple.quarantine "$dest" || true
+    if ! /usr/bin/open "$dest"; then
+      echo "open failed"
+    fi
+    /bin/rm -rf "$backup"
+    /bin/rm -rf "$stage"
+    echo "updated"
     """#
 }

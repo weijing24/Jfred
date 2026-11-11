@@ -11,6 +11,11 @@ set -euo pipefail
 
 app="${1:?usage: codesign-app.sh Jfred.app}"
 identity="Jfred Codesign"
+# Designated requirement of every release build. The in-app updater refuses a
+# download that does not satisfy it. Keep this line in sync with
+# UpdateSignature.requirement in Sources/JfredCore/AppUpdate.swift; a test
+# compares the two.
+release_requirement='identifier "dev.jim.jfred.local" and certificate leaf = H"e4bb0d4d89c4d6d1ab0c3617de5d88225c5a3910"'
 local_dir="${HOME}/.config/jfred/codesign"
 p12="${JFRED_CODESIGN_P12:-}"
 password="${JFRED_CODESIGN_PASSWORD:-}"
@@ -76,13 +81,15 @@ if ! security find-certificate -c "$identity" "$keychain" >/dev/null; then
   exit 1
 fi
 codesign --force --sign "$identity" --keychain "$keychain" "$app"
-codesign --verify --deep --strict "$app"
+# The same check the in-app updater runs on a downloaded app.
+if ! codesign --verify --deep --strict --test-requirement "=${release_requirement}" "$app"; then
+  echo "Signed app does not satisfy the release requirement: $release_requirement" >&2
+  exit 1
+fi
 req="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^.*designated => //p')"
-case "$req" in
-  'identifier "dev.jim.jfred.local" and certificate leaf = H"'*'"') ;;
-  *)
-    echo "Unexpected designated requirement: $req" >&2
-    exit 1
-    ;;
-esac
+if [ "$req" != "$release_requirement" ]; then
+  echo "Unexpected designated requirement: $req" >&2
+  echo "Expected: $release_requirement" >&2
+  exit 1
+fi
 echo "Signed: $req"

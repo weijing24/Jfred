@@ -90,6 +90,26 @@ public enum UpdatePaths {
     }
 }
 
+public enum UpdateSignature {
+    /// Designated requirement of every release build: the bundle id plus the
+    /// leaf hash of the long-lived "Jfred Codesign" certificate. A downloaded
+    /// app must satisfy it before it replaces the running copy, so a valid but
+    /// different signature (ad-hoc, or another certificate) is refused.
+    /// `scripts/codesign-app.sh` checks the same string; a test keeps them equal.
+    public static let requirement = #"identifier "dev.jim.jfred.local" and certificate leaf = H"e4bb0d4d89c4d6d1ab0c3617de5d88225c5a3910""#
+
+    /// codesign's exit status when the code is validly signed but does not
+    /// satisfy the requirement given with `--test-requirement`.
+    public static let requirementNotSatisfiedStatus: Int32 = 3
+
+    /// Arguments for `/usr/bin/codesign` that check the bundle's integrity and
+    /// pin it to the release requirement. A leading "=" makes codesign read the
+    /// requirement as source text instead of a file path.
+    public static func verifyArguments(appPath: String) -> [String] {
+        ["--verify", "--deep", "--strict", "--test-requirement", "=" + requirement, appPath]
+    }
+}
+
 public enum AppVersion {
     public static func compare(_ lhs: String, _ rhs: String) -> ComparisonResult? {
         guard let left = parts(lhs), let right = parts(rhs) else { return nil }
