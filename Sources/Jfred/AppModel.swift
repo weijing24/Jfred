@@ -1097,7 +1097,7 @@ final class AppModel {
                         case .reveal:
                             NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                         case .runAppleScript:
-                            CommandQueue.run { _ = Shell.run("/usr/bin/osascript", [path], timeout: 30) }
+                            UserScriptQueue.run { _ = Shell.run("/usr/bin/osascript", [path], timeout: 30) }
                         case .open:
                             NSWorkspace.shared.open(URL(fileURLWithPath: path))
                         case .touch:
