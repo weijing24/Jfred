@@ -38,7 +38,7 @@ The private key is not in git.
 - Local copy: `~/.config/jfred/codesign/jfred-codesign.p12`, with the password in `~/.config/jfred/codesign/password`. A local `scripts/build-app.sh` uses these files when they exist.
 - Actions secrets: `JFRED_CODESIGN_P12` (base64 of the same `.p12`) and `JFRED_CODESIGN_PASSWORD`.
 
-Do not generate a replacement certificate. A new certificate is a new leaf hash, and the next update asks for folder access again. The certificate is not an Apple Developer ID and the app is not notarized. Gatekeeper still treats a freshly downloaded copy as an unidentified developer; the in-app updater removes the quarantine attribute before it replaces `Jfred.app`. The signature still has to pass `codesign --verify --deep --strict`, which is what the updater checks before swapping the bundle.
+Do not generate a replacement certificate. A new certificate is a new leaf hash, and the next update asks for folder access again. The certificate is not an Apple Developer ID and the app is not notarized. Gatekeeper still treats a freshly downloaded copy as an unidentified developer; the in-app updater removes the quarantine attribute before it replaces `Jfred.app`. The updater runs `codesign --verify --deep --strict --test-requirement "=<designated requirement>"` on the downloaded app, and the swap script runs it again on the copied bundle. A build that is not signed with this certificate fails that check and is not installed. `UpdateSignature.requirement` in `Sources/JfredCore/AppUpdate.swift` and `release_requirement` in `scripts/codesign-app.sh` hold the requirement, and a test keeps them equal.
 
 Example:
 
