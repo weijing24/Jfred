@@ -987,23 +987,6 @@ public enum UsageMath {
     }
 }
 
-public func expandTokens(_ text: String, now: Date = Date()) -> String {
-    let dateFormatter = DateFormatter()
-    dateFormatter.locale = Locale.current
-    dateFormatter.dateStyle = .medium
-    dateFormatter.timeStyle = .none
-    let timeFormatter = DateFormatter()
-    timeFormatter.locale = Locale.current
-    timeFormatter.dateStyle = .none
-    timeFormatter.timeStyle = .short
-    let iso = ISO8601DateFormatter()
-    return text
-        .replacingOccurrences(of: "{date}", with: dateFormatter.string(from: now))
-        .replacingOccurrences(of: "{time}", with: timeFormatter.string(from: now))
-        .replacingOccurrences(of: "{iso}", with: iso.string(from: now))
-        .replacingOccurrences(of: "{clipboard}", with: "")
-}
-
 public func fillTemplate(_ template: String, query: String) -> String {
     template.replacingOccurrences(of: "{query}", with: query)
 }

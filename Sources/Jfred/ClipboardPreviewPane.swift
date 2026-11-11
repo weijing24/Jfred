@@ -18,7 +18,7 @@ struct ClipboardPreviewPane: View {
             return ClipboardPreview.Model(
                 headerTitle: snippet.name,
                 headerPath: snippet.keyword.isEmpty ? nil : snippet.keyword,
-                text: snippet.text
+                text: snippetPreviewText(snippet.text)
             )
         }
         return .empty
