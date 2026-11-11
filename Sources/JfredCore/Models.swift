@@ -807,44 +807,6 @@ public struct LinkRecord: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-public struct WindowInfo: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var title: String
-    public var owner: String
-    public var pid: Int32
-
-    public init(id: String, title: String, owner: String, pid: Int32) {
-        self.id = id
-        self.title = title
-        self.owner = owner
-        self.pid = pid
-    }
-}
-
-public struct ProcInfo: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var pid: Int32
-    public var name: String
-
-    public init(pid: Int32, name: String) {
-        self.pid = pid
-        self.name = name
-        self.id = "\(pid)"
-    }
-}
-
-public struct ProfileInfo: Codable, Equatable, Sendable, Identifiable {
-    public var id: String
-    public var name: String
-    public var directory: String
-
-    public init(id: String, name: String, directory: String) {
-        self.id = id
-        self.name = name
-        self.directory = directory
-    }
-}
-
 public struct SelectionStat: Codable, Equatable, Sendable {
     public var count: Int
     public var lastSelected: Date
@@ -896,10 +858,6 @@ public struct SearchContext: Sendable {
     public var clips: [ClipItem]
     /// Files a Spotlight file search found for the current query.
     public var files: [FileHit]
-    public var windows: [WindowInfo]
-    public var processes: [ProcInfo]
-    public var tabs: [LinkRecord]
-    public var profiles: [ProfileInfo]
     public var definition: String?
     public var opItems: [AppRecord]
     public var knowledge: [String: String]
@@ -920,10 +878,6 @@ public struct SearchContext: Sendable {
         links: [LinkRecord] = [],
         clips: [ClipItem] = [],
         files: [FileHit] = [],
-        windows: [WindowInfo] = [],
-        processes: [ProcInfo] = [],
-        tabs: [LinkRecord] = [],
-        profiles: [ProfileInfo] = [],
         definition: String? = nil,
         opItems: [AppRecord] = [],
         knowledge: [String: String] = [:],
@@ -941,10 +895,6 @@ public struct SearchContext: Sendable {
         self.links = links
         self.clips = clips
         self.files = files
-        self.windows = windows
-        self.processes = processes
-        self.tabs = tabs
-        self.profiles = profiles
         self.definition = definition
         self.opItems = opItems
         self.knowledge = knowledge
