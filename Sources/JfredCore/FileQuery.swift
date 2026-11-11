@@ -23,6 +23,54 @@ public struct FileQuery: Sendable, Equatable {
     public var terms: [String] {
         text.split(whereSeparator: \.isWhitespace).map(String.init)
     }
+
+    /// Spotlight results read per name query. Spotlight evaluates the whole
+    /// predicate whatever this is; reading a result's names costs well under a
+    /// microsecond, so a large pool costs little and lets the best matches win.
+    public static let nameCandidateLimit = 2000
+    /// Spotlight results read for a name query of single characters. A cold
+    /// one-letter query can take several seconds to gather 2000 results; asking
+    /// for fewer often lets Spotlight stop after tens of milliseconds.
+    public static let singleCharacterCandidateLimit = 100
+    /// Spotlight results read per contents or tags query.
+    public static let otherCandidateLimit = 1000
+
+    /// A name query whose shortest term is shorter than this waits
+    /// `shortQueryDelay` before it reaches Spotlight.
+    public static let shortTermLength = 3
+    /// Long enough to span the gap between two typed keys, so a short prefix
+    /// typed on the way to a longer one never starts a Spotlight query.
+    public static let shortQueryDelay: TimeInterval = 0.22
+
+    /// The terms Spotlight is asked for.
+    var spotlightTerms: [String] {
+        terms.flatMap(SpotlightPredicate.spotlightTerms)
+    }
+
+    /// How many Spotlight results to read.
+    public var candidateLimit: Int {
+        switch kind {
+        case .name:
+            let terms = spotlightTerms
+            if !terms.isEmpty, terms.allSatisfy({ $0.count == 1 }) {
+                return Self.singleCharacterCandidateLimit
+            }
+            return Self.nameCandidateLimit
+        case .content, .tags:
+            return Self.otherCandidateLimit
+        }
+    }
+
+    /// Seconds to wait before starting the Spotlight query. A short name prefix
+    /// matches a large part of the disk and, until Spotlight has cached it,
+    /// takes one to several seconds, so it waits to see whether the user keeps
+    /// typing. Everything else starts at once.
+    public var launchDelay: TimeInterval {
+        guard kind == .name else { return 0 }
+        let terms = spotlightTerms
+        guard let shortest = terms.map(\.count).min() else { return 0 }
+        return shortest < Self.shortTermLength ? Self.shortQueryDelay : 0
+    }
 }
 
 /// A file Spotlight found, after path exclusion.

@@ -212,7 +212,15 @@ final class AppModel {
     private var generation = 0
     /// The Spotlight file lookup for the current query, if one is running.
     @ObservationIgnored private var fileSearchTask: Task<Void, Never>?
-    /// Short-lived Script Filter results keyed by "workflowID|argument".
+    /// Script Filter runs: the one in flight, a query waiting for it, and the
+    /// delay before the newest query. At most one script runs at a time.
+    @ObservationIgnored private var scriptQueue = ScriptFilterQueue<WorkflowMatch>()
+    @ObservationIgnored private var scriptRuns: [Int: Task<Void, Never>] = [:]
+    @ObservationIgnored private var scriptDelay: Task<Void, Never>?
+    @ObservationIgnored private var typingCadence = TypingCadence()
+    /// The query last counted as a keystroke by `typingCadence`.
+    @ObservationIgnored private var cadenceQuery = ""
+    /// Short-lived Script Filter results keyed by "workflowID|inputID|argument".
     private var scriptFilterCache: [String: (date: Date, rows: [SearchResult])] = [:]
     private var searchingSubtitle: String?
     /// Query string last written into `results`. Selection resets only when it changes.
@@ -271,13 +279,21 @@ final class AppModel {
     func scheduleSearch() {
         generation += 1
         let token = generation
+        if query != cadenceQuery {
+            cadenceQuery = query
+            typingCadence.keystroke(at: ProcessInfo.processInfo.systemUptime)
+        }
         cancelFileSearch()
         if let browser = fileBrowserResults(query) {
+            stopScriptFilter()
             publishResults(browser)
             return
         }
         if transientItem != nil {
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                stopScriptFilter()
+                return
+            }
             transientItem = nil
         }
         if fromHistory {
@@ -296,39 +312,13 @@ final class AppModel {
         context.index = searchIndex
         let useWorkflows = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
         if useWorkflows, let match = WorkflowRuntime.match(in: workflows, query: trimmed, disabledBuiltins: disabledBuiltins) {
-            if match.input.kind == .scriptFilter || match.input.kind == .listFilter {
-                let cacheKey = "\(match.workflow.id.uuidString)|\(match.invocation.argument)"
-                if let cached = scriptFilterCache[cacheKey], Date().timeIntervalSince(cached.date) < 8 {
-                    publishResults(cached.rows)
-                    return
-                }
-                // Keep the previous list visible; mark the subtitle instead of flashing "Running…".
-                if results.isEmpty {
-                    publishResults([statusRow(id: "run:pending", title: match.invocation.keyword, subtitle: "Running…", icon: match.workflow.resolvedIcon(objectUID: match.input.alfredUID).resource, category: "action")])
-                } else {
-                    searchingSubtitle = "Running…"
-                    launcher?.layout(animated: false)
-                }
-                let workflow = match.workflow
-                let invocation = match.invocation
-                let job = Task.detached {
-                    await WorkflowRuntime.engine(for: workflow).results(for: invocation)
-                }
-                Task {
-                    let ran = await job.value
-                    guard token == self.generation else { return }
-                    self.searchingSubtitle = nil
-                    let result = ran ?? WorkflowScriptFilterResult(items: [])
-                    let rows = result.items.isEmpty
-                        ? [self.statusRow(id: "run:empty", title: "No matches", subtitle: match.invocation.keyword, icon: match.workflow.resolvedIcon(objectUID: match.input.alfredUID).resource, category: "action")]
-                        : WorkflowRuntime.rows(for: match, result: result)
-                    self.scriptFilterCache[cacheKey] = (Date(), rows)
-                    if self.scriptFilterCache.count > 40 {
-                        let trimmed = self.scriptFilterCache.sorted { $0.value.date > $1.value.date }.prefix(24)
-                        self.scriptFilterCache = Dictionary(uniqueKeysWithValues: trimmed.map { ($0.key, $0.value) })
-                    }
-                    self.publishResults(rows)
-                }
+            if match.input.kind == .scriptFilter {
+                scheduleScriptFilter(match)
+                return
+            }
+            stopScriptFilter()
+            if match.input.kind == .listFilter {
+                runListFilter(match, token: token)
                 return
             }
             if let row = WorkflowRuntime.directRow(for: match) {
@@ -336,6 +326,7 @@ final class AppModel {
                 return
             }
         }
+        stopScriptFilter()
 
         guard let fileQuery = Search.fileQuery(raw: raw, preferences: context.preferences) else {
             publishResults(Search.results(for: raw, context: context))
@@ -360,12 +351,17 @@ final class AppModel {
         // placeholder when there is nothing on screen yet.
         if results.isEmpty {
             publishResults([statusRow(id: "search:pending", title: "Searching…", subtitle: trimmed, icon: "symbol:magnifyingglass", category: "navigation")])
-        } else {
-            searchingSubtitle = "Searching…"
-            launcher?.layout(animated: false)
         }
         let preferences = context.preferences
+        // A one- or two-letter name prefix is slow in Spotlight until cached.
+        // Wait briefly so a prefix typed on the way to a longer query never
+        // starts one.
+        let delay = fileQuery.launchDelay
         fileSearchTask = Task {
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+                guard token == self.generation, !Task.isCancelled else { return }
+            }
             // A newer keystroke stops this query inside SpotlightSearch and
             // makes `search` return nil.
             guard let hits = await SpotlightSearch.shared.search(fileQuery, preferences: preferences) else { return }
@@ -375,9 +371,11 @@ final class AppModel {
             let working = found
             let rows = await Task.detached { Search.results(for: raw, context: working) }.value
             guard token == self.generation, !Task.isCancelled else { return }
-            self.searchingSubtitle = nil
+            self.fileSearchTask = nil
+            self.refreshSearching()
             self.publishResults(rows)
         }
+        refreshSearching()
     }
 
     /// Stops a running Spotlight file query whose rows nobody will see.
@@ -386,7 +384,148 @@ final class AppModel {
         task.cancel()
         fileSearchTask = nil
         SpotlightSearch.shared.cancel()
-        searchingSubtitle = nil
+        refreshSearching()
+    }
+
+    /// "Searching…" while a Spotlight query runs or waits to start, "Running…"
+    /// while a Script Filter runs or waits; nil when nothing is pending.
+    private func refreshSearching() {
+        let subtitle: String?
+        if scriptQueue.isBusy {
+            subtitle = "Running…"
+        } else if fileSearchTask != nil {
+            subtitle = "Searching…"
+        } else {
+            subtitle = nil
+        }
+        if searchingSubtitle != subtitle { searchingSubtitle = subtitle }
+    }
+
+    private static func scriptFilterCacheKey(_ match: WorkflowMatch) -> String {
+        "\(match.workflow.id.uuidString)|\(match.input.id.uuidString)|\(match.invocation.argument)"
+    }
+
+    private func cachedScriptFilterRows(_ match: WorkflowMatch) -> [SearchResult]? {
+        guard let cached = scriptFilterCache[Self.scriptFilterCacheKey(match)],
+              Date().timeIntervalSince(cached.date) < 8 else { return nil }
+        return cached.rows
+    }
+
+    private func cacheScriptFilterRows(_ rows: [SearchResult], for match: WorkflowMatch) {
+        scriptFilterCache[Self.scriptFilterCacheKey(match)] = (Date(), rows)
+        if scriptFilterCache.count > 40 {
+            let trimmed = scriptFilterCache.sorted { $0.value.date > $1.value.date }.prefix(24)
+            scriptFilterCache = Dictionary(uniqueKeysWithValues: trimmed.map { ($0.key, $0.value) })
+        }
+    }
+
+    /// Queues a Script Filter run for the current query, following the
+    /// object's Run Behaviour (see `ScriptFilterRunBehaviour`).
+    private func scheduleScriptFilter(_ match: WorkflowMatch) {
+        let request = ScriptFilterQueue<WorkflowMatch>.Request(
+            filter: "\(match.workflow.id.uuidString)|\(match.input.id.uuidString)",
+            argument: match.invocation.argument,
+            behaviour: ScriptFilterRunBehaviour(config: match.input.config),
+            payload: match
+        )
+        if let cached = cachedScriptFilterRows(match) {
+            performScriptCommands(scriptQueue.answer(request))
+            publishResults(cached)
+            refreshSearching()
+            return
+        }
+        // Keep the previous list visible; the busy indicator shows the run.
+        if results.isEmpty {
+            publishResults([statusRow(id: "run:pending", title: match.invocation.keyword, subtitle: "Running…", icon: match.workflow.resolvedIcon(objectUID: match.input.alfredUID).resource, category: "action")])
+        }
+        performScriptCommands(scriptQueue.submit(request, automaticDelay: typingCadence.delay))
+        refreshSearching()
+    }
+
+    private func performScriptCommands(_ commands: [ScriptFilterQueue<WorkflowMatch>.Command]) {
+        for command in commands {
+            switch command {
+            case .terminate(let id):
+                // Cancelling the task terminates the script's processes.
+                scriptRuns.removeValue(forKey: id)?.cancel()
+            case .wait(let seconds, let ticket):
+                scriptDelay?.cancel()
+                scriptDelay = nil
+                if seconds <= 0 {
+                    performScriptCommands(scriptQueue.fire(ticket: ticket))
+                } else {
+                    scriptDelay = Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(seconds))
+                        guard !Task.isCancelled, let self else { return }
+                        self.scriptDelay = nil
+                        self.performScriptCommands(self.scriptQueue.fire(ticket: ticket))
+                        self.refreshSearching()
+                    }
+                }
+            case .launch(let id, let request):
+                launchScriptFilter(id, match: request.payload)
+            }
+        }
+    }
+
+    private func launchScriptFilter(_ id: Int, match: WorkflowMatch) {
+        scriptRuns[id] = Task { [weak self] in
+            let rows = await Self.scriptFilterRows(match)
+            guard let self, !Task.isCancelled, let rows else { return }
+            self.finishScriptFilter(id, match: match, rows: rows)
+        }
+    }
+
+    /// Runs the script and builds its rows off the main thread. Nil when the
+    /// run was cancelled.
+    nonisolated private static func scriptFilterRows(_ match: WorkflowMatch) async -> [SearchResult]? {
+        let ran = await WorkflowRuntime.engine(for: match.workflow).results(for: match.invocation)
+        if Task.isCancelled { return nil }
+        let result = ran ?? WorkflowScriptFilterResult(items: [])
+        if result.items.isEmpty {
+            let icon = match.workflow.resolvedIcon(objectUID: match.input.alfredUID).resource
+            return [SearchResult(id: "run:empty", title: "No matches", subtitle: match.invocation.keyword, icon: icon, kind: "text", payload: "", category: "action", score: 1)]
+        }
+        return WorkflowRuntime.rows(for: match, result: result)
+    }
+
+    private func finishScriptFilter(_ id: Int, match: WorkflowMatch, rows: [SearchResult]) {
+        scriptRuns[id] = nil
+        let (outcome, commands) = scriptQueue.finish(runID: id)
+        switch outcome {
+        case .current, .interim:
+            cacheScriptFilterRows(rows, for: match)
+            publishResults(rows)
+        case .stale:
+            cacheScriptFilterRows(rows, for: match)
+        case .unknown:
+            break
+        }
+        performScriptCommands(commands)
+        refreshSearching()
+    }
+
+    /// Terminates the Script Filter run in flight and drops waiting queries.
+    private func stopScriptFilter() {
+        scriptDelay?.cancel()
+        scriptDelay = nil
+        performScriptCommands(scriptQueue.reset())
+        for task in scriptRuns.values { task.cancel() }
+        scriptRuns.removeAll()
+        refreshSearching()
+    }
+
+    /// List Filters filter a fixed list; nothing to queue or terminate.
+    private func runListFilter(_ match: WorkflowMatch, token: Int) {
+        if let cached = cachedScriptFilterRows(match) {
+            publishResults(cached)
+            return
+        }
+        Task {
+            guard let rows = await Self.scriptFilterRows(match), token == self.generation else { return }
+            self.cacheScriptFilterRows(rows, for: match)
+            self.publishResults(rows)
+        }
     }
 
     private func statusRow(id: String, title: String, subtitle: String, icon: String, category: String) -> SearchResult {
@@ -416,6 +555,7 @@ final class AppModel {
     func showLauncher() {
         launcherEpoch += 1
         transientItem = nil
+        typingCadence.beginSession()
         record(category: "hotkeys")
         previousApp = NSWorkspace.shared.frontmostApplication
         if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier { previousApp = nil }
@@ -438,6 +578,7 @@ final class AppModel {
     func hideLauncher(reactivate: Bool) {
         launcherEpoch += 1
         cancelFileSearch()
+        stopScriptFilter()
         transientItem = nil
         launcherVisible = false
         actionPanelVisible = false
