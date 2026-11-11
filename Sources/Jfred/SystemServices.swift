@@ -620,21 +620,52 @@ final class SnippetExpander: @unchecked Sendable {
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
         guard let created = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: mask, callback: { _, type, event, _ in
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                if let tap = SnippetExpander.shared.tap { CGEvent.tapEnable(tap: tap, enable: true) }
+                SnippetExpander.shared.reenableTap()
                 return Unmanaged.passUnretained(event)
             }
             SnippetExpander.shared.handle(event)
             return Unmanaged.passUnretained(event)
         }, userInfo: nil) else { return }
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: created, enable: true)
         lock.lock()
         tap = created
         self.source = source
         lock.unlock()
+        // A .defaultTap holds every keystroke in every app until the callback
+        // returns. Serve it from its own run loop so a busy main thread (a
+        // synchronous osascript, a state save, a slow search) cannot stall typing
+        // system-wide or get the tap disabled by timeout.
+        let thread = Thread { [self] in
+            self.runTapLoop()
+        }
+        thread.name = "Jfred snippet expander tap"
+        thread.qualityOfService = .userInteractive
+        thread.start()
     }
 
+    /// Body of the tap thread. The source stays attached for the life of the app,
+    /// so `CFRunLoopRun` does not return.
+    private func runTapLoop() {
+        lock.lock()
+        let tap = self.tap
+        let source = self.source
+        lock.unlock()
+        guard let tap, let source else { return }
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        CFRunLoopRun()
+    }
+
+    /// Called on the tap thread when macOS disables the tap.
+    private func reenableTap() {
+        lock.lock()
+        let tap = self.tap
+        lock.unlock()
+        if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+    }
+
+    /// Runs on the tap thread. Keep it non-blocking: read state under the lock and
+    /// hand any expansion to the main queue.
     private func handle(_ event: CGEvent) {
         lock.lock()
         if ignore > 0 {
@@ -668,9 +699,9 @@ final class SnippetExpander: @unchecked Sendable {
         guard character == " " || character == "\t" else { return }
         let stem = String(current.dropLast())
         guard let (keyword, replacement) = Self.match(stem: stem, table: table, wordBased: wordBasedMatch) else { return }
-        let expanded = expandTokens(replacement)
         let deletes = keyword.count + 1
         DispatchQueue.main.async {
+            let expanded = expandTokens(replacement)
             self.lock.lock()
             self.ignore = deletes
             self.buffer = ""
