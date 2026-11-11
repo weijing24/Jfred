@@ -82,6 +82,25 @@ public enum SystemEffect: Equatable, Sendable {
     case unknown(String)
 }
 
+extension SystemEffect {
+    /// True when performing the effect spawns a process, runs AppleScript or
+    /// waits on a disk. Those run off the main thread on one serial queue, in
+    /// the order they were asked for. The rest are quick AppKit calls made on
+    /// the main thread, plus the interactive screenshot, which waits for the
+    /// user for up to a minute and so runs on its own instead of holding up
+    /// later commands.
+    public var runsOnCommandQueue: Bool {
+        switch self {
+        case .setOutputVolume, .sleep, .restart, .shutdown, .logout, .lock, .screensaver,
+             .emptyTrash, .showTrash, .eject, .toggleDarkMode, .toggleHiddenFiles,
+             .mute, .volumeUp, .volumeDown:
+            return true
+        case .quitAll, .showDesktop, .missionControl, .launchpad, .screenshot, .unknown:
+            return false
+        }
+    }
+}
+
 public enum ActionExecutor {
     /// `nil` means the command is disabled or the volume payload is not 0...100.
     /// Confirmation stays with the caller; this function only chooses the effect.

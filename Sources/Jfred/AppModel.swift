@@ -219,6 +219,9 @@ final class AppModel {
     private var fileBufferLastUsed: Date?
     private var workflowHotkeyIDs: [UInt32] = []
     private var previousApp: NSRunningApplication?
+    /// Bumped whenever the launcher is shown, hidden or given a transient
+    /// item, so work that finishes later can tell the user has moved on.
+    @ObservationIgnored private var launcherEpoch = 0
     private var saveWork: DispatchWorkItem?
     var launcher: LauncherController?
     private var didStart = false
@@ -407,6 +410,7 @@ final class AppModel {
     }
 
     func showLauncher() {
+        launcherEpoch += 1
         transientItem = nil
         record(category: "hotkeys")
         previousApp = NSWorkspace.shared.frontmostApplication
@@ -428,6 +432,7 @@ final class AppModel {
     }
 
     func hideLauncher(reactivate: Bool) {
+        launcherEpoch += 1
         transientItem = nil
         launcherVisible = false
         actionPanelVisible = false
@@ -764,12 +769,13 @@ final class AppModel {
     private func getInfo(_ path: String) {
         let quoted = appleString(path)
         hideLauncher(reactivate: false)
-        _ = Shell.osascript("""
+        let script = """
         tell application "Finder"
           activate
           open information window of (POSIX file \(quoted) as alias)
         end tell
-        """)
+        """
+        CommandQueue.run { _ = Shell.osascript(script) }
     }
 
     private func transfer(_ path: String, move: Bool, replace: Bool) {
@@ -945,8 +951,9 @@ final class AppModel {
             return
         }
         if forced == "finder" {
-            searchFinder(query.isEmpty ? item.title : query)
+            let text = query.isEmpty ? item.title : query
             hideLauncher(reactivate: false)
+            searchFinder(text)
             return
         }
         if forced == "reveal" {
@@ -988,7 +995,7 @@ final class AppModel {
                         case .reveal:
                             NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                         case .runAppleScript:
-                            _ = Shell.run("/usr/bin/osascript", [path], timeout: 30)
+                            CommandQueue.run { _ = Shell.run("/usr/bin/osascript", [path], timeout: 30) }
                         case .open:
                             NSWorkspace.shared.open(URL(fileURLWithPath: path))
                         case .touch:
@@ -1018,8 +1025,8 @@ final class AppModel {
             if let url = URL(string: item.payload) { NSWorkspace.shared.open(url) }
             hideLauncher(reactivate: false)
         case "place":
-            openPlace(item.payload)
             hideLauncher(reactivate: false)
+            openPlace(item.payload)
         case "snippets":
             query = preferences.snippetKeyword.trimmingCharacters(in: .whitespaces) + " "
             scheduleSearch()
@@ -1050,11 +1057,14 @@ final class AppModel {
                 showLarge(body)
             }
         case "system":
-            performSystem(item.payload)
+            // Confirm while the launcher is still up, then hide it before the
+            // command runs so it never sits frozen on screen.
+            let effect = confirmedSystemEffect(item.payload)
             hideLauncher(reactivate: false)
+            if let effect { performSystem(effect) }
         case "terminal":
-            runInTerminal(item.payload)
             hideLauncher(reactivate: false)
+            runInTerminal(item.payload)
         case "shell":
             let command = item.payload
             hideLauncher(reactivate: false)
@@ -2044,15 +2054,17 @@ final class AppModel {
     private func openPlace(_ id: String) {
         switch id {
         case "computer":
-            _ = Shell.osascript("""
-            tell application "Finder"
-              activate
-              if (count of Finder windows) is 0 then make new Finder window
-              set target of front Finder window to computer container
-            end tell
-            """)
+            CommandQueue.run {
+                _ = Shell.osascript("""
+                tell application "Finder"
+                  activate
+                  if (count of Finder windows) is 0 then make new Finder window
+                  set target of front Finder window to computer container
+                end tell
+                """)
+            }
         case "trash":
-            _ = Shell.osascript("tell application \"Finder\" to open trash")
+            CommandQueue.run { _ = Shell.osascript("tell application \"Finder\" to open trash") }
         default:
             if let place = places().first(where: { $0.id == id }) {
                 NSWorkspace.shared.open(URL(fileURLWithPath: place.path))
@@ -2069,7 +2081,7 @@ final class AppModel {
 
     private func searchFinder(_ text: String) {
         let escaped = text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        _ = Shell.osascript("""
+        let script = """
         tell application "Finder" to activate
         delay 0.15
         tell application "System Events" to tell process "Finder"
@@ -2077,7 +2089,8 @@ final class AppModel {
           delay 0.15
           keystroke "\(escaped)"
         end tell
-        """)
+        """
+        CommandQueue.run { _ = Shell.osascript(script) }
     }
 
     private func reveal(_ item: SearchResult) {
@@ -2152,44 +2165,34 @@ final class AppModel {
         launcher?.showLarge(text, size: preferences.largeTypeSize, font: preferences.largeTypeFont)
     }
 
-    private func performSystem(_ id: String) {
-        guard let effect = ActionExecutor.systemEffect(id: id, disabled: preferences.systemDisabled, ejectScope: preferences.ejectScope) else { return }
-        if case .setOutputVolume(let value) = effect {
-            _ = Shell.osascript("set volume output volume \(value)")
-            return
-        }
+    /// The system command for `id`, once the user has confirmed it when
+    /// Preferences asks for that. Nil when it is disabled or cancelled. The
+    /// alert runs here, on the main thread, before any command work starts.
+    private func confirmedSystemEffect(_ id: String) -> SystemEffect? {
+        guard let effect = ActionExecutor.systemEffect(id: id, disabled: preferences.systemDisabled, ejectScope: preferences.ejectScope) else { return nil }
+        if case .setOutputVolume = effect { return effect }
         if preferences.systemConfirm.contains(id) {
             let alert = NSAlert()
             alert.messageText = "Run this system command?"
             alert.informativeText = "This action may interrupt what you are doing."
             alert.addButton(withTitle: "Continue")
             alert.addButton(withTitle: "Cancel")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        }
+        return effect
+    }
+
+    private func performSystem(_ effect: SystemEffect) {
+        if effect.runsOnCommandQueue {
+            let exclusions = preferences.ejectExclusions
+            CommandQueue.run { SystemEffectRunner.perform(effect, ejectExclusions: exclusions) }
+            return
         }
         switch effect {
-        case .setOutputVolume(let value):
-            _ = Shell.osascript("set volume output volume \(value)")
-        case .sleep: _ = Shell.osascript("tell application \"System Events\" to sleep")
-        case .restart: _ = Shell.osascript("tell application \"System Events\" to restart")
-        case .shutdown: _ = Shell.osascript("tell application \"System Events\" to shut down")
-        case .logout: _ = Shell.osascript("tell application \"System Events\" to log out")
-        case .lock: _ = Shell.osascript("tell application \"System Events\" to keystroke \"q\" using {command down, control down}")
-        case .screensaver: _ = Shell.run("/usr/bin/open", ["-a", "ScreenSaverEngine"])
-        case .emptyTrash: _ = Shell.osascript("tell application \"Finder\" to empty trash")
-        case .showTrash: _ = Shell.run("/usr/bin/open", [NSHomeDirectory() + "/.Trash"])
-        case .eject(let all):
-            ejectDisks(all: all)
         case .quitAll:
             for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
                 app.terminate()
             }
-        case .toggleDarkMode:
-            _ = Shell.osascript("tell application \"System Events\" to tell appearance preferences to set dark mode to not dark mode")
-        case .toggleHiddenFiles:
-            let current = Shell.run("/usr/bin/defaults", ["read", "com.apple.finder", "AppleShowAllFiles"])
-            let next = current.trimmingCharacters(in: .whitespacesAndNewlines) == "1" ? "false" : "true"
-            _ = Shell.run("/usr/bin/defaults", ["write", "com.apple.finder", "AppleShowAllFiles", "-bool", next])
-            _ = Shell.run("/usr/bin/killall", ["Finder"])
         case .showDesktop: postKey(103)
         case .missionControl: NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Mission Control.app"))
         case .launchpad:
@@ -2198,32 +2201,11 @@ final class AppModel {
             }
         case .screenshot:
             Task.detached { _ = Shell.run("/usr/sbin/screencapture", ["-i"], timeout: 60) }
-        case .mute: _ = Shell.osascript("set volume with output muted")
-        case .volumeUp: changeVolume(10)
-        case .volumeDown: changeVolume(-10)
         case .unknown(let name):
             debugLine = "Unknown command \(name)"
+        default:
+            break
         }
-    }
-
-    private func ejectDisks(all: Bool) {
-        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsEjectableKey, .volumeIsLocalKey]
-        let urls = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
-        for url in urls {
-            guard let values = try? url.resourceValues(forKeys: Set(keys)),
-                  values.volumeIsEjectable == true else { continue }
-            if !all, values.volumeIsLocal == false { continue }
-            let name = values.volumeName ?? url.lastPathComponent
-            if preferences.ejectExclusions.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { continue }
-            try? NSWorkspace.shared.unmountAndEjectDevice(at: url)
-        }
-    }
-
-    private func changeVolume(_ delta: Int) {
-        let text = Shell.osascript("output volume of (get volume settings)")
-        let current = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 50
-        let next = min(100, max(0, current + delta))
-        _ = Shell.osascript("set volume output volume \(next)")
     }
 
     private func openChromeProfile(_ directory: String) {
@@ -2234,43 +2216,39 @@ final class AppModel {
         NSWorkspace.shared.openApplication(at: chrome, configuration: config) { _, _ in }
     }
 
+    /// Open `command` in the preferred terminal. The AppleScript or `open`
+    /// call runs on `CommandQueue`, never on the main thread.
     private func runInTerminal(_ command: String) {
         let escaped = command
             .replacingOccurrences(of: "\0", with: "")
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+        let terminalScript = """
+        tell application "Terminal"
+          activate
+          do script "\(escaped)"
+        end tell
+        """
         switch preferences.terminalApp {
         case "iTerm":
-            _ = Shell.osascript("""
+            let script = """
             tell application "iTerm"
               activate
               create window with default profile
               tell current session of current window to write text "\(escaped)"
             end tell
-            """)
+            """
+            CommandQueue.run { _ = Shell.osascript(script) }
         case "Ghostty":
-            _ = Shell.run("/usr/bin/open", ["-na", "Ghostty", "--args", "-e", "/bin/zsh", "-lc", command])
+            CommandQueue.run { _ = Shell.run("/usr/bin/open", ["-na", "Ghostty", "--args", "-e", "/bin/zsh", "-lc", command]) }
         case "Alacritty":
-            _ = Shell.run("/usr/bin/open", ["-na", "Alacritty", "--args", "-e", "/bin/zsh", "-lc", command])
+            CommandQueue.run { _ = Shell.run("/usr/bin/open", ["-na", "Alacritty", "--args", "-e", "/bin/zsh", "-lc", command]) }
         case "Custom":
-            let script = preferences.terminalCustomScript.replacingOccurrences(of: "{query}", with: escaped)
-            if script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                _ = Shell.osascript("""
-                tell application "Terminal"
-                  activate
-                  do script "\(escaped)"
-                end tell
-                """)
-            } else {
-                _ = Shell.osascript(script)
-            }
+            let custom = preferences.terminalCustomScript.replacingOccurrences(of: "{query}", with: escaped)
+            let script = custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? terminalScript : custom
+            CommandQueue.run { _ = Shell.osascript(script) }
         default:
-            _ = Shell.osascript("""
-            tell application "Terminal"
-              activate
-              do script "\(escaped)"
-            end tell
-            """)
+            CommandQueue.run { _ = Shell.osascript(terminalScript) }
         }
     }
 
@@ -2378,8 +2356,25 @@ final class AppModel {
             ))
             return
         }
-        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.finder" else { return }
-        let files = Accessibility.finderSelection()
+        guard Self.finderIsFrontmost() else { return }
+        // Asking Finder for its selection is an AppleScript round trip that can
+        // take seconds. Fetch it off the main thread and present it when it
+        // arrives, unless the launcher was used in the meantime.
+        let epoch = launcherEpoch
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let files = Accessibility.finderSelection()
+            Task { @MainActor in
+                guard let self, self.launcherEpoch == epoch, Self.finderIsFrontmost() else { return }
+                self.presentFinderSelection(files)
+            }
+        }
+    }
+
+    private static func finderIsFrontmost() -> Bool {
+        NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.finder"
+    }
+
+    private func presentFinderSelection(_ files: [String]) {
         guard let first = files.first else { return }
         let title = (first as NSString).lastPathComponent
         presentTransient(SearchResult(
@@ -2389,6 +2384,7 @@ final class AppModel {
     }
 
     private func presentTransient(_ item: SearchResult) {
+        launcherEpoch += 1
         previousApp = NSWorkspace.shared.frontmostApplication
         if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier { previousApp = nil }
         transientItem = item
