@@ -71,6 +71,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 exit(1)
             }
         }
+        // Log out, restart and shut down announce themselves here before the
+        // quit event arrives; either one lets Jfred quit.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { AppRuntime.systemPoweringOff = true }
+        }
         // A raw bitmap assigned here skips the system squircle, so the Dock draws a square.
         AppRuntime.model = model
         model.start()
@@ -92,12 +99,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if AppRuntime.explicitQuit { return .terminateNow }
+        if QuitPolicy.shouldTerminate(
+            explicitQuit: AppRuntime.explicitQuit,
+            systemPoweringOff: AppRuntime.systemPoweringOff,
+            quitReason: Self.currentQuitReason()
+        ) {
+            return .terminateNow
+        }
         // Cmd+Q closes Preferences while keeping the menu bar app and its
         // global hotkeys alive. The status menu's "Quit Jfred" sets
         // explicitQuit and still terminates the process.
         model.leaveDock()
         return .terminateCancel
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        guard !AppRuntime.renderPreferencesOnly else { return }
+        model.prepareForTermination()
+    }
+
+    /// `kAEQuitReason` of the quit Apple event being handled. loginwindow sets
+    /// it for log out, restart and shut down; ⌘Q has no Apple event and the
+    /// Dock's Quit sends none.
+    private static func currentQuitReason() -> UInt32? {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventClass == kCoreEventClass,
+              event.eventID == kAEQuitApplication else { return nil }
+        let keyword = AEKeyword(kAEQuitReason)
+        guard let reason = event.attributeDescriptor(forKeyword: keyword) ?? event.paramDescriptor(forKeyword: keyword) else { return nil }
+        let code = reason.typeCodeValue != 0 ? reason.typeCodeValue : reason.enumCodeValue
+        return code == 0 ? nil : code
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
