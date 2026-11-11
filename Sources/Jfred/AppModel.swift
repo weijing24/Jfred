@@ -222,7 +222,9 @@ final class AppModel {
     @ObservationIgnored private var cadenceQuery = ""
     /// Short-lived Script Filter results keyed by "workflowID|inputID|argument".
     private var scriptFilterCache: [String: (date: Date, rows: [SearchResult])] = [:]
-    private var searchingSubtitle: String?
+    /// "Searching…" or "Running…" while a file search or Script Filter is
+    /// pending; the launcher shows a spinner in the query field.
+    private(set) var searchingSubtitle: String?
     /// Query string last written into `results`. Selection resets only when it changes.
     private var renderedQuery = ""
     private var historyCursor: Int?
@@ -1368,39 +1370,15 @@ final class AppModel {
         if queryChanged || !rows.indices.contains(selection) {
             selection = 0
         }
-        let visible = rows.prefix(LauncherMetrics.visibleRows)
-        let paths = visible.compactMap { item -> String? in
-            guard item.icon.hasPrefix("file:") else { return nil }
-            return String(item.icon.dropFirst("file:".count))
+        // Draw icons off the main thread: the visible rows first, then the
+        // rest of the list so scrolling finds them ready.
+        func icons(_ rows: ArraySlice<SearchResult>) -> [IconCache.Request] {
+            rows.flatMap { [$0.icon, $0.badge] }.compactMap(IconCache.Request.init(icon:))
         }
-        let artwork = visible.compactMap { item -> String? in
-            guard item.icon.hasPrefix("image:") else { return nil }
-            return String(item.icon.dropFirst("image:".count))
-        }
-        let fileTypes = visible.compactMap { item -> String? in
-            guard item.icon.hasPrefix("filetype:") else { return nil }
-            return String(item.icon.dropFirst("filetype:".count))
-        }
-        let previews = visible.compactMap { item -> String? in
-            guard item.icon.hasPrefix("clipimage:") else { return nil }
-            return String(item.icon.dropFirst("clipimage:".count))
-        }
-        let badges = visible.compactMap { item -> String? in
-            guard item.badge.hasPrefix("file:") else { return nil }
-            return String(item.badge.dropFirst("file:".count))
-        }
-        if !paths.isEmpty || !badges.isEmpty {
-            IconCache.shared.prefetch(paths + badges)
-        }
-        if !artwork.isEmpty {
-            IconCache.shared.prefetchArtwork(artwork)
-        }
-        if !fileTypes.isEmpty {
-            IconCache.shared.prefetchFileTypes(fileTypes)
-        }
-        if !previews.isEmpty {
-            IconCache.shared.prefetchPreviews(previews)
-        }
+        IconCache.shared.prefetchResults(
+            visible: icons(rows.prefix(LauncherMetrics.visibleRows)),
+            rest: icons(rows.dropFirst(LauncherMetrics.visibleRows))
+        )
         launcher?.layout()
     }
 
@@ -1410,7 +1388,7 @@ final class AppModel {
             let apps = AppIndexer.applications(preferences: prefs)
             await MainActor.run {
                 self.apps = apps
-                IconCache.shared.prefetch(apps.map(\.path))
+                IconCache.shared.prefetch(apps.map { IconCache.Request(path: $0.path, style: .file) }, priority: .low)
                 self.warmSearchIndex()
             }
         }

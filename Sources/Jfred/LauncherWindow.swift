@@ -472,6 +472,12 @@ struct LauncherRoot: View {
             )
             .padding(.horizontal, 10)
             .frame(height: theme.queryBoxHeight)
+            .overlay(alignment: .trailing) {
+                if let busy = model.searchingSubtitle {
+                    SearchActivityIndicator(label: busy)
+                        .padding(.trailing, 10)
+                }
+            }
             .background { LauncherFieldBackground(color: theme.searchBackground, radius: theme.fieldRadius) }
             .padding(.horizontal, theme.paddingH)
             .padding(.top, theme.paddingV)
@@ -544,11 +550,11 @@ struct LauncherRoot: View {
         let height = LauncherMetrics.listHeight(rows: shown, rowHeight: theme.rowHeight)
         return Group {
             if count <= LauncherMetrics.visibleRows {
-                actionRows(theme)
+                actionRows(theme, lazy: false)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
-                        actionRows(theme)
+                        actionRows(theme, lazy: true)
                     }
                     .scrollIndicators(.visible)
                     .onChange(of: model.actionIndex) { _, newValue in
@@ -562,8 +568,8 @@ struct LauncherRoot: View {
         .transaction { $0.animation = nil }
     }
 
-    private func actionRows(_ theme: LauncherTheme) -> some View {
-        VStack(spacing: LauncherMetrics.rowGap) {
+    private func actionRows(_ theme: LauncherTheme, lazy: Bool) -> some View {
+        RowStack(lazy: lazy) {
             ForEach(Array(model.launcherActions.enumerated()), id: \.element.id) { index, action in
                 LauncherActionRow(action: action, index: index, selected: index == model.actionIndex, theme: theme)
                     .id(action.id)
@@ -583,11 +589,13 @@ struct LauncherRoot: View {
         let height = LauncherMetrics.listHeight(rows: shown, rowHeight: theme.rowHeight)
         return Group {
             if count <= LauncherMetrics.visibleRows {
-                resultRows(theme)
+                resultRows(theme, lazy: false)
             } else {
+                // Only rows scrolled into view are built, so a long list does
+                // not lay out (or draw icons for) rows nobody sees.
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
-                        resultRows(theme)
+                        resultRows(theme, lazy: true)
                     }
                     .scrollIndicators(.visible)
                     .onChange(of: model.selection) { _, newValue in
@@ -601,8 +609,8 @@ struct LauncherRoot: View {
         .transaction { $0.animation = nil }
     }
 
-    private func resultRows(_ theme: LauncherTheme) -> some View {
-        VStack(spacing: LauncherMetrics.rowGap) {
+    private func resultRows(_ theme: LauncherTheme, lazy: Bool) -> some View {
+        RowStack(lazy: lazy) {
             if model.results.isEmpty {
                 Text("No matches")
                     .font(.system(size: 14))
@@ -672,6 +680,46 @@ struct LauncherRoot: View {
                 .help(document.path)
             }
         }
+    }
+}
+
+/// A plain stack for lists that fit on screen; a lazy one inside a scroll view.
+/// Rows have a fixed height, so the lazy stack sizes its content without
+/// building every row, and `ScrollViewReader` can still scroll to any row.
+private struct RowStack<Content: View>: View {
+    var lazy: Bool
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        if lazy {
+            LazyVStack(spacing: LauncherMetrics.rowGap) { content }
+        } else {
+            VStack(spacing: LauncherMetrics.rowGap) { content }
+        }
+    }
+}
+
+/// A small spinner at the end of the query field while a file search or
+/// Script Filter is still working and older rows are on screen. It fades in
+/// after a short wait, so queries that answer at once do not flash it.
+private struct SearchActivityIndicator: View {
+    var label: String
+    @State private var visible = false
+
+    var body: some View {
+        ProgressView()
+            .controlSize(.small)
+            .scaleEffect(0.8)
+            .frame(width: 16, height: 16)
+            .opacity(visible ? 1 : 0)
+            .help(label)
+            .accessibilityLabel(label)
+            .allowsHitTesting(false)
+            .task {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.12)) { visible = true }
+            }
     }
 }
 
