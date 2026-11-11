@@ -11,12 +11,6 @@ import JfredCore
 final class SpotlightSearch: @unchecked Sendable {
     static let shared = SpotlightSearch()
 
-    /// Spotlight results read per name query. Spotlight evaluates the whole
-    /// predicate whatever this is; reading a result's names costs well under a
-    /// microsecond, so a large pool costs little and lets the best matches win.
-    static let nameCandidateLimit = 2000
-    /// Spotlight results read per contents or tags query.
-    static let otherCandidateLimit = 1000
     /// Files returned per query: more than the launcher shows after ranking.
     static let hitLimit = 200
     /// Paths resolved per query. Each path costs about 8 µs.
@@ -73,7 +67,7 @@ final class SpotlightSearch: @unchecked Sendable {
         let attributes = [kMDItemFSName!, kMDItemDisplayName!, kMDItemLastUsedDate!] as CFArray
         guard let query = MDQueryCreate(kCFAllocatorDefault, predicate as CFString, attributes, nil) else { return [] }
         MDQuerySetSearchScope(query, roots as CFArray, 0)
-        MDQuerySetMaxCount(query, request.kind == .name ? Self.nameCandidateLimit : Self.otherCandidateLimit)
+        MDQuerySetMaxCount(query, request.candidateLimit)
 
         lock.lock()
         guard mine == ticket else {

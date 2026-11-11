@@ -265,3 +265,35 @@ struct ContentAndTagResultTests {
         #expect(Search.results(for: "in rabbit", context: context).count == 15)
     }
 }
+
+struct FileQueryLaunchPolicyTests {
+    @Test func shortNamePrefixesWaitBeforeReachingSpotlight() {
+        #expect(FileQuery(kind: .name, text: "k").launchDelay == FileQuery.shortQueryDelay)
+        #expect(FileQuery(kind: .name, text: "ke").launchDelay == FileQuery.shortQueryDelay)
+        #expect(FileQuery(kind: .name, text: "ker").launchDelay == 0)
+        #expect(FileQuery(kind: .name, text: "kernel").launchDelay == 0)
+        // Every term reaches Spotlight, so one short term makes the query slow.
+        #expect(FileQuery(kind: .name, text: "kernel ab").launchDelay == FileQuery.shortQueryDelay)
+        #expect(FileQuery(kind: .name, text: "   ").launchDelay == 0)
+    }
+
+    @Test func onlyNameQueriesWait() {
+        #expect(FileQuery(kind: .content, text: "ab").launchDelay == 0)
+        #expect(FileQuery(kind: .tags, text: "r").launchDelay == 0)
+    }
+
+    @Test func apostrophePiecesCountAsTheyReachSpotlight() {
+        // "o'k" asks Spotlight for "o" only.
+        #expect(FileQuery(kind: .name, text: "o'k").launchDelay == FileQuery.shortQueryDelay)
+        #expect(FileQuery(kind: .name, text: "brenna o'brien").launchDelay == 0)
+    }
+
+    @Test func singleCharacterQueriesReadFewerCandidates() {
+        #expect(FileQuery(kind: .name, text: "k").candidateLimit == FileQuery.singleCharacterCandidateLimit)
+        #expect(FileQuery(kind: .name, text: "a b").candidateLimit == FileQuery.singleCharacterCandidateLimit)
+        #expect(FileQuery(kind: .name, text: "ke").candidateLimit == FileQuery.nameCandidateLimit)
+        #expect(FileQuery(kind: .name, text: "kernel a").candidateLimit == FileQuery.nameCandidateLimit)
+        #expect(FileQuery(kind: .content, text: "a").candidateLimit == FileQuery.otherCandidateLimit)
+        #expect(FileQuery(kind: .tags, text: "red").candidateLimit == FileQuery.otherCandidateLimit)
+    }
+}
