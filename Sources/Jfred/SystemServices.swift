@@ -62,6 +62,72 @@ enum Shell {
     }
 }
 
+/// Runs the shell and AppleScript commands the launcher sends on the user's
+/// behalf (system commands, Finder, Terminal). Each can block for its whole
+/// timeout, so they run here instead of on the main thread: one at a time, in
+/// the order they were asked for, so pressing volume up twice adds 20.
+enum CommandQueue {
+    private static let queue = DispatchQueue(label: "dev.jim.jfred.commands", qos: .userInitiated)
+
+    static func run(_ work: @escaping @Sendable () -> Void) {
+        queue.async(execute: work)
+    }
+}
+
+/// System commands that spawn a process, run AppleScript or wait on a disk.
+/// Call from `CommandQueue`, never from the main thread.
+enum SystemEffectRunner {
+    static func perform(_ effect: SystemEffect, ejectExclusions: [String]) {
+        switch effect {
+        case .setOutputVolume(let value):
+            _ = Shell.osascript("set volume output volume \(value)")
+        case .sleep: _ = Shell.osascript("tell application \"System Events\" to sleep")
+        case .restart: _ = Shell.osascript("tell application \"System Events\" to restart")
+        case .shutdown: _ = Shell.osascript("tell application \"System Events\" to shut down")
+        case .logout: _ = Shell.osascript("tell application \"System Events\" to log out")
+        case .lock: _ = Shell.osascript("tell application \"System Events\" to keystroke \"q\" using {command down, control down}")
+        case .screensaver: _ = Shell.run("/usr/bin/open", ["-a", "ScreenSaverEngine"])
+        case .emptyTrash: _ = Shell.osascript("tell application \"Finder\" to empty trash")
+        case .showTrash: _ = Shell.run("/usr/bin/open", [NSHomeDirectory() + "/.Trash"])
+        case .eject(let all):
+            ejectDisks(all: all, exclusions: ejectExclusions)
+        case .toggleDarkMode:
+            _ = Shell.osascript("tell application \"System Events\" to tell appearance preferences to set dark mode to not dark mode")
+        case .toggleHiddenFiles:
+            let current = Shell.run("/usr/bin/defaults", ["read", "com.apple.finder", "AppleShowAllFiles"])
+            let next = current.trimmingCharacters(in: .whitespacesAndNewlines) == "1" ? "false" : "true"
+            _ = Shell.run("/usr/bin/defaults", ["write", "com.apple.finder", "AppleShowAllFiles", "-bool", next])
+            _ = Shell.run("/usr/bin/killall", ["Finder"])
+        case .mute: _ = Shell.osascript("set volume with output muted")
+        case .volumeUp: changeVolume(10)
+        case .volumeDown: changeVolume(-10)
+        case .quitAll, .showDesktop, .missionControl, .launchpad, .screenshot, .unknown:
+            // Not `runsOnCommandQueue`; AppModel performs these itself.
+            break
+        }
+    }
+
+    private static func ejectDisks(all: Bool, exclusions: [String]) {
+        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsEjectableKey, .volumeIsLocalKey]
+        let urls = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
+        for url in urls {
+            guard let values = try? url.resourceValues(forKeys: Set(keys)),
+                  values.volumeIsEjectable == true else { continue }
+            if !all, values.volumeIsLocal == false { continue }
+            let name = values.volumeName ?? url.lastPathComponent
+            if exclusions.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { continue }
+            try? NSWorkspace.shared.unmountAndEjectDevice(at: url)
+        }
+    }
+
+    private static func changeVolume(_ delta: Int) {
+        let text = Shell.osascript("output volume of (get volume settings)")
+        let current = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 50
+        let next = min(100, max(0, current + delta))
+        _ = Shell.osascript("set volume output volume \(next)")
+    }
+}
+
 enum AppIndexer {
     static func watchPaths(preferences: Preferences) -> [String] {
         roots(preferences: preferences).map(\.0).filter { FileManager.default.fileExists(atPath: $0) }

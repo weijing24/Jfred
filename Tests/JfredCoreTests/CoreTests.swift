@@ -528,6 +528,30 @@ private func asset(_ version: String, _ sha: String, _ size: Int64, architecture
         #expect(ActionExecutor.systemEffect(id: "nope", disabled: [], ejectScope: "local") == .unknown("nope"))
     }
 
+    @Test func blockingSystemEffectsRunOnTheCommandQueue() {
+        // Everything that spawns osascript, defaults, killall or open, or
+        // ejects a disk, must stay off the main thread.
+        let queued: [SystemEffect] = [
+            .setOutputVolume(30), .sleep, .restart, .shutdown, .logout, .lock, .screensaver,
+            .emptyTrash, .showTrash, .eject(all: false), .eject(all: true), .toggleDarkMode,
+            .toggleHiddenFiles, .mute, .volumeUp, .volumeDown,
+        ]
+        for effect in queued {
+            #expect(effect.runsOnCommandQueue, "\(effect)")
+        }
+        // Quick AppKit calls stay on main; the interactive screenshot runs on
+        // its own so it never holds up later commands.
+        let notQueued: [SystemEffect] = [.quitAll, .showDesktop, .missionControl, .launchpad, .screenshot, .unknown("x")]
+        for effect in notQueued {
+            #expect(!effect.runsOnCommandQueue, "\(effect)")
+        }
+        let ids = ["sleep", "restart", "shutdown", "logout", "lock", "screensaver", "emptetrash", "trash",
+                   "eject", "ejectall", "darkmode", "hidden", "mute", "volumeup", "volumedown", "volume:10"]
+        for id in ids {
+            #expect(ActionExecutor.systemEffect(id: id, disabled: [], ejectScope: "local")?.runsOnCommandQueue == true, "\(id)")
+        }
+    }
+
     @Test func clipboardRetentionFollowsClipKind() {
         var preferences = Preferences()
         preferences.clipboardRetentionText = "1 day"
