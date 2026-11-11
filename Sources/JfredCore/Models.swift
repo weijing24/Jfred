@@ -894,7 +894,8 @@ public struct SearchContext: Sendable {
     public var settings: [SettingRecord]
     public var links: [LinkRecord]
     public var clips: [ClipItem]
-    public var files: [AppRecord]
+    /// Files a Spotlight file search found for the current query.
+    public var files: [FileHit]
     public var windows: [WindowInfo]
     public var processes: [ProcInfo]
     public var tabs: [LinkRecord]
@@ -905,8 +906,6 @@ public struct SearchContext: Sendable {
     public var selections: [String: SelectionStat]
     public var now: Date
     public var forcedResults: [SearchResult]?
-    /// Spotlight-backed lookup for file contents (tags == false) or file tags (tags == true).
-    public var spotlight: (@Sendable (String, Bool) -> [AppRecord])?
     /// Prepared match keys. Search refreshes a copy against the records above, so
     /// a stale or missing index costs a rebuild but never changes results.
     public var index: SearchIndex?
@@ -920,7 +919,7 @@ public struct SearchContext: Sendable {
         settings: [SettingRecord] = [],
         links: [LinkRecord] = [],
         clips: [ClipItem] = [],
-        files: [AppRecord] = [],
+        files: [FileHit] = [],
         windows: [WindowInfo] = [],
         processes: [ProcInfo] = [],
         tabs: [LinkRecord] = [],
@@ -931,7 +930,6 @@ public struct SearchContext: Sendable {
         selections: [String: SelectionStat] = [:],
         now: Date = Date(),
         forcedResults: [SearchResult]? = nil,
-        spotlight: (@Sendable (String, Bool) -> [AppRecord])? = nil,
         index: SearchIndex? = nil
     ) {
         self.preferences = preferences
@@ -953,7 +951,6 @@ public struct SearchContext: Sendable {
         self.selections = selections
         self.now = now
         self.forcedResults = forcedResults
-        self.spotlight = spotlight
         self.index = index
     }
 }

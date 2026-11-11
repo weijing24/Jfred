@@ -3,106 +3,6 @@ import CoreServices
 import Foundation
 import JfredCore
 
-struct IndexedFile: Sendable {
-    var path: String
-    var name: String
-    var isFolder: Bool
-}
-
-final class FileIndex: @unchecked Sendable {
-    static let shared = FileIndex()
-    private let lock = NSLock()
-    private var files: [String: IndexedFile] = [:]
-    private var ready = false
-
-    var isReady: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return ready
-    }
-
-    func replaceAll(_ items: [IndexedFile]) {
-        lock.lock()
-        files = Dictionary(items.map { ($0.path, $0) }, uniquingKeysWith: { _, latest in latest })
-        ready = true
-        lock.unlock()
-    }
-
-    func upsert(_ item: IndexedFile) {
-        lock.lock()
-        files[item.path] = item
-        ready = true
-        lock.unlock()
-    }
-
-    func removeTree(_ path: String) {
-        lock.lock()
-        files.removeValue(forKey: path)
-        let prefix = path.hasSuffix("/") ? path : path + "/"
-        for key in Array(files.keys) where key.hasPrefix(prefix) {
-            files.removeValue(forKey: key)
-        }
-        lock.unlock()
-    }
-
-    func search(query: String, limit: Int) -> [AppRecord] {
-        guard !fold(query).isEmpty else { return [] }
-        lock.lock()
-        let snapshot = Array(files.values)
-        lock.unlock()
-        let prepared = MatchQuery(query)
-        var hits: [(AppRecord, FieldMatch)] = []
-        for file in snapshot {
-            guard let match = fieldMatch(query: prepared, key: MatchKey(file.name), maxTier: 3) else { continue }
-            hits.append((AppRecord(id: file.path, name: file.name, path: file.path), match))
-        }
-        hits.sort { lhs, rhs in
-            if lhs.1.tier != rhs.1.tier { return lhs.1.tier < rhs.1.tier }
-            if lhs.1.score != rhs.1.score { return lhs.1.score > rhs.1.score }
-            return lhs.0.name.localizedCaseInsensitiveCompare(rhs.0.name) == .orderedAscending
-        }
-        return hits.prefix(limit).map(\.0)
-    }
-}
-
-enum FileCatalog {
-    static let limit = 60_000
-
-    static func collect(preferences: Preferences) -> [IndexedFile] {
-        var items: [IndexedFile] = []
-        for root in FileSearch.scopeRoots(preferences) {
-            walk(URL(fileURLWithPath: root), into: &items)
-            if items.count >= limit { break }
-        }
-        return items
-    }
-
-    static func walk(_ root: URL, into items: inout [IndexedFile]) {
-        guard items.count < limit else { return }
-        let keys: [URLResourceKey] = [.isDirectoryKey]
-        guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return }
-        while let url = enumerator.nextObject() as? URL {
-            if items.count >= limit { return }
-            let name = url.lastPathComponent
-            if name == "node_modules" || name == ".git" || name == ".build" || name == "DerivedData" || name == "Pods" {
-                enumerator.skipDescendants()
-                continue
-            }
-            let ext = url.pathExtension.lowercased()
-            if ext == "photoslibrary" || ext == "musiclibrary" || ext == "tvlibrary" || ext == "aplibrary" {
-                enumerator.skipDescendants()
-                continue
-            }
-            if ext == "app" || ext == "prefpane" {
-                enumerator.skipDescendants()
-                continue
-            }
-            let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            items.append(IndexedFile(path: url.path, name: name, isFolder: isFolder))
-        }
-    }
-}
-
 final class PathWatch: @unchecked Sendable {
     private var stream: FSEventStreamRef?
     private let queue: DispatchQueue
@@ -156,10 +56,11 @@ final class PathWatch: @unchecked Sendable {
     }
 }
 
+/// Watches the application folders and rescans apps when they change. File
+/// search needs no index of its own: Spotlight keeps it current.
 final class IndexWatch: @unchecked Sendable {
     static let shared = IndexWatch()
     private let apps = PathWatch(label: "dev.jim.jfred.apps")
-    private let files = PathWatch(label: "dev.jim.jfred.files")
     private var appDebounce: DispatchWorkItem?
     private var wakeObserver: NSObjectProtocol?
     private var preferences = Preferences()
@@ -178,7 +79,6 @@ final class IndexWatch: @unchecked Sendable {
             }
         }
         restartApps(preferences)
-        restartFiles(preferences)
     }
 
     func restartApps(_ preferences: Preferences) {
@@ -188,24 +88,9 @@ final class IndexWatch: @unchecked Sendable {
         apps.start(paths: paths, latency: 1)
     }
 
-    func restartFiles(_ preferences: Preferences) {
-        self.preferences = preferences
-        let paths = FileSearch.scopeRoots(preferences)
-        files.handler = { [weak self] paths, flags in
-            self?.applyFileEvents(paths: paths, flags: flags)
-        }
-        files.start(paths: paths, latency: 0.5)
-        let snapshot = preferences
-        DispatchQueue.global(qos: .userInitiated).async {
-            FileIndex.shared.replaceAll(FileCatalog.collect(preferences: snapshot))
-        }
-    }
-
     private func restartAfterWake() {
         apps.stop()
-        files.stop()
         restartApps(preferences)
-        restartFiles(preferences)
     }
 
     private func scheduleAppRescan() {
@@ -215,35 +100,5 @@ final class IndexWatch: @unchecked Sendable {
         }
         appDebounce = work
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1, execute: work)
-    }
-
-    private func applyFileEvents(paths: [String], flags: [FSEventStreamEventFlags]) {
-        let fileManager = FileManager.default
-        for (path, flag) in zip(paths, flags) {
-            let name = (path as NSString).lastPathComponent
-            if name.hasPrefix(".") || path.contains(".app/") || path.contains(".prefPane/") || path.contains(".prefpane/") {
-                continue
-            }
-            let removed = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemRemoved) != 0
-            let renamed = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemRenamed) != 0
-            let mustScan = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs) != 0
-            if removed || (renamed && !fileManager.fileExists(atPath: path)) {
-                FileIndex.shared.removeTree(path)
-                continue
-            }
-            var isFolder: ObjCBool = false
-            guard fileManager.fileExists(atPath: path, isDirectory: &isFolder) else {
-                FileIndex.shared.removeTree(path)
-                continue
-            }
-            let ext = (path as NSString).pathExtension.lowercased()
-            if ext == "app" || ext == "prefpane" { continue }
-            FileIndex.shared.upsert(IndexedFile(path: path, name: name, isFolder: isFolder.boolValue))
-            if mustScan && isFolder.boolValue {
-                var found: [IndexedFile] = []
-                FileCatalog.walk(URL(fileURLWithPath: path), into: &found)
-                for item in found { FileIndex.shared.upsert(item) }
-            }
-        }
     }
 }

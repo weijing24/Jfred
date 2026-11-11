@@ -39,11 +39,11 @@ public enum Search {
             let rows = fileResults(query: openQuery, context: context)
             return Array(rows.prefix(max(1, prefs.fileSearchMax)))
         }
-        if let inside = keywordQuery(prefs.fileInsideKeyword, enabled: prefs.fileInsideEnabled), let spotlight = context.spotlight {
-            return spotlightFileResults(spotlight(inside, false), context: context, limit: prefs.fileSearchMax)
+        if let inside = keywordQuery(prefs.fileInsideKeyword, enabled: prefs.fileInsideEnabled) {
+            return spotlightFileResults(FileQuery(kind: .content, text: inside), context: context, limit: prefs.fileSearchMax)
         }
-        if let tags = keywordQuery(prefs.fileTagsKeyword, enabled: prefs.fileTagsEnabled), let spotlight = context.spotlight {
-            return spotlightFileResults(spotlight(tags, true), context: context, limit: prefs.fileSearchMax)
+        if let tags = keywordQuery(prefs.fileTagsKeyword, enabled: prefs.fileTagsEnabled) {
+            return spotlightFileResults(FileQuery(kind: .tags, text: tags), context: context, limit: prefs.fileSearchMax)
         }
         if let volume = volumeValue(trimmed) {
             return [make(
@@ -306,20 +306,33 @@ public enum Search {
     /// File-name and Spotlight queries. Their rows replace the app ranking, so the
     /// launcher must not publish that ranking while the lookup is still running.
     public static func exclusiveSlowQuery(raw: String, preferences: Preferences) -> Bool {
-        if raw.hasPrefix(" "), preferences.quickSearchEnabled { return true }
+        fileQuery(raw: raw, preferences: preferences) != nil
+    }
+
+    /// The Spotlight lookup a query needs: quick file search (a leading space),
+    /// the `open` and `find` keywords (file names), `in` (file contents) or
+    /// `tags`. The text is empty while only the prefix or keyword is typed. Nil
+    /// for every other query. Checks the keywords in the order `results` does.
+    public static func fileQuery(raw: String, preferences: Preferences) -> FileQuery? {
+        if raw.hasPrefix(" "), preferences.quickSearchEnabled {
+            return FileQuery(kind: .name, text: raw.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let keywords = [
-            (preferences.fileOpenKeyword, preferences.fileOpenEnabled),
-            (preferences.fileFindKeyword, preferences.fileFindEnabled),
-            (preferences.fileInsideKeyword, preferences.fileInsideEnabled),
-            (preferences.fileTagsKeyword, preferences.fileTagsEnabled),
+        guard !trimmed.isEmpty else { return nil }
+        let keywords: [(String, Bool, FileQuery.Kind)] = [
+            (preferences.fileOpenKeyword, preferences.fileOpenEnabled, .name),
+            (preferences.fileFindKeyword, preferences.fileFindEnabled, .name),
+            (preferences.fileInsideKeyword, preferences.fileInsideEnabled, .content),
+            (preferences.fileTagsKeyword, preferences.fileTagsEnabled, .tags),
         ]
-        for (keyword, enabled) in keywords {
+        for (keyword, enabled, kind) in keywords {
             let key = keyword.trimmingCharacters(in: .whitespaces)
             guard enabled, !key.isEmpty else { continue }
-            if argument(of: key, in: trimmed) != nil { return true }
+            if let text = argument(of: key, in: trimmed) {
+                return FileQuery(kind: kind, text: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
         }
-        return false
+        return nil
     }
 
     public static func wantsDefinition(raw: String) -> String? {
@@ -332,21 +345,68 @@ public enum Search {
         }
         let hidden = Set(context.preferences.hiddenFileTypes)
         let prepared = MatchQuery(query)
-        return context.files.filter { !isHiddenFile($0.path, hiddenTypes: hidden) }.compactMap { file in
-            let keys = [MatchKey(file.name), MatchKey(URL(fileURLWithPath: file.path).lastPathComponent)]
-            guard let match = keptMatch(prepared, keys) else { return nil }
-            return make(
-                id: "file:\(file.path)",
-                title: file.name,
-                subtitle: file.path,
-                icon: context.preferences.fileUseTypeIconsForExternal && file.path.hasPrefix("/Volumes/") ? "symbol:doc" : "file:\(file.path)",
-                kind: "file",
-                payload: file.path,
-                category: "navigation",
-                score: match.score,
-                tier: match.tier
-            )
+        var rows: [SearchResult] = []
+        for file in context.files where !isHiddenFile(file.path, hiddenTypes: hidden) {
+            let fileName = (file.path as NSString).lastPathComponent
+            guard let match = fileMatch(prepared, name: file.name, fileName: fileName) else { continue }
+            let score = match.score + FileRanking.recencyBoost(file.lastUsed, now: context.now)
+            rows.append(fileRow(file, context: context, score: score, tier: match.tier))
         }
+        return rows.sorted { lhs, rhs in
+            if lhs.tier != rhs.tier { return lhs.tier < rhs.tier }
+            if abs(lhs.score - rhs.score) > 0.000_001 { return lhs.score > rhs.score }
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
+    }
+
+    /// The file name match the launcher keeps (tier 2 or better), against the
+    /// display name and the file name.
+    private static func fileMatch(_ query: MatchQuery, name: String, fileName: String) -> FieldMatch? {
+        let keys = name == fileName || fileName.isEmpty ? [MatchKey(name)] : [MatchKey(name), MatchKey(fileName)]
+        return keptMatch(query, keys)
+    }
+
+    /// Indices of the Spotlight candidates a name search keeps, best match
+    /// first, leaving out hidden file types. The file search resolves paths in
+    /// this order, so the rows `fileResults` ranks highest are the ones it
+    /// resolves.
+    public static func rankFileCandidates(query: String, candidates: [FileCandidate], preferences: Preferences, now: Date) -> [Int] {
+        let prepared = MatchQuery(query)
+        guard !prepared.folded.isEmpty else { return [] }
+        let hidden = Set(preferences.hiddenFileTypes)
+        var kept: [(index: Int, tier: Int, score: Double)] = []
+        for (index, candidate) in candidates.enumerated() {
+            if isHiddenFile(candidate.fileName, hiddenTypes: hidden) { continue }
+            guard let match = fileMatch(prepared, name: candidate.name, fileName: candidate.fileName) else { continue }
+            kept.append((index, match.tier, match.score + FileRanking.recencyBoost(candidate.lastUsed, now: now)))
+        }
+        kept.sort { lhs, rhs in
+            if lhs.tier != rhs.tier { return lhs.tier < rhs.tier }
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            return lhs.index < rhs.index
+        }
+        return kept.map(\.index)
+    }
+
+    /// True when "Don't Show" hides this file type from a file search. Contents
+    /// searches follow it too; tag searches do not.
+    public static func hidesFile(_ path: String, kind: FileQuery.Kind, preferences: Preferences) -> Bool {
+        guard kind != .tags else { return false }
+        return isHiddenFile(path, hiddenTypes: Set(preferences.hiddenFileTypes))
+    }
+
+    private static func fileRow(_ file: FileHit, context: SearchContext, score: Double, tier: Int = 0) -> SearchResult {
+        make(
+            id: "file:\(file.path)",
+            title: file.name,
+            subtitle: file.path,
+            icon: context.preferences.fileUseTypeIconsForExternal && file.path.hasPrefix("/Volumes/") ? "symbol:doc" : "file:\(file.path)",
+            kind: "file",
+            payload: file.path,
+            category: "navigation",
+            score: score,
+            tier: tier
+        )
     }
 
     private static let hiddenExtensions: [String: Set<String>] = [
@@ -369,19 +429,23 @@ public enum Search {
         return false
     }
 
-    private static func spotlightFileResults(_ records: [AppRecord], context: SearchContext, limit: Int) -> [SearchResult] {
-        records.prefix(max(1, limit)).map { record in
-            make(
-                id: "file:\(record.path)",
-                title: record.name,
-                subtitle: record.path,
-                icon: "file:\(record.path)",
-                kind: "file",
-                payload: record.path,
-                category: "navigation",
-                score: 2
-            )
+    /// Contents and tag search rows: the files Spotlight found, most recently
+    /// used first, then by name.
+    private static func spotlightFileResults(_ query: FileQuery, context: SearchContext, limit: Int) -> [SearchResult] {
+        if query.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let hint = query.kind == .tags
+                ? (title: "File tags", subtitle: "Type the tags to look for")
+                : (title: "Inside files", subtitle: "Type words to look for in file contents")
+            return [make(id: "file:hint", title: hint.title, subtitle: hint.subtitle, icon: "symbol:doc.text.magnifyingglass", kind: "text", payload: "", category: "navigation", score: 1)]
         }
+        let rows = context.files
+            .filter { !hidesFile($0.path, kind: query.kind, preferences: context.preferences) }
+            .map { fileRow($0, context: context, score: 2 + FileRanking.recencyBoost($0.lastUsed, now: context.now)) }
+            .sorted { lhs, rhs in
+                if abs(lhs.score - rhs.score) > 0.000_001 { return lhs.score > rhs.score }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+        return Array(rows.prefix(max(1, limit)))
     }
 
     private static func fallbacks(for query: String, context: SearchContext, score: Double) -> [SearchResult] {

@@ -167,7 +167,7 @@ struct CoreTests {
     @Test func fileModeDoesNotReturnApps() {
         var context = SearchContext()
         context.apps = [AppRecord(id: "r", name: "Report", path: "/Applications/Report.app")]
-        context.files = [AppRecord(id: "f", name: "Report.pdf", path: "/Users/me/Report.pdf")]
+        context.files = [FileHit(path: "/Users/me/Report.pdf", name: "Report.pdf")]
         let rows = Search.results(for: " report", context: context)
         #expect(rows.map(\.kind) == ["file"])
         #expect(Search.wantsFiles(raw: " report", preferences: context.preferences))
