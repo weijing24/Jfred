@@ -299,47 +299,13 @@ enum PreferencePaneNames {
     }
 }
 
+/// Where the file search looks. `SpotlightSearch` runs the queries.
 enum FileSearch {
-    static func files(query: String, preferences: Preferences) -> [AppRecord] {
-        let safe = query.replacingOccurrences(of: "\"", with: "").trimmingCharacters(in: .whitespaces)
-        guard safe.count >= 1 else { return [] }
-        if FileIndex.shared.isReady {
-            return FileIndex.shared.search(query: safe, limit: max(preferences.fileSearchMax, 400))
-        }
-        return spotlight(query: safe, preferences: preferences)
-    }
-
-    /// Metadata lookup used only while FileIndex is still warming. Avoids
-    /// spawning `mdfind` and never blocks the main thread; callers already run
-    /// this off-main. Caps wait so the launcher can keep streaming.
-    private static func spotlight(query: String, preferences: Preferences) -> [AppRecord] {
-        let safe = query.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let predicate = "kMDItemDisplayName == \"*\(safe)*\"c" as CFString
-        guard let mdQuery = MDQueryCreate(kCFAllocatorDefault, predicate, nil, nil) else { return [] }
-        let roots = scopeRoots(preferences).prefix(8).map { $0 as CFString }
-        if !roots.isEmpty {
-            MDQuerySetSearchScope(mdQuery, roots as CFArray, 0)
-        }
-        MDQuerySetMaxCount(mdQuery, preferences.fileSearchMax)
-        // Synchronous execute off the main thread keeps results simple without UI stalls.
-        guard MDQueryExecute(mdQuery, CFOptionFlags(kMDQuerySynchronous.rawValue)) else { return [] }
-        defer { MDQueryStop(mdQuery) }
-        var rows: [AppRecord] = []
-        let count = MDQueryGetResultCount(mdQuery)
-        for index in 0..<count {
-            guard let raw = MDQueryGetResultAtIndex(mdQuery, index) else { continue }
-            let item = Unmanaged<MDItem>.fromOpaque(UnsafeRawPointer(raw)).takeUnretainedValue()
-            guard let pathValue = MDItemCopyAttribute(item, kMDItemPath) else { continue }
-            let path = pathValue as? String ?? String(describing: pathValue)
-            guard path.hasPrefix("/") else { continue }
-            let name = FileManager.default.displayName(atPath: path)
-            rows.append(AppRecord(id: path, name: name, path: path))
-            if rows.count >= preferences.fileSearchMax { break }
-        }
-        return rows
-    }
-
     static func scopeRoots(_ preferences: Preferences) -> [String] {
+        // Read mount points from the kernel's cache. Calling stat or statfs on a
+        // network mount (an NFS share, ~/OrbStack) can block until the server
+        // answers, so those are ruled out before anything touches them.
+        let remote = networkMounts()
         var roots: [String] = []
         if preferences.scopeApplications {
             roots.append("/Applications")
@@ -350,22 +316,25 @@ enum FileSearch {
             let homePath = (configured.isEmpty || configured == "~")
                 ? NSHomeDirectory()
                 : (configured as NSString).expandingTildeInPath
-            let home = URL(fileURLWithPath: homePath)
-            if let items = try? FileManager.default.contentsOfDirectory(at: home, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
-                for url in items where shouldIndex(url.path) {
-                    roots.append(url.path)
+            // Names only: asking for resource values would stat every entry.
+            if !isUnder(homePath, remote), let names = try? FileManager.default.contentsOfDirectory(atPath: homePath) {
+                for name in names.sorted() where !name.hasPrefix(".") {
+                    let path = (homePath as NSString).appendingPathComponent(name)
+                    if shouldIndex(path, remote: remote) { roots.append(path) }
                 }
             }
         }
         for path in preferences.scopePaths {
             let expanded = (path as NSString).expandingTildeInPath
-            if shouldIndex(expanded) { roots.append(expanded) }
+            if shouldIndex(expanded, remote: remote) { roots.append(expanded) }
         }
-        return roots
+        var seen = Set<String>()
+        return roots.filter { seen.insert($0).inserted }
     }
 
     /// Home music libraries and network mounts each raise a privacy prompt.
-    private static func shouldIndex(_ path: String) -> Bool {
+    private static func shouldIndex(_ path: String, remote: [String]) -> Bool {
+        if isUnder(path, remote) { return false }
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return false }
         let name = (path as NSString).lastPathComponent
@@ -373,6 +342,27 @@ enum FileSearch {
         var info = statfs()
         guard statfs(path, &info) == 0 else { return false }
         return info.f_flags & UInt32(MNT_LOCAL) != 0
+    }
+
+    private static func isUnder(_ path: String, _ mounts: [String]) -> Bool {
+        mounts.contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    /// Mount points of file systems that are not local, without contacting them.
+    private static func networkMounts() -> [String] {
+        var mounts: UnsafeMutablePointer<statfs>?
+        let count = getmntinfo(&mounts, MNT_NOWAIT)
+        guard count > 0, let mounts else { return [] }
+        var paths: [String] = []
+        for index in 0..<Int(count) {
+            var info = mounts[index]
+            guard info.f_flags & UInt32(MNT_LOCAL) == 0 else { continue }
+            let path = withUnsafeBytes(of: &info.f_mntonname) { raw in
+                String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+            }
+            if path.count > 1 { paths.append(path) }
+        }
+        return paths
     }
 }
 

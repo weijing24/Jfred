@@ -210,6 +210,8 @@ final class AppModel {
     }
 
     private var generation = 0
+    /// The Spotlight file lookup for the current query, if one is running.
+    @ObservationIgnored private var fileSearchTask: Task<Void, Never>?
     /// Short-lived Script Filter results keyed by "workflowID|argument".
     private var scriptFilterCache: [String: (date: Date, rows: [SearchResult])] = [:]
     private var searchingSubtitle: String?
@@ -269,6 +271,7 @@ final class AppModel {
     func scheduleSearch() {
         generation += 1
         let token = generation
+        cancelFileSearch()
         if let browser = fileBrowserResults(query) {
             publishResults(browser)
             return
@@ -334,57 +337,56 @@ final class AppModel {
             }
         }
 
-        if !Search.exclusiveSlowQuery(raw: raw, preferences: context.preferences) {
-            var instant = context
-            instant.spotlight = nil
-            publishResults(Search.results(for: raw, context: instant))
+        guard let fileQuery = Search.fileQuery(raw: raw, preferences: context.preferences) else {
+            publishResults(Search.results(for: raw, context: context))
             guard let word = Search.wantsDefinition(raw: raw), context.preferences.dictionaryEnabled else { return }
             let job = Task.detached { DictionaryLookup.define(word) }
             Task {
                 let definition = await job.value
                 guard token == self.generation, let definition else { return }
                 var enriched = context
-                enriched.spotlight = nil
                 enriched.definition = definition
                 self.publishResults(Search.results(for: raw, context: enriched))
             }
             return
         }
 
-        let needsFiles = Search.wantsFiles(raw: raw, preferences: context.preferences)
-        if needsFiles {
-            var preview = context
-            preview.spotlight = nil
-            let hint = Search.results(for: raw, context: preview)
-            if hint.contains(where: { $0.id == "file:hint" }) {
-                publishResults(hint)
-                return
-            }
+        if fileQuery.text.isEmpty {
+            // Only the prefix or keyword so far: show the hint row.
+            publishResults(Search.results(for: raw, context: context))
+            return
         }
-        // Keep existing rows while the exclusive file lookup runs. Only show a
+        // Keep existing rows while the file lookup runs. Only show a
         // placeholder when there is nothing on screen yet.
         if results.isEmpty {
-            let subtitle = trimmed.isEmpty ? "Files" : trimmed
-            publishResults([statusRow(id: "search:pending", title: "Searching…", subtitle: subtitle, icon: "symbol:magnifyingglass", category: "navigation")])
+            publishResults([statusRow(id: "search:pending", title: "Searching…", subtitle: trimmed, icon: "symbol:magnifyingglass", category: "navigation")])
         } else {
             searchingSubtitle = "Searching…"
             launcher?.layout(animated: false)
         }
-        let job = Task.detached {
-            var working = context
-            if needsFiles {
-                let fileQuery = raw.trimmingCharacters(in: .whitespaces)
-                working.files = FileSearch.files(query: fileQuery, preferences: working.preferences)
-                working.spotlight = nil
-            }
-            return Search.results(for: raw, context: working)
-        }
-        Task {
-            let rows = await job.value
-            guard token == self.generation else { return }
+        let preferences = context.preferences
+        fileSearchTask = Task {
+            // A newer keystroke stops this query inside SpotlightSearch and
+            // makes `search` return nil.
+            guard let hits = await SpotlightSearch.shared.search(fileQuery, preferences: preferences) else { return }
+            guard token == self.generation, !Task.isCancelled else { return }
+            var found = context
+            found.files = hits
+            let working = found
+            let rows = await Task.detached { Search.results(for: raw, context: working) }.value
+            guard token == self.generation, !Task.isCancelled else { return }
             self.searchingSubtitle = nil
             self.publishResults(rows)
         }
+    }
+
+    /// Stops a running Spotlight file query whose rows nobody will see.
+    private func cancelFileSearch() {
+        guard let task = fileSearchTask else { return }
+        task.cancel()
+        fileSearchTask = nil
+        SpotlightSearch.shared.cancel()
+        searchingSubtitle = nil
     }
 
     private func statusRow(id: String, title: String, subtitle: String, icon: String, category: String) -> SearchResult {
@@ -435,6 +437,7 @@ final class AppModel {
 
     func hideLauncher(reactivate: Bool) {
         launcherEpoch += 1
+        cancelFileSearch()
         transientItem = nil
         launcherVisible = false
         actionPanelVisible = false
@@ -1134,9 +1137,6 @@ final class AppModel {
         if appRootsChanged {
             reindex()
             IndexWatch.shared.restartApps(preferences)
-        }
-        if appRootsChanged || old.scopeHome != preferences.scopeHome {
-            IndexWatch.shared.restartFiles(preferences)
         }
         if old.onePasswordEnabled != preferences.onePasswordEnabled && preferences.onePasswordEnabled { reloadOnePassword() }
         if !preferences.fileBufferEnabled { fileBuffer = []; fileBufferLastUsed = nil }
@@ -2019,7 +2019,7 @@ final class AppModel {
             .replacingOccurrences(of: "\n", with: " ")
     }
 
-    private func makeContext(files: [AppRecord], windows: [WindowInfo], processes: [ProcInfo], tabs: [LinkRecord], profiles: [ProfileInfo], definition: String?, forced: [SearchResult]? = nil) -> SearchContext {
+    private func makeContext(files: [FileHit], windows: [WindowInfo], processes: [ProcInfo], tabs: [LinkRecord], profiles: [ProfileInfo], definition: String?, forced: [SearchResult]? = nil) -> SearchContext {
         SearchContext(
             preferences: preferences,
             workflows: workflows,
@@ -2039,18 +2039,7 @@ final class AppModel {
             knowledge: knowledge,
             selections: selections,
             now: Date(),
-            forcedResults: forced,
-            spotlight: { term, tags in
-                let escaped = term.replacingOccurrences(of: "'", with: "\\'")
-                let predicate = tags
-                    ? "kMDItemUserTags == '\(escaped)'cd"
-                    : "kMDItemTextContent == '*\(escaped)*'cd"
-                let output = Shell.run("/usr/bin/mdfind", [predicate], timeout: 3)
-                return output.split(separator: "\n").prefix(40).map { line in
-                    let path = String(line)
-                    return AppRecord(id: path, name: (path as NSString).lastPathComponent, path: path)
-                }
-            }
+            forcedResults: forced
         )
     }
 

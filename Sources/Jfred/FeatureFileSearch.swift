@@ -26,6 +26,7 @@ extension FeaturesPane {
                     .toggleStyle(.checkbox)
             }
             SettingsNote("Search for and open files very quickly by prefixing your search term with a space (or '). This is the best way to find files.")
+            SettingsNote("File search uses Spotlight, so folders in Spotlight's privacy list are not searched. Results leave out hidden folders, node_modules, Pods, DerivedData, the Go module cache and the contents of app bundles.")
             HStack(alignment: .top, spacing: 24) {
                 keywordBlock("Opening Files:", "Use the keyword followed by the search term, e.g. 'open magictricks.pdf' to open the specified file.", keyword: model.bindPref(\.fileOpenKeyword), enabled: model.bindPref(\.fileOpenEnabled))
                 keywordBlock("Revealing Files:", "Use the keyword followed by the search term, e.g. 'find magictricks.pdf' to reveal the file in Finder.", keyword: model.bindPref(\.fileFindKeyword), enabled: model.bindPref(\.fileFindEnabled))
