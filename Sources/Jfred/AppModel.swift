@@ -258,7 +258,7 @@ final class AppModel {
             return builtin
         })
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        var context = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil, forced: nil)
+        var context = makeContext(files: [], definition: nil, forced: nil)
         searchIndex.refresh(for: context)
         context.index = searchIndex
         let useWorkflows = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
@@ -1367,7 +1367,7 @@ final class AppModel {
     /// Builds match keys for changed records off the main thread, so the first
     /// keystroke after apps or bookmarks reload does not pay for them.
     private func warmSearchIndex() {
-        let context = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil)
+        let context = makeContext(files: [], definition: nil)
         let current = searchIndex
         Task {
             let warmed = await Task.detached(priority: .userInitiated) {
@@ -1377,7 +1377,7 @@ final class AppModel {
             }.value
             // Records may have changed again, or a keystroke may already have
             // refreshed the index. Keep the warmed copy only if it still matches.
-            let latest = self.makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil)
+            let latest = self.makeContext(files: [], definition: nil)
             if warmed.isCurrent(for: latest) { self.searchIndex = warmed }
         }
     }
@@ -2087,7 +2087,7 @@ final class AppModel {
             .replacingOccurrences(of: "\n", with: " ")
     }
 
-    private func makeContext(files: [FileHit], windows: [WindowInfo], processes: [ProcInfo], tabs: [LinkRecord], profiles: [ProfileInfo], definition: String?, forced: [SearchResult]? = nil) -> SearchContext {
+    private func makeContext(files: [FileHit], definition: String?, forced: [SearchResult]? = nil) -> SearchContext {
         SearchContext(
             preferences: preferences,
             workflows: workflows,
@@ -2098,10 +2098,6 @@ final class AppModel {
             links: links,
             clips: clips,
             files: files,
-            windows: windows,
-            processes: processes,
-            tabs: tabs,
-            profiles: profiles,
             definition: definition,
             opItems: opItems,
             knowledge: knowledge,
@@ -2285,14 +2281,6 @@ final class AppModel {
         default:
             break
         }
-    }
-
-    private func openChromeProfile(_ directory: String) {
-        let chrome = URL(fileURLWithPath: "/Applications/Google Chrome.app")
-        let config = NSWorkspace.OpenConfiguration()
-        config.arguments = ["--profile-directory=\(directory)"]
-        config.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: chrome, configuration: config) { _, _ in }
     }
 
     /// Open `command` in the preferred terminal. The AppleScript or `open`
