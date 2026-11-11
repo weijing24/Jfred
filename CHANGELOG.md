@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.2.0
+
+### Typing and search
+
+Typing in the launcher stays responsive with large bookmark libraries. Jfred prepares the match keys for apps, bookmarks, snippets and workflows when they change, instead of on every keystroke. With about 2,200 bookmarks a keystroke drops from over 100 ms to about 2 ms. Result order is unchanged.
+
+Snippet auto expansion now reads the keyboard on its own thread, so a busy launcher no longer delays typing in other apps. A small activity indicator appears at the trailing edge of the query field while a file search or Script Filter is still running.
+
+### File search
+
+File search now uses Spotlight. It reaches Documents, Downloads, Desktop and every other folder in the search scope. Before, results came from Jfred's own 60,000-file index, which could fill up before those folders. Each keystroke cancels the previous query. Very short queries wait a moment, so fast typing doesn't start them. Folders excluded from Spotlight, `node_modules`, `.git`, build folders and the Go module cache stay out of the results. The `in` and `tags` keywords use the same engine. Names match on word starts, so a file that matched only by its camel-case initials no longer appears.
+
+### Snippets and clipboard
+
+Snippets understand new placeholders: `{clipboard}`, `{cursor}`, `{date:FORMAT}`, `{time:FORMAT}`, `{datetime:FORMAT}` and `{random:UUID}`. FORMAT is `short`, `medium`, `long`, `full` or a date pattern such as `yyyy-MM-dd`. `{date}`, `{time}` and `{iso}` work as before.
+
+Expanding a snippet or pasting from the launcher puts the whole clipboard back afterwards, including images, files and rich text. These temporary writes no longer appear in clipboard history. If you copy something new in the meantime, Jfred leaves it alone. Paste and Copy on a snippet result in the action panel now use the snippet text instead of its identifier.
+
+### Commands and workflows
+
+System commands, terminal commands, Finder actions and AppleScript files run in the background after the launcher closes, so the launcher no longer freezes on screen. AppleScript files have their own queue, so a slow script doesn't hold up volume or eject commands.
+
+Script Filters follow the workflow's queue settings. One script runs at a time, a replaced run is stopped together with its child processes, and runs wait for a short pause in typing. Two Script Filters in the same workflow no longer share cached results for the same argument.
+
+### Reliability
+
+Jfred no longer blocks log out, restart or shut down, including when Jfred runs those commands itself. Unsaved changes are written on exit. ⌘Q and the Dock's Quit still only close Preferences.
+
+State is saved in the background. Clipboard history and usage now live in `clips.json` and `usage.json` next to `state.json`, so a copy no longer rewrites your workflows. The files are migrated on first launch. If you go back to an older Jfred, it starts with empty clipboard history and usage, and everything else is intact.
+
+Result icons are drawn in the background and kept in a bounded cache. The updater installs a download only if it is signed by the Jfred release certificate.
+
 ## 1.1.5
 
 ### Preferences
