@@ -593,7 +593,7 @@ final class AppModel {
             writeClipboard(item.title)
             hideLauncher(reactivate: false)
         case .copyValue:
-            writeClipboard(value)
+            writeClipboard(item.kind == "snippet" ? expandedSnippet(item).text : value)
             hideLauncher(reactivate: false)
         case .openBrowser:
             if let url = URL(string: value) { NSWorkspace.shared.open(url) }
@@ -605,7 +605,12 @@ final class AppModel {
         case .pasteClipboard:
             if let clip = clips.first(where: { $0.id.uuidString == item.payload }) { pasteClipboardItem(clip) }
         case .pasteValue:
-            pasteToPrevious(value)
+            if item.kind == "snippet" {
+                let expansion = expandedSnippet(item)
+                pasteToPrevious(expansion.text, cursorOffset: expansion.cursorOffset)
+            } else {
+                pasteToPrevious(value)
+            }
         case .searchWeb:
             let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
             if let url = URL(string: "https://www.google.com/search?q=\(encoded)") {
@@ -1037,14 +1042,11 @@ final class AppModel {
             if let clip = clips.first(where: { $0.id.uuidString == item.payload }) {
                 pasteClipboardItem(clip)
             }
-        case "calculation", "copy", "snippet":
-            let text: String
-            if item.kind == "snippet" {
-                text = expandTokens(snippets.first { $0.id.uuidString == item.payload }?.text ?? item.title)
-            } else {
-                text = item.payload.isEmpty ? item.title : item.payload
-            }
-            pasteToPrevious(text)
+        case "calculation", "copy":
+            pasteToPrevious(item.payload.isEmpty ? item.title : item.payload)
+        case "snippet":
+            let expansion = expandedSnippet(item)
+            pasteToPrevious(expansion.text, cursorOffset: expansion.cursorOffset)
         case "dictionary":
             let body = item.subtitle == "Open Dictionary" ? item.title : item.subtitle
             if let url = URL(string: "dict://\(item.payload.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.payload)") {
@@ -2111,18 +2113,24 @@ final class AppModel {
         pasteIntoPreviousApp()
     }
 
-    private func pasteToPrevious(_ text: String) {
-        let restore = preferences.selectionHotkeyMode == "restore"
-        let board = NSPasteboard.general
-        let previous = board.string(forType: .string)
-        board.clearContents()
-        board.setString(text, forType: .string)
+    /// A snippet result's text with its placeholders filled in. The result's
+    /// payload is the snippet id; `{clipboard}` reads the clipboard as it is now,
+    /// before `pasteToPrevious` replaces it.
+    private func expandedSnippet(_ item: SearchResult) -> SnippetExpansion {
+        let template = snippets.first { $0.id.uuidString == item.payload }?.text ?? item.title
+        return expandSnippet(template, clipboard: TemporaryClipboard.userText())
+    }
+
+    /// Paste `text` into the previous app. `cursorOffset` Left Arrows follow the
+    /// paste to place a snippet's `{cursor}`.
+    private func pasteToPrevious(_ text: String, cursorOffset: Int = 0) {
+        let pending = TemporaryClipboard.write(text, restoring: preferences.selectionHotkeyMode == "restore")
         hideLauncher(reactivate: true)
         pasteIntoPreviousApp {
-            if restore {
+            SnippetExpander.shared.postIgnoringTap(KeyCode.leftArrow, count: cursorOffset)
+            if let pending {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    board.clearContents()
-                    if let previous { board.setString(previous, forType: .string) }
+                    TemporaryClipboard.restore(pending)
                 }
             }
         }

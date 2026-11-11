@@ -167,3 +167,69 @@ enum ClipboardBoard {
         try? NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.html], documentAttributes: nil)
     }
 }
+
+/// Text Jfred puts on the general pasteboard only to send a synthetic ⌘V, and
+/// putting the user's clipboard back afterwards. Main thread only.
+@MainActor
+enum TemporaryClipboard {
+    /// The last temporary write still waiting to be restored.
+    private static var pending: ClipboardRestore?
+
+    /// Replace the pasteboard with `text`. With `restoring`, every item and
+    /// type on the pasteboard is saved first, and the write carries
+    /// `ClipboardBoard.origin` so clipboard history skips it. Pass the result
+    /// to `restore(_:)` once the paste has landed.
+    static func write(_ text: String, restoring: Bool) -> ClipboardRestore? {
+        let board = NSPasteboard.general
+        let saved: ClipboardSnapshot? = restoring
+            ? ClipboardRestore.contentsToSave(currentChangeCount: board.changeCount, pending: pending) { snapshot(board) }
+            : nil
+        board.clearContents()
+        let item = NSPasteboardItem()
+        item.setString(text, forType: .string)
+        if restoring { item.setData(Data(), forType: ClipboardBoard.origin) }
+        board.writeObjects([item])
+        guard let saved else {
+            pending = nil
+            return nil
+        }
+        let restore = ClipboardRestore(saved: saved, changeCount: board.changeCount)
+        pending = restore
+        return restore
+    }
+
+    /// The user's plain-text clipboard for `{clipboard}`. While an earlier
+    /// temporary write is still on the pasteboard, that is the text it saved.
+    static func userText() -> String? {
+        let board = NSPasteboard.general
+        if let pending, pending.changeCount == board.changeCount { return pending.saved.plainText }
+        return board.string(forType: .string)
+    }
+
+    /// Put the saved contents back, marked as Jfred's own write. Does nothing
+    /// when anything else wrote to the pasteboard after the temporary text.
+    static func restore(_ restore: ClipboardRestore) {
+        let board = NSPasteboard.general
+        if pending?.changeCount == restore.changeCount { pending = nil }
+        guard let items = restore.itemsToRestore(currentChangeCount: board.changeCount, marker: ClipboardBoard.origin.rawValue) else { return }
+        board.clearContents()
+        let objects = items.map { entries -> NSPasteboardItem in
+            let item = NSPasteboardItem()
+            for entry in entries {
+                item.setData(entry.data, forType: NSPasteboard.PasteboardType(entry.type))
+            }
+            return item
+        }
+        if !objects.isEmpty { board.writeObjects(objects) }
+    }
+
+    /// Every item on `board` with all of its types and their data.
+    static func snapshot(_ board: NSPasteboard) -> ClipboardSnapshot {
+        let items = (board.pasteboardItems ?? []).map { item in
+            item.types.compactMap { type in
+                item.data(forType: type).map { ClipboardSnapshot.Entry(type: type.rawValue, data: $0) }
+            }
+        }
+        return ClipboardSnapshot(items: items.filter { !$0.isEmpty })
+    }
+}

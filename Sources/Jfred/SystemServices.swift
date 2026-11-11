@@ -636,13 +636,23 @@ enum Accessibility {
     }
 }
 
-func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags = []) {
+/// Post one key press. Returns false when the events could not be created.
+@discardableResult
+func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags = []) -> Bool {
     guard let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true),
-          let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else { return }
+          let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else { return false }
     down.flags = flags
     up.flags = flags
     down.post(tap: .cghidEventTap)
     up.post(tap: .cghidEventTap)
+    return true
+}
+
+/// Virtual key codes Jfred posts.
+enum KeyCode {
+    static let v: CGKeyCode = 9
+    static let delete: CGKeyCode = 51
+    static let leftArrow: CGKeyCode = 123
 }
 
 final class SnippetExpander: @unchecked Sendable {
@@ -767,21 +777,49 @@ final class SnippetExpander: @unchecked Sendable {
         guard let (keyword, replacement) = Self.match(stem: stem, table: table, wordBased: wordBasedMatch) else { return }
         let deletes = keyword.count + 1
         DispatchQueue.main.async {
-            let expanded = expandTokens(replacement)
-            self.lock.lock()
-            self.ignore = deletes
-            self.buffer = ""
-            self.lock.unlock()
-            for _ in 0..<deletes { postKey(51) }
-            self.paste(expanded)
-            self.lock.lock()
-            let sound = self.playSound
-            self.lock.unlock()
-            if sound { NSSound(named: "Purr")?.play() }
-            Task { @MainActor in
-                AppRuntime.model?.record(category: "expansion")
+            self.expand(replacement, deleting: deletes)
+        }
+    }
+
+    /// Replace the typed keyword with the snippet. Pasteboard work stays on main.
+    @MainActor
+    private func expand(_ replacement: String, deleting deletes: Int) {
+        // Read before the temporary write below replaces the clipboard.
+        let expansion = expandSnippet(replacement, clipboard: TemporaryClipboard.userText())
+        lock.lock()
+        ignore = 0
+        buffer = ""
+        let restore = restoreClipboard
+        let sound = playSound
+        lock.unlock()
+        postIgnoringTap(KeyCode.delete, count: deletes)
+        let pending = TemporaryClipboard.write(expansion.text, restoring: restore)
+        postIgnoringTap(KeyCode.v, flags: .maskCommand)
+        postIgnoringTap(KeyCode.leftArrow, count: expansion.cursorOffset)
+        if let pending {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                TemporaryClipboard.restore(pending)
             }
         }
+        if sound { NSSound(named: "Purr")?.play() }
+        AppRuntime.model?.record(category: "expansion")
+    }
+
+    /// Post synthetic key presses the tap must not read as typing: the deletes
+    /// and ⌘V of an expansion, and the Left Arrows that place a `{cursor}`.
+    /// The count is only kept while the tap exists to consume it.
+    func postIgnoringTap(_ keyCode: CGKeyCode, flags: CGEventFlags = [], count: Int = 1) {
+        guard count > 0 else { return }
+        lock.lock()
+        let counted = tap != nil
+        if counted { ignore += count }
+        lock.unlock()
+        var failed = 0
+        for _ in 0..<count where !postKey(keyCode, flags: flags) { failed += 1 }
+        guard counted, failed > 0 else { return }
+        lock.lock()
+        ignore = max(0, ignore - failed)
+        lock.unlock()
     }
 
     private static func match(stem: String, table: [String: String], wordBased: Bool) -> (String, String)? {
@@ -795,25 +833,6 @@ final class SnippetExpander: @unchecked Sendable {
             }
         }
         return nil
-    }
-
-    private func paste(_ text: String) {
-        let board = NSPasteboard.general
-        let previous = board.string(forType: .string)
-        board.clearContents()
-        board.setString(text, forType: .string)
-        lock.lock()
-        ignore += 1
-        lock.unlock()
-        postKey(9, flags: .maskCommand)
-        lock.lock()
-        let restore = restoreClipboard
-        lock.unlock()
-        guard restore else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            board.clearContents()
-            if let previous { board.setString(previous, forType: .string) }
-        }
     }
 }
 
