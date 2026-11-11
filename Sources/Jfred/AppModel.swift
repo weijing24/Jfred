@@ -18,65 +18,6 @@ enum AppRuntime {
     @MainActor static var renderPreferencesOnly = false
 }
 
-struct DiskState: Codable {
-    var preferences: Preferences
-    var workflows: [Workflow]
-    var snippets: [Snippet]
-    var clips: [ClipItem]
-    var usage: [UsageEvent]
-    var knowledge: [String: String]
-    var selections: [String: SelectionStat]
-
-    var skippedWorkflowCount = 0
-
-    init(preferences: Preferences, workflows: [Workflow], snippets: [Snippet], clips: [ClipItem], usage: [UsageEvent], knowledge: [String: String], selections: [String: SelectionStat]) {
-        self.preferences = preferences
-        self.workflows = workflows
-        self.snippets = snippets
-        self.clips = clips
-        self.usage = usage
-        self.knowledge = knowledge
-        self.selections = selections
-        self.skippedWorkflowCount = 0
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        preferences = try container.decode(Preferences.self, forKey: .preferences)
-        if let lossy = try container.decodeIfPresent(LossyDecodableArray<Workflow>.self, forKey: .workflows) {
-            workflows = lossy.elements
-            skippedWorkflowCount = lossy.skippedIndexes.count
-            for index in lossy.skippedIndexes {
-                let line = "Jfred: skipped unreadable workflow at index \(index) in state.json\n"
-                FileHandle.standardError.write(Data(line.utf8))
-            }
-        } else {
-            workflows = []
-            skippedWorkflowCount = 0
-        }
-        snippets = try container.decode([Snippet].self, forKey: .snippets)
-        clips = try container.decode([ClipItem].self, forKey: .clips)
-        usage = try container.decode([UsageEvent].self, forKey: .usage)
-        knowledge = try container.decode([String: String].self, forKey: .knowledge)
-        selections = try container.decodeIfPresent([String: SelectionStat].self, forKey: .selections) ?? [:]
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(preferences, forKey: .preferences)
-        try container.encode(workflows, forKey: .workflows)
-        try container.encode(snippets, forKey: .snippets)
-        try container.encode(clips, forKey: .clips)
-        try container.encode(usage, forKey: .usage)
-        try container.encode(knowledge, forKey: .knowledge)
-        try container.encode(selections, forKey: .selections)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case preferences, workflows, snippets, clips, usage, knowledge, selections
-    }
-}
-
 enum Seed {
     static func workflows() -> [Workflow] {
         []
@@ -94,13 +35,15 @@ enum Seed {
 @MainActor
 @Observable
 final class AppModel {
-    var preferences = Preferences()
-    var workflows: [Workflow] = []
-    var snippets: [Snippet] = []
-    var clips: [ClipItem] = []
-    var usage: [UsageEvent] = []
-    var knowledge: [String: String] = [:]
-    var selections: [String: SelectionStat] = [:]
+    // Saved state. Each change marks the file it lives in, so a save writes
+    // only the files that changed: state.json, clips.json or usage.json.
+    var preferences = Preferences() { didSet { unsavedSections.insert(.main) } }
+    var workflows: [Workflow] = [] { didSet { unsavedSections.insert(.main) } }
+    var snippets: [Snippet] = [] { didSet { unsavedSections.insert(.main) } }
+    var clips: [ClipItem] = [] { didSet { unsavedSections.insert(.clips) } }
+    var usage: [UsageEvent] = [] { didSet { unsavedSections.insert(.usage) } }
+    var knowledge: [String: String] = [:] { didSet { unsavedSections.insert(.main) } }
+    var selections: [String: SelectionStat] = [:] { didSet { unsavedSections.insert(.main) } }
     var apps: [AppRecord] = []
     var links: [LinkRecord] = []
     var actionsTab = "General"
@@ -236,7 +179,13 @@ final class AppModel {
     /// Bumped whenever the launcher is shown, hidden or given a transient
     /// item, so work that finishes later can tell the user has moved on.
     @ObservationIgnored private var launcherEpoch = 0
-    private var saveWork: DispatchWorkItem?
+    @ObservationIgnored private var saveWork: DispatchWorkItem?
+    /// Sections changed since the last save.
+    @ObservationIgnored private var unsavedSections: StateSections = []
+    /// Encodes and writes snapshots off the main thread.
+    @ObservationIgnored private let stateWriter = StateWriter()
+    /// Where the last save went; a new support folder gets every file.
+    @ObservationIgnored private var lastSaveDirectory: URL?
     var launcher: LauncherController?
     private var didStart = false
     private var suppressPrompts: Bool {
@@ -1267,7 +1216,7 @@ final class AppModel {
 
     func record(category: String) {
         usage.append(UsageEvent(date: Date(), category: category))
-        if usage.count > 20000 { usage.removeFirst(usage.count - 20000) }
+        if usage.count > StateStore.usageLimit { usage.removeFirst(usage.count - StateStore.usageLimit) }
         scheduleSave()
     }
 
@@ -1611,12 +1560,12 @@ final class AppModel {
     func prepareForTermination() {
         if preferences.clipboardClearOnQuit, !clips.isEmpty {
             clips = []
-            scheduleSave()
         }
-        guard let work = saveWork else { return }
-        work.cancel()
+        saveWork?.cancel()
         saveWork = nil
         save()
+        // Wait for the background write, including one already in progress.
+        stateWriter.flush()
     }
 
     func checkForUpdates(userInitiated: Bool) {
@@ -2624,14 +2573,6 @@ final class AppModel {
         return url
     }
 
-    private var canReplaceStateBackup = false
-    private var canOverwriteStateFile = true
-
-    private func readDiskState(from url: URL) -> DiskState? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(DiskState.self, from: data)
-    }
-
     private func applyDiskState(_ state: DiskState) {
         preferences = state.preferences
         workflows = state.workflows.filter { !WorkflowSync.isLegacyPlaceholder($0) }
@@ -2640,37 +2581,38 @@ final class AppModel {
         usage = state.usage
         knowledge = state.knowledge
         selections = state.selections
-        let allSkipped = state.skippedWorkflowCount > 0 && state.workflows.isEmpty
-        canReplaceStateBackup = !allSkipped
-        canOverwriteStateFile = !allSkipped
     }
 
     private func load() {
         hardenSupportFolder()
         JfredStore.migrateImportedWorkflowsIfNeeded()
         let directory = supportDirectory()
-        let url = directory.appendingPathComponent("state.json")
-        let backup = directory.appendingPathComponent("state.json.bak")
-        if let state = readDiskState(from: url) {
+        let loaded = StateStore.load(directory: directory)
+        if let state = loaded.state {
+            if loaded.usedBackup {
+                let line = "Jfred: state.json was unreadable; loaded workflows from state.json.bak\n"
+                FileHandle.standardError.write(Data(line.utf8))
+            }
             applyDiskState(state)
-            finishJfredStore()
-            return
+            let allSkipped = state.skippedWorkflowCount > 0 && state.workflows.isEmpty
+            stateWriter.configure(canOverwriteStateFile: !allSkipped, canReplaceStateBackup: !allSkipped, protectedSections: loaded.protectedSections)
+        } else {
+            preferences = Preferences()
+            workflows = Seed.workflows()
+            snippets = Seed.snippets()
+            clips = loaded.clips
+            usage = loaded.usage
+            // Do not overwrite an existing unreadable state.json or a good backup
+            // with a seed state. First launch (no file yet) may still write.
+            let url = directory.appendingPathComponent(StateFileName.state)
+            stateWriter.configure(canOverwriteStateFile: !FileManager.default.fileExists(atPath: url.path), canReplaceStateBackup: false, protectedSections: loaded.protectedSections)
         }
-        if let state = readDiskState(from: backup) {
-            let line = "Jfred: state.json was unreadable; loaded workflows from state.json.bak\n"
-            FileHandle.standardError.write(Data(line.utf8))
-            applyDiskState(state)
-            finishJfredStore()
-            return
-        }
-        preferences = Preferences()
-        workflows = Seed.workflows()
-        snippets = Seed.snippets()
-        canReplaceStateBackup = false
-        // Do not overwrite an existing unreadable state.json or a good backup
-        // with a seed state. First launch (no file yet) may still write.
-        canOverwriteStateFile = !FileManager.default.fileExists(atPath: url.path)
+        lastSaveDirectory = directory
+        // Loading is not a change. Clips or usage still inside state.json move
+        // to their own files with the first save.
+        unsavedSections = loaded.sectionsToWrite
         finishJfredStore()
+        if !loaded.sectionsToWrite.isEmpty { scheduleSave() }
     }
 
     private func finishJfredStore() {
@@ -2693,19 +2635,29 @@ final class AppModel {
         scheduleSave()
     }
 
+    /// Delay before saving changes. Usage events only feed the statistics
+    /// pane, so they wait longer and ride along with any other save.
+    private static let saveDelay: TimeInterval = 0.35
+    private static let usageSaveDelay: TimeInterval = 5
+
     private func scheduleSave() {
+        let usageOnly = unsavedSections.isSubset(of: .usage)
+        // A save is already coming; usage events join it without delaying it.
+        if usageOnly, saveWork != nil { return }
         saveWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.save() }
         saveWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (usageOnly ? Self.usageSaveDelay : Self.saveDelay), execute: work)
     }
 
     private func hardenSupportFolder() {
         let dir = supportDirectory()
         try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
-        let state = dir.appendingPathComponent("state.json")
-        if FileManager.default.fileExists(atPath: state.path) {
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: state.path)
+        for name in [StateFileName.state, StateFileName.backup, StateFileName.clips, StateFileName.usage] {
+            let file = dir.appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: file.path) {
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            }
         }
         let images = dir.appendingPathComponent("ClipImages", isDirectory: true)
         if let files = try? FileManager.default.contentsOfDirectory(at: images, includingPropertiesForKeys: nil) {
@@ -2715,24 +2667,25 @@ final class AppModel {
         }
     }
 
+    /// Hands the changed sections to `stateWriter`, which encodes and writes
+    /// them on its own queue. Only copying the values happens here.
     private func save() {
-        let state = DiskState(preferences: preferences, workflows: workflows, snippets: snippets, clips: clips, usage: usage, knowledge: knowledge, selections: selections)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(state) else { return }
+        saveWork = nil
+        var sections = unsavedSections
         let directory = supportDirectory()
-        let destination = directory.appendingPathComponent("state.json")
-        let backup = directory.appendingPathComponent("state.json.bak")
-        let current = try? Data(contentsOf: destination)
-        if !canOverwriteStateFile, current != nil { return }
-        if StateFile.shouldUpdateBackup(current: current, newWorkflowCount: state.workflows.count, allowed: canReplaceStateBackup) {
-            try? current?.write(to: backup, options: .atomic)
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: backup.path)
+        if directory != lastSaveDirectory {
+            sections = .all
+            lastSaveDirectory = directory
         }
-        try? data.write(to: destination, options: .atomic)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
-        canReplaceStateBackup = true
-        canOverwriteStateFile = true
+        guard !sections.isEmpty else { return }
+        unsavedSections = []
+        var snapshot = StateWriter.Snapshot()
+        if sections.contains(.main) {
+            snapshot.main = DiskState(preferences: preferences, workflows: workflows, snippets: snippets, clips: [], usage: [], knowledge: knowledge, selections: selections)
+        }
+        if sections.contains(.clips) { snapshot.clips = clips }
+        if sections.contains(.usage) { snapshot.usage = usage }
+        stateWriter.submit(snapshot, to: directory)
     }
 
     private func refreshStatusItem() {
