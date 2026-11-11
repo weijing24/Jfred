@@ -74,6 +74,18 @@ enum CommandQueue {
     }
 }
 
+/// Runs AppleScript files (.scpt) the user opens from the launcher. One can
+/// take up to its 30 s timeout, so scripts get their own serial queue and never
+/// hold up volume, eject or Finder commands on `CommandQueue`. Scripts still
+/// run one at a time, in the order they were opened.
+enum UserScriptQueue {
+    private static let queue = DispatchQueue(label: "dev.jim.jfred.user-scripts", qos: .userInitiated)
+
+    static func run(_ work: @escaping @Sendable () -> Void) {
+        queue.async(execute: work)
+    }
+}
+
 /// System commands that spawn a process, run AppleScript or wait on a disk.
 /// Call from `CommandQueue`, never from the main thread.
 enum SystemEffectRunner {
