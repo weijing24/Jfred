@@ -636,7 +636,11 @@ struct LauncherRoot: View {
         if item.kind == "app", item.payload.hasPrefix("/") {
             clicked.contextMenu { appFileMenu(item) }
         } else {
-            clicked
+            clicked.contextMenu {
+                ForEach(model.contextActions(for: item)) { action in
+                    Button(action.title) { model.performContext(action, at: index) }
+                }
+            }
         }
     }
 

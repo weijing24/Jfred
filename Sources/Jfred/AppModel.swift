@@ -625,6 +625,23 @@ final class AppModel {
         launcher?.layout()
     }
 
+    /// Right-click commands for a result, the same list the action panel shows.
+    func contextActions(for item: SearchResult) -> [LauncherAction] {
+        actions(for: item)
+    }
+
+    /// Runs one right-click command on the result at `index`.
+    func performContext(_ action: LauncherAction, at index: Int) {
+        guard results.indices.contains(index) else { return }
+        selection = index
+        launcherActions = [action]
+        actionRoot = [action]
+        actionDrilled = false
+        actionIndex = 0
+        actionPanelVisible = true
+        commitAction(at: 0)
+    }
+
     func closeActions() {
         guard actionPanelVisible else { return }
         actionPanelVisible = false
