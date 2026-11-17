@@ -189,12 +189,13 @@ public final class ProcessWorkflowRunner: WorkflowScriptRunning, @unchecked Send
         return data
     }
 
+    /// Shebang scripts and Mach-O binaries are executed by the kernel. A
+    /// universal binary such as Unit Converter's `converter` has no shebang;
+    /// handing it to bash produces "cannot execute binary file" and an empty
+    /// Script Filter. Text scripts without a shebang still use the interpreter.
     private static func executableForScriptFile(_ path: String, language: WorkflowScriptLanguage) -> (executable: String, arguments: [String]) {
-        if FileManager.default.isExecutableFile(atPath: path) {
-            if let first = try? String(contentsOfFile: path, encoding: .utf8).split(separator: "\n", maxSplits: 1).first,
-               first.hasPrefix("#!") {
-                return (path, [])
-            }
+        if FileManager.default.isExecutableFile(atPath: path), launchesDirectly(path) {
+            return (path, [])
         }
         switch language {
         case .bash, .external: return ("/bin/bash", [])
@@ -206,6 +207,30 @@ public final class ProcessWorkflowRunner: WorkflowScriptRunning, @unchecked Send
         case .osascript: return ("/usr/bin/osascript", [])
         case .swift: return ("/usr/bin/swift", [])
         }
+    }
+
+    private static func launchesDirectly(_ path: String) -> Bool {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return false }
+        defer { try? handle.close() }
+        let header = handle.readData(ofLength: 4)
+        if header.starts(with: Data([0x23, 0x21])) { return true }
+        return isMachO(header)
+    }
+
+    private static func isMachO(_ header: Data) -> Bool {
+        guard header.count >= 4 else { return false }
+        let bytes = [UInt8](header.prefix(4))
+        let magics: [[UInt8]] = [
+            [0xFE, 0xED, 0xFA, 0xCE], // MH_MAGIC
+            [0xCE, 0xFA, 0xED, 0xFE], // MH_CIGAM
+            [0xFE, 0xED, 0xFA, 0xCF], // MH_MAGIC_64
+            [0xCF, 0xFA, 0xED, 0xFE], // MH_CIGAM_64
+            [0xCA, 0xFE, 0xBA, 0xBE], // FAT_MAGIC
+            [0xBE, 0xBA, 0xFE, 0xCA], // FAT_CIGAM
+            [0xCA, 0xFE, 0xBA, 0xBF], // FAT_MAGIC_64
+            [0xBF, 0xBA, 0xFE, 0xCA], // FAT_CIGAM_64
+        ]
+        return magics.contains(bytes)
     }
 
     private static func fileSuffix(for language: WorkflowScriptLanguage) -> String {

@@ -858,6 +858,49 @@ extension WorkflowGraphTests {
         #expect(result.items.first?.title == "hello world")
         #expect(result.items.first?.argument == "hello world")
     }
+
+    @Test func processRunnerExecutesMachOScriptFile() async {
+        let output = await ProcessWorkflowRunner().run(scriptFileRequest(sourceFile: "/bin/echo", arguments: ["42 km"]))
+        #expect(output.isSuccess)
+        #expect(output.stdout == "42 km\n")
+        #expect(!output.stderr.contains("cannot execute binary file"))
+    }
+
+    @Test func processRunnerInterpretsExecutableScriptWithoutShebang() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("jfred-scriptfile-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let script = directory.appendingPathComponent("plain.sh")
+        try "printf '%s\\n' \"$1\"\n".write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        let output = await ProcessWorkflowRunner().run(scriptFileRequest(sourceFile: script.path, arguments: ["kept"]))
+        #expect(output.isSuccess)
+        #expect(output.stdout == "kept\n")
+    }
+
+    private func scriptFileRequest(sourceFile: String, arguments: [String]) -> WorkflowScriptRequest {
+        WorkflowScriptRequest(
+            workflowID: UUID(),
+            objectID: UUID(),
+            bundleID: "com.example.runner",
+            workflowName: "Runner",
+            workflowVersion: "1.0",
+            keyword: "conv",
+            language: .external,
+            source: "",
+            sourceFile: sourceFile,
+            argumentMode: .argv,
+            escaping: 0,
+            query: arguments.joined(separator: " "),
+            arguments: arguments,
+            variables: [:],
+            directory: URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true),
+            environment: [
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "alfred_workflow_cache": NSTemporaryDirectory() + "jfred-runner-test",
+            ]
+        )
+    }
 }
 
 extension WorkflowGraphTests {
