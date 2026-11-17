@@ -1196,12 +1196,12 @@ struct WorkflowEditor: View {
             .help("Help")
             if object != nil, let directory = workflowDirectory {
                 Button {
-                    NSWorkspace.shared.activateFileViewerSelecting([directory])
+                    NSWorkspace.shared.open(directory)
                 } label: {
                     Image(systemName: "folder")
                 }
                 .buttonStyle(.plain)
-                .help("Show workflow folder")
+                .help("Open workflow folder")
             }
             Spacer()
             Button("Cancel") { model.cancelWorkflowConfig() }
