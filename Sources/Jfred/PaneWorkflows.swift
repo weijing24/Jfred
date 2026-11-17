@@ -20,6 +20,48 @@ private enum WorkflowChrome {
     static let secondary = Color(hex: 0x6E6E73)
 }
 
+/// Read-only preview of an external script. The text stays gray and cannot be edited in the sheet.
+private struct ScriptFilePreview: NSViewRepresentable {
+    var text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        scroll.borderType = .bezelBorder
+        scroll.drawsBackground = true
+        scroll.backgroundColor = Self.fill
+        guard let textView = scroll.documentView as? NSTextView else { return scroll }
+        configure(textView)
+        textView.string = text
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        scroll.backgroundColor = Self.fill
+        guard let textView = scroll.documentView as? NSTextView else { return }
+        configure(textView)
+        if textView.string != text {
+            textView.string = text
+        }
+    }
+
+    private func configure(_ textView: NSTextView) {
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.textColor = .secondaryLabelColor
+        textView.backgroundColor = Self.fill
+        textView.drawsBackground = true
+        textView.textContainerInset = NSSize(width: 4, height: 6)
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+    }
+
+    private static let fill = NSColor(white: 0.94, alpha: 1)
+}
+
 private func artworkImage(from ref: WorkflowIconRef) -> NSImage? {
     switch ref {
     case .image(let path):
@@ -1104,7 +1146,7 @@ struct WorkflowEditor: View {
             }
         } else {
             let hasScriptFile = !object.scriptFile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || object.scriptType == 8
-            let height: CGFloat = object.kind == .scriptFilter ? 700 : (hasScriptFile ? 430 : 540)
+            let height: CGFloat = object.kind == .scriptFilter || hasScriptFile ? 700 : 540
             configuredSheet(width: 980, height: height, object: object) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -1334,10 +1376,7 @@ struct WorkflowEditor: View {
             }
             let hasScriptFile = !object.scriptFile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || object.scriptType == 8
             if hasScriptFile {
-                field("Script file", model.bindWorkflowString(workflowID, object.id, "scriptfile"))
-                Text("Relative paths start at the workflow folder.")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
+                scriptFilePreview(object)
             } else {
                 HStack(alignment: .top, spacing: 10) {
                     Text("Script:").font(.system(size: 11.5)).frame(width: 64, alignment: .trailing).padding(.top, 2)
@@ -1371,6 +1410,57 @@ struct WorkflowEditor: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    @ViewBuilder
+    private func scriptFilePreview(_ object: WorkflowObject) -> some View {
+        let url = resolvedScriptFileURL(object)
+        HStack(spacing: 8) {
+            Text("Script File:").font(.system(size: 11.5)).frame(width: 78, alignment: .trailing)
+            TextField("Script file", text: model.bindWorkflowString(workflowID, object.id, "scriptfile"))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 11.5))
+            Button("Open File") {
+                if let url { NSWorkspace.shared.open(url) }
+            }
+            .disabled(url == nil)
+        }
+        Text(scriptFileCaption(object))
+            .font(.system(size: 10.5))
+            .foregroundStyle(.secondary)
+            .padding(.leading, 86)
+        ScriptFilePreview(text: scriptFileContents(at: url))
+            .frame(minHeight: 360)
+    }
+
+    private func scriptFileCaption(_ object: WorkflowObject) -> String {
+        let input = object.scriptArgumentType == 1
+            ? "The input is passed to the script as argv."
+            : "The {query} placeholder is replaced with the input."
+        return "Scripts are run relative to the workflow folder. \(input)"
+    }
+
+    private func resolvedScriptFileURL(_ object: WorkflowObject) -> URL? {
+        let raw = object.scriptFile.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+        let expanded = (raw as NSString).expandingTildeInPath
+        let url: URL
+        if expanded.hasPrefix("/") {
+            url = URL(fileURLWithPath: expanded)
+        } else if let directory = workflowDirectory {
+            url = directory.appendingPathComponent(expanded)
+        } else {
+            return nil
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue else { return nil }
+        return url
+    }
+
+    private func scriptFileContents(at url: URL?) -> String {
+        guard let url, let data = try? Data(contentsOf: url) else { return "" }
+        if let text = String(data: data, encoding: .utf8) { return text }
+        return String(data: data, encoding: .utf16) ?? ""
     }
 
     private func concurrencyBinding(_ object: WorkflowObject) -> Binding<Int> {

@@ -116,7 +116,7 @@ Keyword、Script Filter、List Filter、Run Script、AppleScript、Open URL、Op
 
 - 约 980×700pt，浅灰底 `#F2F2F2`，底部左侧帮助/文件夹按钮，右侧 Cancel/Save。
 - 顶部不显示 “Object” 标题或内部 type 字符串，也不把连接编辑器塞进配置面板。
-- Run Script 顶部为 `Language`、输入方式、`running instances` 三段；`External Script` 类型显示 `Script file`，不再显示空白的大 Script 框。
+- Run Script 顶部为 `Language`、输入方式、`running instances` 三段；`External Script` 显示 `Script File`、`Open File`，以及工作流目录里该文件的灰色只读预览，不能在面板里改脚本正文。
 - Script Filter 额外显示 Keyword/Placeholder、Alfred filters results、Match mode 和 Argument requirement。
 
 ### Configure 行为
