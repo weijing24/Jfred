@@ -705,6 +705,51 @@ public struct Workflow: Codable, Equatable, Sendable, Identifiable {
         normalizeLayout()
     }
 
+    /// Defaults from User Configuration, in the form Alfred puts on the
+    /// environment: checkboxes are `1` or `0`, sliders are their number.
+    public var configurationVariables: [String: String] {
+        var result: [String: String] = [:]
+        for item in userConfiguration {
+            guard let field = item.objectValue else { continue }
+            let name = field[string: "variable"].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, let value = Self.configurationValue(field) else { continue }
+            result[name] = value
+        }
+        return result
+    }
+
+    /// User Configuration defaults, then values the user saved on the workflow.
+    /// A saved value replaces the default for the same key.
+    public var resolvedVariables: [String: String] {
+        configurationVariables.merging(variables) { _, saved in saved }
+    }
+
+    /// Substitutes `{var:name}` in a keyword. An unknown placeholder is left
+    /// in place so it does not match a typed query by accident.
+    public func expandedKeyword(_ keyword: String) -> String {
+        var result = keyword
+        for (key, value) in resolvedVariables {
+            result = result.replacingOccurrences(of: "{var:\(key)}", with: value)
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func configurationValue(_ field: [String: WorkflowValue]) -> String? {
+        let config = field.object("config")
+        switch field[string: "type"] {
+        case "checkbox":
+            return config["default"]?.boolValue == true ? "1" : "0"
+        case "slider":
+            guard let number = config["defaultvalue"] else { return nil }
+            if let int = number.intValue, number.doubleValue == Double(int) { return String(int) }
+            return number.stringValue
+        default:
+            guard let value = config["default"] else { return nil }
+            if case .boolean(let flag) = value { return flag ? "1" : "0" }
+            return value.stringValue
+        }
+    }
+
     public var keyword: String {
         get {
             for object in objects where object.kind.isSearchInput {

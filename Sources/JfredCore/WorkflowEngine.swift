@@ -361,15 +361,15 @@ public struct WorkflowEngine: Sendable {
         for workflow in workflows where workflow.enabled {
             if let builtin = workflow.builtin, disabledBuiltins.contains(builtin) { continue }
             for input in workflow.searchInputs {
-                let keyword = input.keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !keyword.isEmpty else { continue }
+                let keyword = workflow.expandedKeyword(input.keyword)
+                guard !keyword.isEmpty, !keyword.contains("{var:") else { continue }
                 guard let argument = matchKeyword(keyword, in: query, attached: !input.withSpace) else { continue }
                 if let current = winner, current.4 >= keyword.count { continue }
                 winner = (workflow, input, keyword, argument, keyword.count)
             }
         }
         guard let winner else { return nil }
-        let variables = winner.0.variables.merging(["alfred_workflow_keyword": winner.2]) { _, new in new }
+        let variables = winner.0.resolvedVariables.merging(["alfred_workflow_keyword": winner.2]) { _, new in new }
         let invocation = WorkflowInvocation(
             workflowID: winner.0.id,
             inputID: winner.1.id,
@@ -480,6 +480,7 @@ public struct WorkflowEngine: Sendable {
         }
         var mergedEnvironment = environment
         mergedEnvironment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (mergedEnvironment["PATH"] ?? "/usr/bin:/bin")
+        for (key, value) in workflow.configurationVariables { mergedEnvironment[key] = value }
         for (key, value) in workflow.variables { mergedEnvironment[key] = value }
         for (key, value) in variables { mergedEnvironment[key] = value }
         mergedEnvironment["alfred_workflow_bundleid"] = workflow.bundleID

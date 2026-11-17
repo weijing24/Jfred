@@ -644,6 +644,67 @@ struct WorkflowGraphTests {
         #expect(state.effects == [.copy("copied: handled")])
     }
 
+    @Test func userConfigurationDefaultsExpandTheKeyword() throws {
+        let filter = WorkflowObject(kind: .scriptFilter, config: [
+            "keyword": .string("{var:convert_keyword}"),
+            "withspace": .boolean(true),
+            "scriptfile": .string("converter"),
+        ])
+        let workflow = Workflow(
+            name: "Unit Converter", author: "Tester", symbol: "puzzlepiece.extension", tint: "561D7E",
+            enabled: true, builtin: "com.example.conv",
+            objects: [filter], connections: [],
+            userConfiguration: [
+                .object([
+                    "type": .string("textfield"),
+                    "variable": .string("convert_keyword"),
+                    "config": .object(["default": .string("conv")]),
+                ]),
+                .object([
+                    "type": .string("checkbox"),
+                    "variable": .string("copy_include_unit"),
+                    "config": .object(["default": .boolean(true)]),
+                ]),
+                .object([
+                    "type": .string("checkbox"),
+                    "variable": .string("split_feet"),
+                    "config": .object(["default": .boolean(false)]),
+                ]),
+                .object([
+                    "type": .string("slider"),
+                    "variable": .string("decimal_places"),
+                    "config": .object(["defaultvalue": .integer(3)]),
+                ]),
+            ],
+            rootPath: "/tmp/conv"
+        )
+        let match = try #require(WorkflowEngine.match(in: [workflow], query: "conv 1"))
+        #expect(match.invocation.keyword == "conv")
+        #expect(match.invocation.argument == "1")
+        #expect(match.invocation.variables["decimal_places"] == "3")
+        #expect(match.invocation.variables["copy_include_unit"] == "1")
+        #expect(match.invocation.variables["split_feet"] == "0")
+        #expect(WorkflowEngine.match(in: [workflow], query: "{var:convert_keyword} 1") == nil)
+
+        var overridden = workflow
+        overridden.variables["convert_keyword"] = "units"
+        let renamed = try #require(WorkflowEngine.match(in: [overridden], query: "units 2"))
+        #expect(renamed.invocation.keyword == "units")
+        #expect(renamed.invocation.argument == "2")
+        #expect(WorkflowEngine.match(in: [overridden], query: "conv 2") == nil)
+
+        let engine = WorkflowEngine(workflow: workflow, runner: FakeWorkflowRunner(output: ""))
+        let request = engine.scriptRequest(
+            for: filter,
+            arguments: ["1"],
+            variables: match.invocation.variables,
+            keyword: match.invocation.keyword
+        )
+        #expect(request.environment["convert_keyword"] == "conv")
+        #expect(request.environment["decimal_places"] == "3")
+        #expect(request.environment["copy_include_unit"] == "1")
+    }
+
     @Test func conditionalUsesSourceOutputBranch() async throws {
         let conditionUID = "BRANCH-RED"
         let keyword = WorkflowObject(kind: .keyword, config: ["keyword": .string("colour")])
