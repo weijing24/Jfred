@@ -559,7 +559,7 @@ public struct WorkflowEngine: Sendable {
         }
 
         switch object.kind {
-        case .keyword, .hotkey, .externalTriggerInput, .junction, .scriptFilter, .listFilter:
+        case .keyword, .hotkey, .universalAction, .externalTriggerInput, .junction, .scriptFilter, .listFilter:
             return Processed(log: log("Passed “\(query)” through"), effects: [], next: next())
 
         case .runScript, .appleScript:

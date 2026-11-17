@@ -675,7 +675,7 @@ struct WorkflowEditor: View {
     private var paletteSections: [(String, [WorkflowObjectKind])] {
         [
             ("Favourites", [.keyword, .scriptFilter, .runScript, .openURL, .clipboard]),
-            ("Triggers", [.hotkey, .externalTriggerInput]),
+            ("Triggers", [.hotkey, .universalAction, .externalTriggerInput]),
             ("Inputs", [.keyword, .scriptFilter, .listFilter]),
             ("Actions", [.runScript, .appleScript, .openURL, .openFile, .revealFile, .terminal]),
             ("Automations", [.automationTask]),
@@ -843,17 +843,28 @@ struct WorkflowEditor: View {
         } else {
             let breakpoint = workflow?.objects.firstIndex(where: { $0.id == object.id }).map { model.debugBreakpoints.contains($0) } ?? false
             let note = object.note.trimmingCharacters(in: .whitespacesAndNewlines)
+            let caption = object.triggerCaption
             VStack(spacing: 0) {
-                VStack(spacing: 7) {
+                VStack(spacing: caption.isEmpty ? 7 : 4) {
+                    if !caption.isEmpty {
+                        Text(caption)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(textColor(for: object.kind))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .padding(.horizontal, 6)
+                            .padding(.top, 5)
+                    }
                     if let icon = objectIconImage(object, workflow: workflow) {
                         Image(nsImage: icon)
                             .resizable()
                             .interpolation(.high)
-                            .frame(width: 44, height: 44)
+                            .frame(width: caption.isEmpty ? 44 : 36, height: caption.isEmpty ? 44 : 36)
                             .clipShape(RoundedRectangle(cornerRadius: 7))
                     } else {
                         Image(systemName: object.kind.symbol)
-                            .font(.system(size: 36, weight: .regular))
+                            .font(.system(size: caption.isEmpty ? 36 : 28, weight: .regular))
                             .foregroundStyle(textColor(for: object.kind))
                     }
                     Text(object.kind.title)
@@ -861,6 +872,7 @@ struct WorkflowEditor: View {
                         .foregroundStyle(textColor(for: object.kind))
                         .lineLimit(1)
                         .padding(.horizontal, 4)
+                        .padding(.bottom, caption.isEmpty ? 0 : 4)
                 }
                 .frame(width: size.width, height: size.height)
                 .background(cardColor(for: object.kind))
@@ -915,6 +927,7 @@ struct WorkflowEditor: View {
     private func cardColor(for kind: WorkflowObjectKind) -> Color {
         switch kind {
         case .hotkey: return Color(hex: 0xF6E6C8)
+        case .universalAction: return Color(hex: 0xE7EEF4)
         case .openURL: return Color(hex: 0xB9E7B0)
         case .notification: return Color(hex: 0xF5CDA8)
         case .automationTask: return Color(hex: 0x4B4B4B)
@@ -1074,37 +1087,60 @@ struct WorkflowEditor: View {
         .preferredColorScheme(.light)
     }
 
+    @ViewBuilder
     private func objectSheet(_ object: WorkflowObject) -> some View {
-        let hasScriptFile = !object.scriptFile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || object.scriptType == 8
-        let height: CGFloat = object.kind == .scriptFilter ? 700 : (hasScriptFile ? 430 : 540)
-        return VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    if object.kind.isSearchInput {
-                        HStack(spacing: 12) {
-                            field("Keyword", model.bindWorkflowString(workflowID, object.id, "keyword"))
-                            field("Placeholder Title", model.bindWorkflowString(workflowID, object.id, "title"))
-                        }
-                        HStack(spacing: 12) {
-                            field("Placeholder Subtext", model.bindWorkflowString(workflowID, object.id, "subtext"))
-                            Toggle("Keyword requires a space", isOn: model.bindWorkflowBool(workflowID, object.id, "withspace", default: true))
-                                .toggleStyle(.checkbox)
-                        }
-                    }
-                    if object.kind == .scriptFilter || object.kind == .runScript || object.kind == .appleScript {
-                        scriptForm(object)
-                    } else {
-                        objectFields(object)
-                    }
-                }
-                .padding(20)
+        if object.kind == .universalAction {
+            configuredSheet(width: 640, height: 430, object: object) {
+                universalActionForm(object)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+        } else if object.kind == .hotkey {
+            configuredSheet(width: 560, height: 500, object: object) {
+                HotkeyTriggerForm(model: model, workflowID: workflowID, objectID: object.id)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+        } else {
+            let hasScriptFile = !object.scriptFile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || object.scriptType == 8
+            let height: CGFloat = object.kind == .scriptFilter ? 700 : (hasScriptFile ? 430 : 540)
+            configuredSheet(width: 980, height: height, object: object) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        if object.kind.isSearchInput {
+                            HStack(spacing: 12) {
+                                field("Keyword", model.bindWorkflowString(workflowID, object.id, "keyword"))
+                                field("Placeholder Title", model.bindWorkflowString(workflowID, object.id, "title"))
+                            }
+                            HStack(spacing: 12) {
+                                field("Placeholder Subtext", model.bindWorkflowString(workflowID, object.id, "subtext"))
+                                Toggle("Keyword requires a space", isOn: model.bindWorkflowBool(workflowID, object.id, "withspace", default: true))
+                                    .toggleStyle(.checkbox)
+                            }
+                        }
+                        if object.kind == .scriptFilter || object.kind == .runScript || object.kind == .appleScript {
+                            scriptForm(object)
+                        } else {
+                            objectFields(object)
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+        }
+    }
+
+    private func configuredSheet<Content: View>(width: CGFloat, height: CGFloat, object: WorkflowObject, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
             sheetFooter(help: object)
         }
-        .frame(width: 980, height: height)
+        .frame(width: width, height: height)
         .background(Color(hex: 0xF2F2F2))
-        .foregroundStyle(Color(hex: 0x222222))
+        .foregroundStyle(Color(hex: 0x1D1D1F))
         .preferredColorScheme(.light)
+        .presentationBackground(Color(hex: 0xF2F2F2))
     }
 
     private func sheetFooter(help object: WorkflowObject?) -> some View {
@@ -1348,7 +1384,7 @@ struct WorkflowEditor: View {
     @ViewBuilder
     private func objectFields(_ object: WorkflowObject) -> some View {
         switch object.kind {
-        case .keyword, .listFilter, .hotkey, .externalTriggerInput:
+        case .keyword, .listFilter, .externalTriggerInput:
             if object.kind == .listFilter {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Items JSON").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
@@ -1359,10 +1395,6 @@ struct WorkflowEditor: View {
                         .scrollContentBackground(.hidden)
                 .background(RoundedRectangle(cornerRadius: 4).fill(.white))
                 }
-            }
-            if object.kind == .hotkey {
-                Text("This hotkey is registered when the workflow is enabled.")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
             }
             if object.kind == .externalTriggerInput {
                 field("Trigger ID", model.bindWorkflowString(workflowID, object.id, "triggerid"))
@@ -1435,6 +1467,9 @@ struct WorkflowEditor: View {
         case .writeFile:
             field("Path", model.bindWorkflowString(workflowID, object.id, "path"))
             field("Content", model.bindWorkflowString(workflowID, object.id, "text"))
+
+        case .hotkey, .universalAction:
+            EmptyView()
 
         case .junction:
             Text("Passes its input to every connected object.")
@@ -1711,6 +1746,423 @@ struct WorkflowEditor: View {
         }
     }
 
+    private func universalActionForm(_ object: WorkflowObject) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text("Name:")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color(hex: 0x1D1D1F))
+                        .frame(width: 72, alignment: .trailing)
+                    TextField("Name", text: model.bindWorkflowString(workflowID, object.id, "name"))
+                        .textFieldStyle(.roundedBorder)
+                        .foregroundStyle(Color(hex: 0x1D1D1F))
+                }
+                Text("The searchable name for the Universal Actions view.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: 0x6E6E73))
+                    .padding(.leading, 80)
+                HStack(spacing: 10) {
+                    Text("Show for:")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color(hex: 0x1D1D1F))
+                        .frame(width: 72, alignment: .trailing)
+                    Toggle("Files", isOn: model.bindWorkflowBool(workflowID, object.id, "acceptsfiles"))
+                        .toggleStyle(.checkbox)
+                    Toggle("URLs", isOn: model.bindWorkflowBool(workflowID, object.id, "acceptsurls"))
+                        .toggleStyle(.checkbox)
+                    Toggle("Text", isOn: model.bindWorkflowBool(workflowID, object.id, "acceptstext"))
+                        .toggleStyle(.checkbox)
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(Color(hex: 0x1D1D1F))
+                Text("Only show this trigger when the input argument matches the type.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: 0x6E6E73))
+                    .padding(.leading, 80)
+                HStack(spacing: 8) {
+                    Text("")
+                        .frame(width: 72)
+                    Picker("", selection: model.bindWorkflowInt(workflowID, object.id, "acceptsmulti")) {
+                        ForEach(Array(WorkflowTriggerLabels.universalArgumentCounts.enumerated()), id: \.offset) { index, title in
+                            Text(title).tag(index)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 180)
+                    Text("Input Arguments")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color(hex: 0x1D1D1F))
+                }
+                Text("Select the multiple argument capability of this trigger.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: 0x6E6E73))
+                    .padding(.leading, 80)
+                Text("Note: You can prevent Keyword and Script Filter inputs in this workflow from being automatically treated as Universal Actions by unchecking the \"Treat Input as Universal Action\" option in the pop-up menu for the selected inputs.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: 0x6E6E73))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black.opacity(0.08)))
+                    .padding(.top, 6)
+            }
+            VStack(spacing: 6) {
+                universalActionIconWell(object)
+                Text("Drop an icon above.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: 0x6E6E73))
+                    .multilineTextAlignment(.center)
+                    .frame(width: 80)
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func universalActionIconWell(_ object: WorkflowObject) -> some View {
+        let configured = object.config[string: "icon"]
+        let image: NSImage? = {
+            guard !configured.isEmpty, let workflow else { return nil }
+            return artworkImage(from: WorkflowIcon.resolve(
+                path: configured,
+                workflowRoot: workflow.rootPath,
+                workflowSymbol: workflow.symbol,
+                objectUID: object.alfredUID
+            ))
+        }()
+        return ZStack {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.white)
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .padding(6)
+            }
+        }
+        .frame(width: 70, height: 70)
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.black.opacity(0.15)))
+        .onTapGesture { chooseUniversalActionIcon(object) }
+        .onDrop(of: [.fileURL, .image], isTargeted: nil) { providers in
+            loadUniversalActionIcon(object, providers)
+            return true
+        }
+        .help("Drop an icon above.")
+    }
+
+    private func chooseUniversalActionIcon(_ object: WorkflowObject) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image, .icns]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.setWorkflowObjectIcon(workflowID, object.id, from: url)
+    }
+
+    private func loadUniversalActionIcon(_ object: WorkflowObject, _ providers: [NSItemProvider]) {
+        guard let provider = providers.first else { return }
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+            let url: URL?
+            if let item = item as? URL {
+                url = item
+            } else if let data = item as? Data {
+                url = URL(dataRepresentation: data, relativeTo: nil)
+            } else {
+                url = nil
+            }
+            guard let url else { return }
+            DispatchQueue.main.async {
+                model.setWorkflowObjectIcon(workflowID, object.id, from: url)
+            }
+        }
+    }
+
+}
+
+private struct HotkeyTriggerForm: View {
+    var model: AppModel
+    var workflowID: UUID
+    var objectID: UUID
+    @State private var tab = 0
+    @State private var selectedBundle = ""
+
+    private var object: WorkflowObject? {
+        model.workflows.first { $0.id == workflowID }?.object(id: objectID)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Picker("", selection: $tab) {
+                Text("Hotkey Settings").tag(0)
+                Text("Related Apps").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 280)
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 16)
+
+            if tab == 0 {
+                settings
+            } else {
+                relatedApps
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var settings: some View {
+        let code = object?.config["hotkey"]?.intValue ?? 0
+        let modifiers = UInt(truncatingIfNeeded: object?.config["hotmod"]?.intValue ?? 0)
+        let argument = object?.config[integer: "argument"] ?? 0
+        let action = object?.config[integer: "action"] ?? 0
+        return VStack(alignment: .leading, spacing: 8) {
+            labeled("Hotkey:") {
+                HStack(spacing: 6) {
+                    ZStack {
+                        if code != 0 {
+                            HotkeyGlyphs(hotkey: Hotkey(keyCode: UInt16(truncatingIfNeeded: code), modifiers: modifiers), prominent: false)
+                        } else {
+                            Text("Click to record")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color(hex: 0x8E8E93))
+                        }
+                        HotkeyCapture(
+                            onSet: { keyCode, flags in
+                                model.setWorkflowObjectHotkey(workflowID, objectID, keyCode: keyCode, modifiers: flags, display: keyDisplayName(keyCode))
+                            },
+                            onFocus: { focused in
+                                if focused { HotkeyCenter.shared.suspend() } else { model.applyHotkeys() }
+                            }
+                        )
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26)
+                    .padding(.horizontal, 8)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color(hex: 0x8AB4F8), lineWidth: 1))
+                    Menu {
+                        ForEach(Array(WorkflowTriggerLabels.hotkeyModifierModes.enumerated()), id: \.offset) { index, title in
+                            Button(title) { model.bindWorkflowInt(workflowID, objectID, "modsmode").wrappedValue = index }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.left.arrow.right")
+                            .font(.system(size: 11))
+                            .frame(width: 22, height: 22)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 28)
+                    .help(WorkflowTriggerLabels.hotkeyModifierModes[min(max(object?.config[integer: "modsmode"] ?? 0, 0), WorkflowTriggerLabels.hotkeyModifierModes.count - 1)])
+                    if code != 0 {
+                        Button("Clear") { model.clearWorkflowObjectHotkey(workflowID, objectID) }
+                            .controlSize(.small)
+                    }
+                }
+            }
+            hint("The hotkey combination you would like to use to trigger this workflow object.")
+
+            labeled("Action:") {
+                menuPicker(WorkflowTriggerLabels.hotkeyActions, model.bindWorkflowInt(workflowID, objectID, "action"))
+            }
+            hint("What to do when the hotkey is pressed. Note that if you choose 'Show Alfred', nothing will be passed out from the output of this processor, even if connected.")
+
+            labeled("Argument:") {
+                menuPicker(WorkflowTriggerLabels.hotkeyArguments, model.bindWorkflowInt(workflowID, objectID, "argument", default: 1))
+            }
+            if argument != 0 {
+                labeled(argument == 4 ? "Text:" : "Prefix:") {
+                    HStack(spacing: 8) {
+                        TextField("", text: model.bindWorkflowString(workflowID, objectID, "argumenttext"))
+                            .textFieldStyle(.roundedBorder)
+                            .foregroundStyle(Color(hex: 0x1D1D1F))
+                        if action == 1 {
+                            Text("Cursor:")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color(hex: 0x1D1D1F))
+                            Picker("", selection: cursorBinding) {
+                                Text("Right").tag(false)
+                                Text("Left").tag(true)
+                            }
+                            .labelsHidden()
+                            .frame(width: 90)
+                        }
+                    }
+                }
+                hint("An optional argument to be used. If text is input, this will be prefixed onto the dynamic argument types.")
+            }
+        }
+    }
+
+    private var relatedApps: some View {
+        let apps = object?.relatedApps ?? []
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Hotkey is only active when the following apps")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color(hex: 0x1D1D1F))
+                menuPicker(WorkflowTriggerLabels.relatedAppModes, model.bindWorkflowInt(workflowID, objectID, "relatedAppsMode"))
+                    .frame(width: 150)
+            }
+            HStack(alignment: .top, spacing: 8) {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        if apps.isEmpty {
+                            Text("Drop apps (e.g. from Finder or Alfred's results) above to add them.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color(hex: 0x6E6E73))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                        }
+                        ForEach(apps) { app in
+                            HStack(spacing: 6) {
+                                Image(nsImage: applicationIcon(app.bundleID))
+                                    .resizable()
+                                    .frame(width: 16, height: 16)
+                                Text(app.name)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color(hex: 0x1D1D1F))
+                                    .lineLimit(1)
+                                Spacer(minLength: 4)
+                                Text(app.bundleID)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Color(hex: 0x6E6E73))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 6)
+                            .frame(height: 24)
+                            .background(selectedBundle == app.bundleID ? Color(hex: 0xD6E8F8) : Color.white)
+                            .contentShape(Rectangle())
+                            .onTapGesture { selectedBundle = app.bundleID }
+                        }
+                    }
+                }
+                .frame(height: 150)
+                .background(Color.white)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.black.opacity(0.15)))
+                .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                    loadDroppedApps(providers)
+                    return true
+                }
+                VStack(spacing: 6) {
+                    Button {
+                        chooseApps()
+                    } label: {
+                        Image(systemName: "plus")
+                            .frame(width: 22, height: 22)
+                    }
+                    .help("Add an application to this hotkey's related apps")
+                    Button {
+                        removeSelectedApp()
+                    } label: {
+                        Image(systemName: "minus")
+                            .frame(width: 22, height: 22)
+                    }
+                    .disabled(selectedBundle.isEmpty)
+                    .help("Remove selected applications from this hotkey's related apps")
+                }
+            }
+            Toggle("Focused App Variable:", isOn: model.bindWorkflowBool(workflowID, objectID, "focusedappvariable"))
+                .toggleStyle(.checkbox)
+                .font(.system(size: 12))
+                .foregroundStyle(Color(hex: 0x1D1D1F))
+            TextField("focusedapp", text: model.bindWorkflowString(workflowID, objectID, "focusedappvariablename"))
+                .textFieldStyle(.roundedBorder)
+                .foregroundStyle(Color(hex: 0x1D1D1F))
+                .disabled(!(object?.config["focusedappvariable"]?.boolValue ?? false))
+            hint("Set a variable with the bundle id of the focused app when this hotkey was triggered.")
+        }
+    }
+
+    private var cursorBinding: Binding<Bool> {
+        model.bindWorkflowBool(workflowID, objectID, "leftcursor")
+    }
+
+    private func labeled<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundStyle(Color(hex: 0x1D1D1F))
+                .frame(width: 72, alignment: .trailing)
+            content()
+        }
+    }
+
+    private func hint(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(Color(hex: 0x6E6E73))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, 80)
+    }
+
+    private func menuPicker(_ titles: [String], _ selection: Binding<Int>) -> some View {
+        Picker("", selection: selection) {
+            ForEach(Array(titles.enumerated()), id: \.offset) { index, title in
+                Text(title).tag(index)
+            }
+        }
+        .labelsHidden()
+        .frame(maxWidth: 280)
+    }
+
+    private func chooseApps() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        panel.prompt = "Add"
+        guard panel.runModal() == .OK else { return }
+        addApps(panel.urls)
+    }
+
+    private func loadDroppedApps(_ providers: [NSItemProvider]) {
+        for provider in providers {
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                let url: URL?
+                if let item = item as? URL {
+                    url = item
+                } else if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else {
+                    url = nil
+                }
+                guard let url else { return }
+                DispatchQueue.main.async { addApps([url]) }
+            }
+        }
+    }
+
+    private func addApps(_ urls: [URL]) {
+        var apps = object?.relatedApps ?? []
+        for url in urls {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            guard url.pathExtension.lowercased() == "app" || Bundle(url: url) != nil else { continue }
+            let bundleID = Bundle(url: url)?.bundleIdentifier ?? ""
+            guard !bundleID.isEmpty, !apps.contains(where: { $0.bundleID == bundleID }) else { continue }
+            let name = FileManager.default.displayName(atPath: url.path)
+            apps.append(WorkflowRelatedApp(name: name, bundleID: bundleID))
+        }
+        model.setWorkflowRelatedApps(workflowID, objectID, apps)
+    }
+
+    private func removeSelectedApp() {
+        guard !selectedBundle.isEmpty else { return }
+        let apps = (object?.relatedApps ?? []).filter { $0.bundleID != selectedBundle }
+        selectedBundle = ""
+        model.setWorkflowRelatedApps(workflowID, objectID, apps)
+    }
+
+    private func applicationIcon(_ bundleID: String) -> NSImage {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
+        return NSWorkspace.shared.icon(for: .applicationBundle)
+    }
 }
 
 private extension WorkflowObjectKind {
@@ -1740,6 +2192,7 @@ private extension WorkflowObjectKind {
         case .externalTrigger: return "Call an external trigger."
         case .externalTriggerInput: return "Start with an external trigger."
         case .hotkey: return "Start with a keyboard shortcut."
+        case .universalAction: return "Show this workflow in Universal Actions."
         case .automationTask: return "Run an Alfred Automation Task."
         case .textView: return "Show text in a window."
         case .userInterface: return "Show a user interface object."

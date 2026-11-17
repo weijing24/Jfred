@@ -1049,6 +1049,44 @@ struct ClipboardPreviewTests {
     }
 }
 
+struct WorkflowTriggerTests {
+    @Test func universalActionAndHotkeyUseAlfredMenuIndexes() {
+        #expect(WorkflowObjectKind(rawType: "alfred.workflow.trigger.universalaction") == .universalAction)
+        #expect(WorkflowObjectKind.universalAction.rawType == "alfred.workflow.trigger.universalaction")
+        #expect(WorkflowObjectKind.universalAction.title == "Universal Action")
+        #expect(WorkflowTriggerLabels.hotkeyAction(0) == "Pass through to workflow")
+        #expect(WorkflowTriggerLabels.hotkeyAction(1) == "Show Alfred")
+        #expect(WorkflowTriggerLabels.hotkeyArgument(0) == "None")
+        #expect(WorkflowTriggerLabels.hotkeyArgument(1) == "Selection in macOS")
+        #expect(WorkflowTriggerLabels.hotkeyArgument(2) == "macOS Clipboard Contents")
+        #expect(WorkflowTriggerLabels.hotkeyArgument(3) == "macOS Find Pasteboard")
+        #expect(WorkflowTriggerLabels.hotkeyArgument(4) == "Text")
+        #expect(WorkflowTriggerLabels.universalArgumentCount(0) == "Single")
+        #expect(WorkflowTriggerLabels.universalArgumentCount(1) == "Single and Multiple")
+        #expect(WorkflowTriggerLabels.universalArgumentCount(2) == "Multiple")
+
+        let convert = WorkflowObject(kind: .universalAction, config: [
+            "name": .string("Convert Unit"),
+            "acceptstext": .boolean(true),
+            "acceptsmulti": .integer(0),
+        ])
+        #expect(convert.triggerCaption == "Convert Unit")
+        #expect(convert.kind == .universalAction)
+
+        let hotkey = WorkflowObject(kind: .hotkey, config: [
+            "action": .integer(0),
+            "argument": .integer(1),
+            "relatedApps": .array([
+                .object(["name": .string("Finder"), "bundleid": .string("com.apple.finder")]),
+                .string("com.apple.Terminal"),
+            ]),
+        ])
+        #expect(hotkey.triggerCaption == "Selection in macOS")
+        #expect(hotkey.relatedApps.map(\.bundleID) == ["com.apple.finder", "com.apple.Terminal"])
+        #expect(hotkey.relatedApps.map(\.name) == ["Finder", "com.apple.Terminal"])
+    }
+}
+
 struct WorkflowPackageTests {
     @Test func isImportableRecognizesWorkflowExtensions() {
         #expect(WorkflowPackage.isImportableFile(URL(fileURLWithPath: "/tmp/unit-converter.alfredworkflow")))

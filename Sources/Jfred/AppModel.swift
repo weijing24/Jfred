@@ -1291,12 +1291,14 @@ final class AppModel {
         workflowConfigSnapshot = nil
         workflowConfigEditsMetadata = false
         workflowConfigPresented = false
+        applyHotkeys()
     }
 
     func saveWorkflowConfig() {
         workflowConfigSnapshot = nil
         workflowEdited()
         workflowConfigPresented = false
+        applyHotkeys()
     }
 
     func togglePaletteSection(_ title: String) {
@@ -1881,6 +1883,25 @@ final class AppModel {
             config = ["inputstring": .string("{query}"), "matchstring": .string(".*"), "matchmode": .integer(4)]
         case .delay:
             config = ["seconds": .number(0.5)]
+        case .universalAction:
+            config = [
+                "name": .string("Universal Action"),
+                "acceptsfiles": .boolean(false),
+                "acceptsurls": .boolean(false),
+                "acceptstext": .boolean(true),
+                "acceptsmulti": .integer(0),
+            ]
+        case .hotkey:
+            config = [
+                "action": .integer(0),
+                "argument": .integer(0),
+                "hotkey": .integer(0),
+                "hotmod": .integer(0),
+                "hotstring": .string(""),
+                "relatedAppsMode": .integer(0),
+                "focusedappvariable": .boolean(false),
+                "focusedappvariablename": .string(""),
+            ]
         default:
             break
         }
@@ -2922,6 +2943,77 @@ extension AppModel {
         guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
         workflows[index].hotkey = Hotkey(keyCode: keyCode, modifiers: modifiers)
         workflowsChanged()
+    }
+
+    func setWorkflowObjectHotkey(_ workflowID: UUID, _ objectID: UUID, keyCode: UInt16, modifiers: UInt, display: String) {
+        updateWorkflowObject(workflowID, objectID) { object in
+            object.config["hotkey"] = .integer(Int(keyCode))
+            object.config["hotmod"] = .integer(Int(modifiers))
+            object.config["hotstring"] = .string(display)
+        }
+        syncImportedHotkey(workflowID, source: objectID)
+        applyHotkeys()
+    }
+
+    func clearWorkflowObjectHotkey(_ workflowID: UUID, _ objectID: UUID) {
+        updateWorkflowObject(workflowID, objectID) { object in
+            object.config["hotkey"] = .integer(0)
+            object.config["hotmod"] = .integer(0)
+            object.config["hotstring"] = .string("")
+        }
+        syncImportedHotkey(workflowID, source: objectID)
+        applyHotkeys()
+    }
+
+    func setWorkflowRelatedApps(_ workflowID: UUID, _ objectID: UUID, _ apps: [WorkflowRelatedApp]) {
+        let value = WorkflowValue.array(apps.map { app in
+            .object(["name": .string(app.name), "bundleid": .string(app.bundleID)])
+        })
+        updateWorkflowObject(workflowID, objectID) { object in
+            object.config["relatedApps"] = value
+        }
+    }
+
+    func setWorkflowObjectIcon(_ workflowID: UUID, _ objectID: UUID, from url: URL) {
+        guard let workflowIndex = workflows.firstIndex(where: { $0.id == workflowID }),
+              let objectIndex = workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }),
+              let root = workflows[workflowIndex].rootPath else { return }
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        guard let image = NSImage(contentsOf: url),
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else { return }
+        let object = workflows[workflowIndex].objects[objectIndex]
+        let filename = (object.alfredUID.isEmpty ? object.id.uuidString : object.alfredUID) + ".png"
+        let destination = URL(fileURLWithPath: root, isDirectory: true).appendingPathComponent(filename)
+        do {
+            try png.write(to: destination, options: .atomic)
+        } catch {
+            return
+        }
+        workflows[workflowIndex].objects[objectIndex].config["icon"] = .string(filename)
+        workflowEdited()
+    }
+
+    private func updateWorkflowObject(_ workflowID: UUID, _ objectID: UUID, _ change: (inout WorkflowObject) -> Void) {
+        guard let workflowIndex = workflows.firstIndex(where: { $0.id == workflowID }),
+              let objectIndex = workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }) else { return }
+        change(&workflows[workflowIndex].objects[objectIndex])
+    }
+
+    /// The workflow-level hotkey is the first Hotkey object, matching import.
+    private func syncImportedHotkey(_ workflowID: UUID, source objectID: UUID) {
+        guard let index = workflows.firstIndex(where: { $0.id == workflowID }),
+              workflows[index].objects.first(where: { $0.kind == .hotkey })?.id == objectID,
+              let object = workflows[index].object(id: objectID) else { return }
+        let code = object.config["hotkey"]?.intValue ?? 0
+        if code == 0 {
+            workflows[index].hotkey = nil
+        } else {
+            let modifiers = UInt(truncatingIfNeeded: object.config["hotmod"]?.intValue ?? 0)
+            workflows[index].hotkey = Hotkey(keyCode: UInt16(truncatingIfNeeded: code), modifiers: modifiers)
+        }
     }
 
     func clearWorkflowHotkey(_ id: UUID) {

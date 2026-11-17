@@ -244,6 +244,7 @@ public enum WorkflowObjectKind: String, Codable, CaseIterable, Sendable {
     case externalTrigger
     case externalTriggerInput
     case hotkey
+    case universalAction
     case automationTask
     case textView
     case userInterface
@@ -276,6 +277,7 @@ public enum WorkflowObjectKind: String, Codable, CaseIterable, Sendable {
         case "alfred.workflow.output.callexternaltrigger": self = .externalTrigger
         case "alfred.workflow.trigger.external": self = .externalTriggerInput
         case "alfred.workflow.trigger.hotkey": self = .hotkey
+        case "alfred.workflow.trigger.universalaction": self = .universalAction
         case "alfred.workflow.automation.task": self = .automationTask
         case "alfred.workflow.userinterface.text": self = .textView
         case "alfred.workflow.userinterface.image", "alfred.workflow.userinterface.grid", "alfred.workflow.userinterface.pdf": self = .userInterface
@@ -309,6 +311,7 @@ public enum WorkflowObjectKind: String, Codable, CaseIterable, Sendable {
         case .externalTrigger: return "alfred.workflow.output.callexternaltrigger"
         case .externalTriggerInput: return "alfred.workflow.trigger.external"
         case .hotkey: return "alfred.workflow.trigger.hotkey"
+        case .universalAction: return "alfred.workflow.trigger.universalaction"
         case .automationTask: return "alfred.workflow.automation.task"
         case .textView: return "alfred.workflow.userinterface.text"
         case .userInterface: return "alfred.workflow.userinterface.image"
@@ -342,6 +345,7 @@ public enum WorkflowObjectKind: String, Codable, CaseIterable, Sendable {
         case .externalTrigger: return "Call External Trigger"
         case .externalTriggerInput: return "External Trigger"
         case .hotkey: return "Hotkey"
+        case .universalAction: return "Universal Action"
         case .automationTask: return "Automation Task"
         case .textView: return "Text View"
         case .userInterface: return "UI Object"
@@ -375,6 +379,7 @@ public enum WorkflowObjectKind: String, Codable, CaseIterable, Sendable {
         case .externalTrigger: return "bolt"
         case .externalTriggerInput: return "bolt.circle"
         case .hotkey: return "command"
+        case .universalAction: return "text.cursor"
         case .automationTask: return "gearshape.2"
         case .textView: return "text.alignleft"
         case .userInterface: return "rectangle.on.rectangle"
@@ -387,6 +392,28 @@ public enum WorkflowObjectKind: String, Codable, CaseIterable, Sendable {
         case .keyword, .scriptFilter, .listFilter: return true
         default: return false
         }
+    }
+}
+
+/// Popup order from Alfred 5's Hotkey and Universal Action configuration nibs.
+/// The stored integer is the menu index.
+public enum WorkflowTriggerLabels {
+    public static let hotkeyActions = ["Pass through to workflow", "Show Alfred"]
+    public static let hotkeyArguments = ["None", "Selection in macOS", "macOS Clipboard Contents", "macOS Find Pasteboard", "Text"]
+    public static let universalArgumentCounts = ["Single", "Single and Multiple", "Multiple"]
+    public static let hotkeyModifierModes = [
+        "Simulate modifier keys released",
+        "Wait until modifier keys are released",
+        "Pass through modifier keys",
+    ]
+    public static let relatedAppModes = ["have focus", "don't have focus"]
+
+    public static func hotkeyAction(_ index: Int) -> String { label(hotkeyActions, index) }
+    public static func hotkeyArgument(_ index: Int) -> String { label(hotkeyArguments, index) }
+    public static func universalArgumentCount(_ index: Int) -> String { label(universalArgumentCounts, index) }
+
+    private static func label(_ labels: [String], _ index: Int) -> String {
+        labels.indices.contains(index) ? labels[index] : labels[0]
     }
 }
 
@@ -429,6 +456,33 @@ public struct WorkflowObject: Codable, Equatable, Sendable, Identifiable {
     public var title: String {
         let configured = config[string: "title"].trimmingCharacters(in: .whitespacesAndNewlines)
         return configured.isEmpty ? kind.title : configured
+    }
+
+    /// Name drawn above the object icon. Universal Action uses `name`; a Hotkey uses its argument mode.
+    public var triggerCaption: String {
+        switch kind {
+        case .universalAction:
+            return config[string: "name"].trimmingCharacters(in: .whitespacesAndNewlines)
+        case .hotkey:
+            let label = WorkflowTriggerLabels.hotkeyArgument(config[integer: "argument"])
+            return label == "None" ? "" : label
+        default:
+            return ""
+        }
+    }
+
+    public var relatedApps: [WorkflowRelatedApp] {
+        let values = config["relatedApps"]?.arrayValue ?? []
+        return values.compactMap { value in
+            if let bundleID = value.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines), !bundleID.isEmpty {
+                return WorkflowRelatedApp(name: bundleID, bundleID: bundleID)
+            }
+            guard let object = value.objectValue else { return nil }
+            let bundleID = object[string: "bundleid"].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !bundleID.isEmpty else { return nil }
+            let name = object[string: "name"].trimmingCharacters(in: .whitespacesAndNewlines)
+            return WorkflowRelatedApp(name: name.isEmpty ? bundleID : name, bundleID: bundleID)
+        }
     }
 
     public var keyword: String {
@@ -484,6 +538,17 @@ public struct WorkflowObject: Codable, Equatable, Sendable, Identifiable {
     public var subtext: String {
         get { config[string: "subtext"] }
         set { config["subtext"] = .string(newValue) }
+    }
+}
+
+public struct WorkflowRelatedApp: Equatable, Sendable, Identifiable {
+    public var name: String
+    public var bundleID: String
+    public var id: String { bundleID }
+
+    public init(name: String, bundleID: String) {
+        self.name = name
+        self.bundleID = bundleID
     }
 }
 
