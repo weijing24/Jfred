@@ -20,8 +20,13 @@ final class LauncherController {
     nonisolated(unsafe) private var scrollMonitor: Any?
     private var quickLookPath: String?
     private var quickLookController: QuickLookPreviewController?
+    /// The user's position. Layout reads these and does not write them, so a
+    /// temporary slide away from the Dock is not the next summon's position.
     private var pinnedTop: CGFloat?
+    private var pinnedCenterX: CGFloat?
     private var hasPlaced = false
+    /// True while `setFrame` is ours. `didMove` is synchronous, so this stays
+    /// true for that notification and the anchor is left alone.
     private var ignoreMove = false
     private var layoutToken = 0
     private var outsideDrag: (mouse: NSPoint, origin: NSPoint)?
@@ -43,22 +48,26 @@ final class LauncherController {
         panel.hasShadow = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
-        panel.isMovableByWindowBackground = true
+        // Ordering the panel on or off must not slide it in from the last frame.
+        panel.animationBehavior = .none
+        // The mouse monitors move the panel. Window-background dragging applies
+        // the same drag a second time, so a small movement throws the panel.
+        panel.isMovableByWindowBackground = false
         let host = NSHostingView(rootView: LauncherRoot(model: model))
         host.frame = panel.contentView?.bounds ?? .zero
         host.autoresizingMask = [.width, .height]
         host.sizingOptions = []
         panel.contentView = host
         self.panel = panel
-        NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self] note in
-            // The observer runs on the main queue. The block itself is not main-actor
-            // isolated, so take the window out of the sending check and read its frame there.
+        // Delivered synchronously on the posting thread. A queued observer runs
+        // after `ignoreMove` is cleared and saves the frame layout just applied,
+        // which is how the panel walked away from where it was dropped.
+        NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: nil) { [weak self] note in
             nonisolated(unsafe) let object = note.object
             MainActor.assumeIsolated {
-                guard self?.ignoreMove != true else { return }
-                if let maxY = (object as? NSWindow)?.frame.maxY {
-                    self?.pinnedTop = maxY
-                }
+                guard let self, !self.ignoreMove, let window = object as? NSWindow else { return }
+                self.pinnedTop = window.frame.maxY
+                self.pinnedCenterX = window.frame.midX
             }
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -117,16 +126,18 @@ final class LauncherController {
 
     func hide() { panel?.orderOut(nil) }
 
-    /// `animated` only eases a panel that is already on screen. The hotkey
-    /// path passes false so the window appears at its final height.
+    /// `animated` only eases a height change of a panel that is already on screen.
+    /// The hotkey path passes false so the window appears where it will stay.
     func layout(animated: Bool = true) {
-        guard let panel else { return }
+        guard let panel, hasPlaced || pinnedTop != nil else { return }
         let frame = panelFrame(for: panel)
+        guard frame != panel.frame else { return }
         let heightDelta = abs(frame.height - panel.frame.height)
+        let centerStable = abs(frame.midX - panel.frame.midX) < 0.5
         layoutToken += 1
         let token = layoutToken
         ignoreMove = true
-        if animated && panel.isVisible && heightDelta > 0.5 {
+        if animated && panel.isVisible && heightDelta > 0.5 && centerStable {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.08
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -135,16 +146,11 @@ final class LauncherController {
                 MainActor.assumeIsolated {
                     guard let self, self.layoutToken == token else { return }
                     self.ignoreMove = false
-                    self.pinnedTop = self.panel?.frame.maxY ?? frame.maxY
                 }
             }
-            pinnedTop = frame.maxY
             return
         }
-        if frame != panel.frame {
-            panel.setFrame(frame, display: true)
-        }
-        pinnedTop = panel.frame.maxY
+        panel.setFrame(frame, display: true, animate: false)
         ignoreMove = false
     }
 
@@ -155,25 +161,22 @@ final class LauncherController {
         let buffer: CGFloat = model.fileBuffer.isEmpty ? 0 : 34
         let header = theme.paddingV + theme.queryBoxHeight + (rows > 0 ? 6 : theme.paddingV)
         let height = header + buffer + listHeight + (rows > 0 ? theme.paddingV : 0)
-        var frame = panel.frame
-        let top = pinnedTop ?? frame.maxY
         let preview = ClipboardPreview.isViewerQuery(model.query, keyword: model.preferences.clipboardViewerKeyword)
             ? LauncherMetrics.clipboardPreviewWidth
             : 0
         let width = theme.width + preview
-        let delta = width - frame.width
-        frame.size = NSSize(width: width, height: height)
-        frame.origin.x -= delta / 2
-        frame.origin.y = top - height
-        if let screen = panel.screen ?? NSScreen.main {
-            let visible = screen.visibleFrame
-            if frame.minX < visible.minX { frame.origin.x = visible.minX }
-            if frame.maxX > visible.maxX { frame.origin.x = visible.maxX - frame.width }
-            if frame.minY < visible.minY {
-                frame.origin.y = max(visible.minY, visible.maxY - frame.height)
-            }
-        }
-        return frame
+        let current = panel.frame
+        let placement = LauncherPlacement(
+            top: pinnedTop ?? current.maxY,
+            centerX: pinnedCenterX ?? current.midX
+        )
+        // `panel.screen` is nil while the panel is ordered out. Falling back to
+        // the main display clamped every summon onto that display.
+        return placement.placedFrame(width: width, height: height, visibleFrames: visibleFrames())
+    }
+
+    private func visibleFrames() -> [CGRect] {
+        NSScreen.screens.map(\.visibleFrame)
     }
 
     private func listRowCount() -> Int {
@@ -219,20 +222,18 @@ final class LauncherController {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return false }
-        let visible = screen.visibleFrame
-        var frame = panel.frame
-        frame.origin.x = visible.midX - frame.width / 2
-        frame.origin.y = visible.maxY - 150 - frame.height
-        panel.setFrame(frame, display: false)
-        pinnedTop = panel.frame.maxY
+        let placement = LauncherPlacement.initial(on: screen.visibleFrame)
+        let frame = placement.placedFrame(width: panel.frame.width, height: panel.frame.height, visibleFrames: [screen.visibleFrame])
+        pinnedTop = frame.maxY
+        pinnedCenterX = frame.midX
+        ignoreMove = true
+        panel.setFrame(frame, display: false, animate: false)
+        ignoreMove = false
         return true
     }
 
     private func isOnVisibleScreen(_ frame: NSRect) -> Bool {
-        NSScreen.screens.contains { screen in
-            let visible = screen.visibleFrame
-            return visible.intersects(frame) && frame.minX >= visible.minX - 1
-        }
+        LauncherPlacement.isOnScreen(frame, visibleFrames: visibleFrames())
     }
 
     private func globalMouse(_ event: NSEvent) {
@@ -253,7 +254,7 @@ final class LauncherController {
         case .leftMouseDragged:
             guard let drag = outsideDrag else { return }
             panel.setFrameOrigin(NSPoint(x: drag.origin.x + loc.x - drag.mouse.x, y: drag.origin.y + loc.y - drag.mouse.y))
-            pinnedTop = panel.frame.maxY
+            rememberDraggedFrame(of: panel)
         case .leftMouseUp:
             outsideDrag = nil
         default:
@@ -282,7 +283,7 @@ final class LauncherController {
             let dy = loc.y - drag.mouse.y
             guard hypot(dx, dy) >= 3 else { return event }
             panel.setFrameOrigin(NSPoint(x: drag.origin.x + dx, y: drag.origin.y + dy))
-            pinnedTop = panel.frame.maxY
+            rememberDraggedFrame(of: panel)
             return nil
         case .leftMouseUp:
             localDrag = nil
@@ -290,6 +291,11 @@ final class LauncherController {
         default:
             return event
         }
+    }
+
+    private func rememberDraggedFrame(of panel: NSPanel) {
+        pinnedTop = panel.frame.maxY
+        pinnedCenterX = panel.frame.midX
     }
 
     /// The query field is first responder, so the wheel can miss the result
